@@ -157,10 +157,10 @@ const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
-let dash = null, dashAt = 0, dashBusy = false;
+let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
-async function loadDash() { if (dashBusy) return; dashBusy = true; try { const { data, error } = await sb.rpc("admin_dashboard"); if (!error) { dash = data || []; dashAt = Date.now(); } } finally { dashBusy = false; } if (tab === "admin") renderAdmin(); }
+async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; } finally { dashBusy = false; } if (tab === "admin") renderAdmin(); }
 function shopFlags(r) {
   const f = [], age = (Date.now() - Date.parse(r.created_at)) / 864e5, left = daysTo(r.trial_ends);
   if (!r.orders && age > 1) f.push(["No orders yet, " + Math.floor(age) + " day" + (Math.floor(age) === 1 ? "" : "s") + " in", "owes"]);
@@ -193,11 +193,28 @@ function renderAdmin() {
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
         <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}</dd></div>
         <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}${r.founding ? " · founding" : ""}</dd></div>
-        ${r.referred_by_name || r.referrals ? `<div><dt>Referrals</dt><dd>${r.referred_by_name ? `From ${esc(r.referred_by_name)}` : ""}${r.referred_by_name && r.referrals ? " · " : ""}${r.referrals ? `brought ${r.referrals}` : ""}</dd></div>` : ""}
+        ${(pend => r.referred_by_name || r.referrals || pend ? `<div><dt>Referrals</dt><dd>${[r.referred_by_name ? `From ${esc(r.referred_by_name)}` : "", r.referrals ? `brought ${r.referrals}` : "", pend ? `${pend} lead${pend === 1 ? "" : "s"} pending` : ""].filter(Boolean).join(" · ")}</dd></div>` : "")(leads.filter(l => l.referrer_shop === r.id && l.status === "pending").length)}
       </dl>
       ${r.is_test ? "" : (f => f.length ? `<div class="dflags">${f.map(([t, k]) => `<span class="pill p-${k === "owes" ? "owed" : "new"}">${t}</span>`).join("")}</div>` : "")(shopFlags(r))}
     </section>`;
   };
+  const referrers = real.filter(r => r.referrals || leads.some(l => l.referrer_shop === r.id));
+  const refHtml = `<section class="scard dref"><h3 class="stitle">Referrals</h3>
+    <p class="ssub">A shop earns 1 free month when a shop it brought starts paying.</p>
+    ${referrers.length ? referrers.map(r => {
+      const joined = dash.filter(k => k.referred_by === r.id), ls = leads.filter(l => l.referrer_shop === r.id);
+      return `<div class="drefb"><b>${esc(r.name)}</b>${r.owner_name ? `<span class="hint">${esc(r.owner_name)}</span>` : ""}
+        ${joined.map(k => { const left = daysTo(k.trial_ends); return `<div class="dref-row"><div><b>${esc(k.name)}</b><span>Joined ${fmtDay(Date.parse(k.created_at))} · ${left !== null && left >= 0 ? `free month due once they pay, from ${fmtDay(Date.parse(k.trial_ends))}` : "free month due once they pay"}</span></div><span class="pill p-ready">Joined</span></div>`; }).join("")}
+        ${ls.map(l => `<div class="dref-row"><div><b>${esc(l.name)}</b><span>${[l.contact ? fmtPhone(l.contact) : "", l.note ? esc(l.note) : "", "added " + fmtDay(Date.parse(l.created_at))].filter(Boolean).join(" · ")}</span></div>
+          ${l.status === "pending" ? `<div class="row"><button class="btn btn-ghost" data-lj="${l.id}">Joined</button><button class="btn btn-ghost" data-ll="${l.id}">Lost</button></div>` : `<span class="pill ${l.status === "joined" ? "p-ready" : "p-collected"}">${l.status === "joined" ? "Joined" : "Lost"}</span>`}</div>`).join("")}
+      </div>`; }).join("") : `<p class="hint">No referrals yet.</p>`}
+    ${leadForm ? `<div class="dlead"><label for="rl-r">Referred by</label><select id="rl-r">${real.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}</select>
+      <label for="rl-n">Shop or person they referred</label><input id="rl-n" placeholder="e.g. Latwash Laundry (Mr Lateef)" autocomplete="off">
+      <label for="rl-c">Phone (optional)</label><input id="rl-c" type="text" inputmode="tel" autocomplete="off">
+      <label for="rl-x">Note (optional)</label><input id="rl-x" placeholder="e.g. don't mention who referred" autocomplete="off">
+      <div class="row"><button class="btn btn-ghost" id="rl-no">Cancel</button><button class="btn btn-primary" id="rl-go">Save lead</button></div></div>`
+      : `<button class="btn btn-ghost" id="rl-add">+ Add a referral lead</button>`}
+  </section>`;
   view.innerHTML = `<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
       <div class="row"><button class="btn btn-ghost" id="dref">Refresh</button><button class="btn btn-primary" id="dadd">Add a shop</button></div></div>
     <div class="stats dstats">
@@ -210,9 +227,21 @@ function renderAdmin() {
     </div>
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<a class="btn btn-ghost" href="${wa(r.owner_phone)}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</div>`).join("")}</section>` : ""}
     <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
+    ${refHtml}
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
   $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };
+  const setLead = async (id, status) => { const { error } = await sb.from("ref_leads").update({ status }).eq("id", id); if (error) return toast("Couldn't save. Check your internet."); const l = leads.find(x => x.id === id); if (l) l.status = status; renderAdmin(); };
+  view.querySelectorAll("[data-lj]").forEach(b => b.onclick = () => setLead(b.dataset.lj, "joined"));
+  view.querySelectorAll("[data-ll]").forEach(b => b.onclick = () => setLead(b.dataset.ll, "lost"));
+  if ($("#rl-add")) $("#rl-add").onclick = () => { leadForm = true; renderAdmin(); $("#rl-n").focus(); };
+  if ($("#rl-no")) $("#rl-no").onclick = () => { leadForm = false; renderAdmin(); };
+  if ($("#rl-go")) $("#rl-go").onclick = async () => {
+    const name = $("#rl-n").value.trim(); if (!name) return toast("Type the shop or person's name");
+    const row = { referrer_shop: $("#rl-r").value, name, contact: $("#rl-c").value.replace(/\D/g, "") || null, note: $("#rl-x").value.trim() || null };
+    const { data, error } = await sb.from("ref_leads").insert(row).select().single(); if (error) return toast("Couldn't save. Check your internet.");
+    leads.push(data); leadForm = false; toast("Lead saved"); renderAdmin();
+  };
 }
 /* ---------- Navigation ---------- */
 const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports", admin: "admin" };

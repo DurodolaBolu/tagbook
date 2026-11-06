@@ -196,3 +196,12 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 @media (min-width:900px){.dstats{grid-template-columns:repeat(3,1fr)}.dlist{grid-template-columns:1fr 1fr}}
 .dtop .row .btn,.dcall .btn{width:auto;flex:none;white-space:nowrap;padding:10px 14px;min-height:0}
 .dcall .staff-row{align-items:center}
+.dref .drefb{padding:12px 0;border-top:1px solid var(--line)}
+.dref .drefb>b{font-size:16px;margin-right:6px}
+.dref-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding-left:12px}
+.dref-row b{display:block;font-size:15px}
+.dref-row span{font-size:13px;color:var(--muted)}
+.dref-row .row{gap:6px;flex:none}
+.dref-row .btn,#rl-add{width:auto;flex:none;padding:8px 12px;min-height:0;white-space:nowrap}
+.dlead{border-top:1px solid var(--line);padding-top:10px}
+.dlead .row .btn{width:auto}
