@@ -262,7 +262,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
+function reset() { d = { cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -273,6 +273,26 @@ function suggest(name) {
   for (const t of tries) { const m = t.toUpperCase().replace(/[^A-Z]/g, ""); if (m.length === 2 && !markTaken(m)) return m; }
   const base = (tries[0] || "XX").toUpperCase().replace(/[^A-Z]/g, "") || "XX"; let n = 2; while (markTaken(base + n)) n++; return base + n;
 }
+// Most recent customers first, from the orders already loaded
+function recentCustomers(n) {
+  const seen = new Set(), out = [];
+  for (const o of [...orders].sort((a, b) => b.no - a.no)) { if (seen.has(o.cid)) continue; seen.add(o.cid); const c = customers.find(x => x.id === o.cid); if (c) out.push(c); if (out.length >= n) break; }
+  return out;
+}
+function searchCustomers(q) {
+  const t = q.trim().toLowerCase(), dg = digits(q);
+  if (!t) return [];
+  const score = c => {
+    if (c.mark.toLowerCase() === t) return 0;
+    if (own() && dg.length >= 4 && c.phone.includes(dg)) return 1;
+    const n = c.name.toLowerCase();
+    if (n.startsWith(t) || n.split(/\s+/).some(w => w.startsWith(t))) return 2;
+    if (n.includes(t)) return 3;
+    if (c.mark.toLowerCase().startsWith(t)) return 4;
+    return 9;
+  };
+  return customers.map(c => [score(c), c]).filter(([s]) => s < 9).sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name)).slice(0, 8).map(([, c]) => c);
+}
 let lookupFor = "";
 async function lookup(phone) {
   lookupFor = phone; d.found = "loading";
@@ -282,30 +302,44 @@ async function lookup(phone) {
   if (error) toast(failMsg(error));
   if (tab === "new") renderNew();
 }
-function renderNew() {
-  if (!d.branch || !liveBranches().some(b => b.id === d.branch)) d.branch = (liveBranches()[0] || {}).id || null;
+const custRow = c => `<button class="crow" data-pick="${c.id}"><span class="mark">${esc(c.mark)}</span><span class="cn"><b>${esc(c.name)}</b>${own() && c.phone ? `<small>${fmtPhone(c.phone)}</small>` : ""}</span></button>`;
+function customerBlock() {
+  if (d.cust) return `<div class="cpicked"><span class="mark">${esc(d.cust.mark)}</span><span class="cn"><b>${esc(d.cust.name)}</b><small>Regular customer. Write <b>${esc(d.cust.mark)}</b> inside every cloth.</small></span><button class="mini" id="cchange">Change</button></div>`;
+  if (!d.newMode) {
+    const res = searchCustomers(d.q), recent = d.q ? [] : recentCustomers(5);
+    const dg = digits(d.q), phoneLike = /^0\d{10}$/.test(dg) && dg === d.q.replace(/\s/g, "");
+    return `<input id="cq" class="search" style="margin:0" placeholder="${own() ? "Search name, mark (BO) or phone" : "Search name or mark (BO)"}" value="${esc(d.q)}" autocomplete="off" aria-label="Find customer">
+      ${res.length ? `<div class="clist">${res.map(custRow).join("")}</div>` : ""}
+      ${d.q && !res.length ? `<p class="hint">${phoneLike ? "Checking this number…" : `No customer called “${esc(d.q)}”.`}</p>` : ""}
+      ${recent.length ? `<p class="clabel">Recent customers</p><div class="clist">${recent.map(custRow).join("")}</div>` : ""}
+      <button class="btn btn-ghost" id="cnew">+ New customer</button>`;
+  }
+  // new customer: phone first (it might still be someone we know), then name and mark
   const existing = d.phone.length === 11 && d.found && d.found !== "loading" ? d.found : null;
-  let markBlock = "";
-  if (d.phone.length === 11 && d.found === "loading") markBlock = `<p class="hint">Checking this number…</p>`;
-  else if (existing) markBlock = `<div class="found">Returning customer: <b>${esc(existing.name)}</b>. Their mark is <b>${esc(existing.mark)}</b>.</div>`;
+  let b = `<div class="newc"><div class="row" style="justify-content:space-between;align-items:center"><b>New customer</b><button class="mini" id="cback">Back to search</button></div>
+    <label for="ph">Phone number</label><input id="ph" type="text" inputmode="tel" placeholder="0803 412 7790" value="${d.phone}" autocomplete="off">`;
+  if (d.phone.length === 11 && d.found === "loading") b += `<p class="hint">Checking this number…</p>`;
+  else if (existing) b += `<div class="found">This number is already a customer: <b>${esc(existing.name)}</b>, mark <b>${esc(existing.mark)}</b>. <button class="mini" id="cuse" style="margin-left:6px">Use</button></div>`;
   else if (d.phone.length === 11 && d.found === null) {
     const clash = d.hasMark === "yes" && d.mark && markTaken(d.mark);
-    markBlock = `
-      <label for="nm">Customer name</label><input id="nm" placeholder="e.g. Bola Ogun" value="${esc(d.name)}" autocomplete="off">
+    b += `<label for="nm">Customer name</label><input id="nm" placeholder="e.g. Bola Ogun" value="${esc(d.name)}" autocomplete="off">
       <label>Does this customer already have a mark on their clothes?</label>
       <div class="chips" style="margin:0"><button class="chip" data-hm="yes" aria-pressed="${d.hasMark === "yes"}">Yes, use it</button><button class="chip" data-hm="no" aria-pressed="${d.hasMark === "no"}">No, give one</button></div>
       ${d.hasMark === "yes" ? `<label for="mk">Their mark</label><input id="mk" placeholder="e.g. BL" value="${esc(d.mark)}" autocomplete="off">
         ${clash ? `<div class="bad">${esc(clash.mark)} is already used by ${esc(clash.name)}. Use a different mark so their clothes don't mix.</div>` : ""}` : ""}
       ${d.hasMark === "no" && d.name.trim() ? `<div class="found">New mark: <b>${suggest(d.name)}</b>. Write this inside every cloth.</div>` : ""}`;
-  } else markBlock = `<p class="hint">Type the customer's number. Regular customers come up with their name and mark.</p>`;
+  } else b += `<p class="hint">Ask the customer for their number. Next time, you'll find them by name.</p>`;
+  return b + `</div>`;
+}
+function renderNew() {
+  if (!d.branch || !liveBranches().some(b => b.id === d.branch)) d.branch = (liveBranches()[0] || {}).id || null;
   const count = d.items.reduce((s, it) => s + it.qty, 0);
   const pickable = PRICES.filter(p => !p.hidden && (p.custom || (p.services || []).includes(d.svc)));
   view.innerHTML = `
     ${backBtn("Orders")}
     <h2>Log clothes</h2>
-    <label for="ph">Customer phone</label>
-    <input id="ph" type="text" inputmode="tel" placeholder="0803 412 7790" value="${d.phone}" autocomplete="off">
-    ${markBlock}
+    <label>Customer</label>
+    ${customerBlock()}
     ${liveBranches().length > 1 ? `<label for="br">Dropped at</label>
     <select id="br">${liveBranches().map(b => `<option value="${b.id}" ${d.branch === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</select>` : ""}
     <label>Service</label>
@@ -329,6 +363,26 @@ function renderNew() {
     <button class="btn btn-ghost" id="clr">Clear</button>`;
   wireBack(view);
   const keep = (id, fn) => { const el = $(id); if (!el) return; el.oninput = e => { fn(e.target.value); const p = e.target.selectionStart; renderNew(); const n = $(id); if (n) { n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } } }; };
+  keep("#cq", v => {
+    d.q = v.slice(0, 40);
+    const dg = digits(v);
+    // a full phone number that isn't in the list (staff can't see numbers): ask the database
+    if (/^0\d{10}$/.test(dg) && !searchCustomers(v).length) {
+      lookupFor = dg;
+      sb.rpc("find_customer", { p_phone: dg }).then(({ data }) => {
+        if (lookupFor !== dg || digits(d.q) !== dg || tab !== "new") return;
+        const c = data && data[0];
+        if (c) { d.cust = { id: c.id, name: c.name, mark: c.mark }; d.q = ""; }
+        else { d.newMode = true; d.phone = dg; d.found = null; d.q = ""; }
+        renderNew();
+      });
+    }
+  });
+  view.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const c = customers.find(x => x.id === b.dataset.pick); d.cust = { id: c.id, name: c.name, mark: c.mark }; d.q = ""; renderNew(); });
+  if ($("#cchange")) $("#cchange").onclick = () => { d.cust = null; renderNew(); const q = $("#cq"); if (q) q.focus(); };
+  if ($("#cnew")) $("#cnew").onclick = () => { d.newMode = true; const dg = digits(d.q); if (/^0\d{10}$/.test(dg)) { d.phone = dg; lookup(dg); } d.q = ""; renderNew(); const p = $("#ph"); if (p) p.focus(); };
+  if ($("#cback")) $("#cback").onclick = () => { d.newMode = false; d.phone = ""; d.found = undefined; d.name = ""; d.hasMark = null; d.mark = ""; renderNew(); };
+  if ($("#cuse")) $("#cuse").onclick = () => { const f = d.found; d.cust = { id: f.id, name: f.name, mark: f.mark }; d.newMode = false; d.phone = ""; d.found = undefined; renderNew(); };
   keep("#ph", v => { const nv = digits(v).slice(0, 11); if (nv !== d.phone) { d.phone = nv; d.found = undefined; if (nv.length === 11) lookup(nv); } });
   keep("#nm", v => d.name = v.replace(/[^a-z\s'-]/gi, ""));
   keep("#mk", v => d.mark = v.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase());
@@ -351,25 +405,24 @@ function renderNew() {
   $("#clr").onclick = () => { reset(); renderNew(); };
   $("#save").onclick = async () => {
     if (d.saving) return;
-    const isNew = d.found === null;
+    const isNew = !d.cust && d.newMode && d.found === null;
     const clash = isNew && d.hasMark === "yes" && d.mark && markTaken(d.mark);
-    const err = !d.phone ? "Enter the customer's phone number."
-      : (d.phone.length !== 11 || d.phone[0] !== "0") ? "The phone number is not correct. It must be 11 digits and start with 0, like 0803 412 7790."
-      : (d.found === undefined || d.found === "loading") ? "Still checking this number. Try again in a moment."
+    const err = !d.cust && !d.newMode ? "Choose the customer first. Search their name, or tap “+ New customer”."
+      : !d.cust && !d.phone ? "Enter the customer's phone number."
+      : !d.cust && (d.phone.length !== 11 || d.phone[0] !== "0") ? "The phone number is not correct. It must be 11 digits and start with 0, like 0803 412 7790."
+      : !d.cust && (d.found === undefined || d.found === "loading") ? "Still checking this number. Try again in a moment."
+      : !d.cust && d.found ? `This number belongs to ${d.found.name}. Tap “Use” to log for them.`
       : (isNew && !d.name.trim()) ? "Enter the customer's name."
       : (isNew && !d.hasMark) ? "Choose if the customer already has a mark on their clothes."
       : (isNew && d.hasMark === "yes" && !d.mark) ? "Type the customer's mark."
       : clash ? `${clash.mark} is already used by ${clash.name}. Use a different mark.`
       : !d.items.length ? "Add at least one cloth to the order." : "";
-    if (err) { showErr(err); if (d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
-    const mark = isNew ? (d.hasMark === "yes" ? d.mark : suggest(d.name)) : d.found.mark;
+    if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
+    const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
+    const base = { branch_id: d.branch, items: d.items.map(i => ({ ...i })), express: d.express, pickup: d.pickup, paid: own() ? d.paid : 0 };
+    const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark };
     d.saving = true; renderNew();
-    const { data, error } = await sb.rpc("log_order", {
-      p: {
-        phone: d.phone, name: d.name.trim(), mark, branch_id: d.branch, items: d.items.map(i => ({ ...i })),
-        express: d.express, pickup: d.pickup, paid: own() ? d.paid : 0,
-      }
-    });
+    const { data, error } = await sb.rpc("log_order", { p });
     d.saving = false;
     if (error) {
       const m = error.message || "";

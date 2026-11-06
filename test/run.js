@@ -59,7 +59,8 @@ async function handle(route) {
   if (p === "/rest/v1/rpc/log_order") {
     const x = body.p; const me = db.staff.find(s => s.user_id === current);
     let ph = db.customer_phones.find(c => c.phone === x.phone), c;
-    if (ph) c = db.customers.find(cc => cc.id === ph.customer_id);
+    if (x.customer_id) c = db.customers.find(cc => cc.id === x.customer_id);
+    else if (ph) c = db.customers.find(cc => cc.id === ph.customer_id);
     else { const clash = db.customers.find(cc => cc.mark === x.mark); if (clash) return send(400, { message: "MARK_TAKEN:" + clash.name, code: "P0001" });
       c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
     const no = db.shops[0].next_no++; const id = uid();
@@ -119,7 +120,7 @@ async function handle(route) {
 
   // SECRETARY logs an order for a new customer
   await login("08000000091"); await shot("02-sec-empty");
-  await T("#tabs button.new");
+  await T("#tabs button.new"); await shot("02b-log-empty"); await T("#cnew");
   await page.fill("#ph", "08011112222"); await page.waitForTimeout(400);
   await page.fill("#nm", "Ade Bello"); await T('[data-hm="no"]');
   await T('[data-add="it0"]'); await T('[data-add="it0"]'); await T('[data-svc="wo"]'); await T('[data-add="it1"]');
@@ -162,8 +163,8 @@ async function handle(route) {
   await T("#pick"); console.log("status:", db.orders[0].status); await shot("10-owner-picked");
   await T("#sheet [data-back]");
   // owner logs a returning customer with early payment
-  await T("#tabs button.new"); await page.fill("#ph", "08011112222"); await page.waitForTimeout(400);
-  console.log("returning found:", (await page.textContent("#view")).includes("Returning customer"));
+  await T("#tabs button.new"); await shot("11a-log-recent"); await page.fill("#cq", "ade"); await page.waitForTimeout(300); await shot("11b-log-search");
+  await T("[data-pick]"); console.log("returning picked:", (await page.textContent("#view")).includes("Regular customer")); await shot("11c-log-picked");
   await T('[data-add="it2"]'); await page.fill("#pd", "2000"); await T("#save"); await page.waitForTimeout(500);
   console.log("orders:", JSON.stringify(db.orders.map(o => [o.no, o.status, o.notified])), "paid #2:", db.order_money[1].paid);
   await shot("11-owner-order2");
@@ -184,6 +185,14 @@ async function handle(route) {
   await shot("13-owner-settings");
   // dark mode
   await T("#themebtn"); await T("[data-back]"); await shot("14-dark"); await T("#themebtn");
+  // staff types a regular customer's full number: picked automatically; unknown number opens New customer
+  await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T('[data-st="account"]'); await T("#out"); await T("#out"); await page.waitForTimeout(500);
+  await login("08000000091"); await T("#tabs button.new");
+  await page.fill("#cq", "08011112222"); await page.waitForTimeout(600); console.log("staff full number picks:", (await page.textContent("#view")).includes("Regular customer"));
+  console.log("staff sees phone anywhere:", (await page.textContent("#view")).includes("0801"));
+  await T("#cchange"); await page.fill("#cq", "08099998888"); await page.waitForTimeout(600); console.log("unknown number opens new:", await page.isVisible("#nm"), await page.inputValue("#ph"));
+  await shot("15-staff-newfromsearch");
+  await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T("#out"); await T("#out"); await page.waitForTimeout(500); await login("08120756325");
   // laptop
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("http://localhost:8787/#orders"); await page.waitForSelector("#tabs button"); await page.waitForTimeout(500); await shot("20-laptop-orders");

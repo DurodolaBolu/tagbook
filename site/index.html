@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261106014138";</script>
+<script>window.TB_BUILD="20261106014820";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -238,6 +238,21 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .ptable .ph span:nth-child(n+2):nth-child(-n+5){text-align:right;padding-right:8px}
 .plink{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:6px;border-radius:6px}
 .plink:hover,.plink:focus-visible{color:var(--owes);background:var(--owes-soft)}
+/* Log clothes: find a customer */
+.clist{display:flex;flex-direction:column;margin-top:8px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.crow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;padding:8px 12px;cursor:pointer}
+.crow:last-child{border-bottom:0}
+.crow:hover{background:var(--bg)}
+.crow .mark,.cpicked .mark{width:46px;padding:6px 0;font-size:15px;flex:none}
+.cn{display:flex;flex-direction:column;min-width:0}
+.cn b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cn small{font-size:13px;color:var(--muted)}
+.clabel{font-size:13px;color:var(--muted);font-weight:500;margin:14px 0 0}
+.cpicked{display:flex;align-items:center;gap:12px;background:var(--accent-soft);color:var(--accent-deep);border-radius:12px;padding:10px 12px}
+.cpicked .cn{flex:1}.cpicked .cn small{color:var(--accent-deep)}
+.cpicked .mark{background:var(--card)}
+.newc{background:var(--card);border-radius:12px;padding:12px 14px}
+.newc label:first-of-type{margin-top:10px}
 </style>
 </head><body>
 <div id="offline" class="offline" hidden>You're offline. Changes won't save until you're back online.</div>
@@ -252,7 +267,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261106014138"></script>
+<script src="/app.js?v=20261106014820"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
