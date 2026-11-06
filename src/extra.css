@@ -1,0 +1,17 @@
+/* Real app additions: login, staff, branches, connection notice */
+.login{max-width:440px;margin:0 auto;padding:max(48px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px))}
+.login .lbrand{font-weight:700;font-size:28px;letter-spacing:-.01em}
+.login .lbrand small{display:block;font-size:15px;font-weight:500;color:var(--muted);letter-spacing:0;margin-top:2px}
+.login .card{background:var(--card);border-radius:14px;padding:16px;margin-top:22px}
+.login .card label:first-child{margin-top:0}
+.pin{letter-spacing:.4em;font-variant-numeric:tabular-nums}
+.loading{display:flex;align-items:center;justify-content:center;min-height:60vh;color:var(--muted);font-size:16px}
+.staff-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.staff-row:last-child{border-bottom:0}
+.staff-row b{display:block}
+.staff-row span{font-size:13px;color:var(--muted)}
+.staff-row .acts{display:flex;gap:6px;flex:none}
+.mini{border:1px solid var(--field);background:var(--card);color:var(--fg);font:inherit;font-size:14px;font-weight:600;border-radius:8px;padding:6px 10px;cursor:pointer}
+.mini.danger{color:var(--owes)}
+.offline{position:fixed;left:0;right:0;top:0;z-index:35;background:var(--warn-soft);color:var(--warn);font-size:14px;font-weight:600;text-align:center;padding:calc(env(safe-area-inset-top,0px) + 6px) 16px 6px}
+.who-me{font-size:13px;color:var(--muted);margin:-6px 0 12px}
