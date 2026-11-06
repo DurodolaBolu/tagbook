@@ -791,26 +791,41 @@ function showLogin(msg) {
       le.textContent = /fetch|network/i.test(error.message) ? "Can't reach Tagbook. Check your internet and try again." : "Wrong phone number or PIN.";
       le.hidden = false; return;
     }
-    box.hidden = true; await start();
+    await start();
   };
 }
 
+// A saved login stays until the person logs out or the owner removes them. A weak or missing
+// connection must never look like being logged out: show "can't reach" with a retry instead.
+const hasSavedLogin = () => { try { return !!localStorage.getItem("tagbook-auth"); } catch (_) { return false; } };
+function cantReach(msg) {
+  $("#login").hidden = true; $("#app").hidden = false;
+  view.innerHTML = `<div class="loading" style="flex-direction:column;gap:14px;text-align:center">${msg}<button class="btn btn-primary" id="retry" style="max-width:220px">Try again</button></div>`;
+  $("#retry").onclick = () => start();
+}
 async function start() {
-  view.innerHTML = `<div class="loading">Loading your shop…</div>`; $("#app").hidden = false;
-  const { data: u } = await sb.auth.getUser();
-  if (!u || !u.user) return showLogin();
-  const { data: st, error } = await sb.from("staff").select("user_id,shop_id,role,name,phone,active").eq("user_id", u.user.id).maybeSingle();
-  if (error) { view.innerHTML = `<div class="loading">Can't reach Tagbook. Check your internet, then pull down to try again.</div>`; return; }
+  view.innerHTML = `<div class="loading">Loading your shop…</div>`; $("#app").hidden = false; $("#login").hidden = true;
+  const timeout = new Promise(r => setTimeout(() => r({ data: null, error: new Error("timeout") }), 9000));
+  const { data, error: se } = await Promise.race([sb.auth.getSession(), timeout]);
+  const user = data && data.session && data.session.user;
+  if (!user) {
+    if (hasSavedLogin() && (se || !navigator.onLine)) return cantReach("Can't reach Tagbook. Check your internet and try again.");
+    return showLogin();
+  }
+  const { data: st, error } = await sb.from("staff").select("user_id,shop_id,role,name,phone,active").eq("user_id", user.id).maybeSingle();
+  if (error) {
+    if (/JWT|token|401/i.test(error.message || "") ) { const r = await sb.auth.refreshSession(); if (!r.error) return start(); }
+    return cantReach("Can't reach Tagbook. Check your internet and try again.");
+  }
   if (!st || !st.active) { await sb.auth.signOut(); return showLogin("This login has been removed. Ask the shop owner."); }
   me = st; role = st.role === "owner" ? "own" : "sec";
-  try { await load(); } catch (e) { view.innerHTML = `<div class="loading">Can't load your shop. Check your internet, then pull down to try again.</div>`; return; }
+  try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   reset(); subscribe(); route();
 }
 
 (async function boot() {
   $("#offline").hidden = navigator.onLine !== false;
-  const { data } = await sb.auth.getSession();
-  if (!data.session) return showLogin();
+  if (!hasSavedLogin()) return showLogin();
   await start();
 })();
-sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT" && me) { location.hash = ""; location.reload(); } });
+sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT" && me && !hasSavedLogin()) { location.hash = ""; location.reload(); } });

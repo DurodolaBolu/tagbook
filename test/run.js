@@ -34,6 +34,10 @@ async function handle(route) {
   const body = req.postData() ? JSON.parse(req.postData()) : null;
   const send = (status, obj, headers = {}) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*", ...headers }, body: obj === undefined ? "" : JSON.stringify(obj) });
   if (method === "OPTIONS") return route.fulfill({ status: 200, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
+  if (p === "/auth/v1/token" && u.searchParams.get("grant_type") === "refresh_token") {
+    const user = { id: current, aud: "authenticated", role: "authenticated" };
+    return send(200, { access_token: "h.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwfQ.s", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: "r2", user });
+  }
   if (p === "/auth/v1/token") {
     const phone = (body.email || "").match(/^p(\d+)@/)?.[1]; const pin = (body.password || "").match(/^tb-(\d{6})-tagbook$/)?.[1];
     const s = db.staff.find(x => x.phone === phone);
@@ -137,6 +141,12 @@ async function handle(route) {
 
   // OWNER
   await login("08120756325"); await shot("07-owner-orders");
+  await page.reload(); await page.waitForTimeout(800); console.log("still logged in after reload:", await page.isVisible("#tabs button"));
+  await ctx.unroute(SB + "/**"); await ctx.route(SB + "/**", r => r.abort());
+  await page.evaluate(() => { const k = JSON.parse(localStorage.getItem("tagbook-auth")); k.expires_at = 1; localStorage.setItem("tagbook-auth", JSON.stringify(k)); });
+  await page.reload(); await page.waitForTimeout(10500); console.log("no internet shows:", (await page.textContent("#view")).slice(0, 60), "| login shown:", await page.isVisible("#lf"));
+  await ctx.unroute(SB + "/**"); await ctx.route(SB + "/**", handle);
+  await page.click("#retry"); await page.waitForTimeout(10000); console.log("after retry logged in:", await page.isVisible("#tabs button"));
   await T(".order"); await shot("08-owner-order");
   await T('[data-done="list"]').catch(() => {});
   console.log("status after list sent attempt:", db.orders[0].status);
