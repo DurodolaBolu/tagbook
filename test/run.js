@@ -49,9 +49,12 @@ async function handle(route) {
   if (p === "/auth/v1/user") { if (method === "PUT") return send(200, { id: current }); return send(200, { id: current, aud: "authenticated" }); }
   if (p === "/auth/v1/logout") { current = null; return send(204); }
   if (p === "/functions/v1/admin") {
+    if (body.action === "create_shop") { if (current !== ownerId) return send(403, { error: "NOT_ALLOWED" }); db.shops.push({ id: uid(), name: body.shop, created_at: new Date().toISOString(), trial_ends: body.trial_ends }); global.lastCreate = body; return send(200, { ok: true }); }
     if (body.action === "add_staff") { if (db.staff.some(s => s.phone === body.phone)) return send(409, { error: "PHONE_IN_USE" }); db.staff.push({ user_id: uid(), shop_id: shopId, role: "secretary", name: body.name, phone: body.phone, active: true, created_at: new Date().toISOString() }); }
     return send(200, { ok: true });
   }
+  if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId);
+  if (p === "/rest/v1/rpc/admin_shops") return send(200, db.shops.map(s => ({ id: s.id, name: s.name, created_at: s.created_at, trial_ends: s.trial_ends || null, owner_name: "Bolu", owner_phone: "08120756325", staff: db.staff.length, orders: db.orders.length, last_order: new Date().toISOString() })));
   if (p === "/rest/v1/rpc/find_customer") {
     const ph = db.customer_phones.find(x => x.phone === body.p_phone); const c = ph && db.customers.find(x => x.id === ph.customer_id);
     return send(200, c ? [{ id: c.id, name: c.name, mark: c.mark }] : []);
@@ -179,6 +182,10 @@ async function handle(route) {
   // settings: add staff, price edit, branch add
   await T("#gear"); await shot("13a-settings-business");
   await T('[data-st="account"]'); await page.waitForTimeout(400); console.log("account notifications box:", (await page.textContent("#pushbox")).trim().slice(0, 40)); await shot("13x-account");
+  await T('[data-st="shops"]'); await page.waitForTimeout(300);
+  await page.fill("#as-n", "Saheed Dry Cleaners"); await page.fill("#as-b", "Main branch, Awule point, Oke-Ijebu point"); await page.fill("#as-on", "Saheed Bello"); await page.fill("#as-op", "08055556666"); await page.fill("#as-pin", "246810");
+  await T("#as-go"); await page.waitForTimeout(500); console.log("create_shop sent:", JSON.stringify(global.lastCreate)); await shot("16-admin-created");
+  console.log("shops listed:", (await page.textContent("#view")).includes("Saheed Dry Cleaners"));
   await T('[data-st="business"]');
   await T('[data-st="staff"]');
   await page.fill("#sfn", "Tolu"); await page.fill("#sfp", "08033334444"); await page.fill("#sfk", "123456"); await T("#sfa"); await page.waitForTimeout(400);
@@ -204,6 +211,10 @@ async function handle(route) {
   await page.goto("http://localhost:8787/#orders"); await page.waitForSelector("#tabs button"); await page.waitForTimeout(500); await shot("20-laptop-orders");
   await page.click(".order"); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, "21-laptop-order.png") });
   await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(400); await T('[data-st="prices"]'); await shot("22-laptop-prices");
+  await T('[data-st="shops"]'); await page.waitForTimeout(300);
+  await page.fill("#as-n", "Saheed Dry Cleaners"); await page.fill("#as-b", "Main branch, Awule point, Oke-Ijebu point"); await page.fill("#as-on", "Saheed Bello"); await page.fill("#as-op", "08055556666"); await page.fill("#as-pin", "246810");
+  await T("#as-go"); await page.waitForTimeout(500); console.log("create_shop sent:", JSON.stringify(global.lastCreate)); await shot("16-admin-created");
+  console.log("shops listed:", (await page.textContent("#view")).includes("Saheed Dry Cleaners"));
   await T('[data-st="business"]'); await shot("23-laptop-business");
   await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(400); await shot("24-laptop-log");
   await page.goto("http://localhost:8787/#reports"); await page.waitForTimeout(400); await shot("25-laptop-reports");

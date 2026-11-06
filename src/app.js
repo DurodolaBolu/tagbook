@@ -26,7 +26,7 @@ function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; 
 const busy = () => { const a = document.activeElement; return !!(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); };
 
 /* ---------- State, loaded from the database ---------- */
-let me = null, role = "sec", shop = null, priv = null;
+let me = null, role = "sec", shop = null, priv = null, isAdmin = false;
 let BRANCHES = [], PRICES = [], customers = [], orders = [], staffList = [];
 let tab = "orders", filter = "all", query = "", openNo = null;
 const own = () => role === "own";
@@ -722,7 +722,8 @@ const shortSvc = { wi: "Wash & iron", wo: "Wash", io: "Iron", wsi: "Starch" };
 function renderSettings() {
   if (!own()) setTab = "account";
   const meLine = `<p class="who-me">Signed in as <b>${esc(me.name)}</b> (${own() ? "owner" : "staff"}) · ${fmtPhone(me.phone)}</p>`;
-  const nav = own() ? `<nav class="stabs" aria-label="Settings sections">${SET_TABS.map(([k, l]) => `<button data-st="${k}" aria-current="${setTab === k ? "page" : "false"}">${l}</button>`).join("")}</nav>` : "";
+  const tabsList = isAdmin ? SET_TABS.concat([["shops", "Tagbook shops"]]) : SET_TABS;
+  const nav = own() ? `<nav class="stabs" aria-label="Settings sections">${tabsList.map(([k, l]) => `<button data-st="${k}" aria-current="${setTab === k ? "page" : "false"}">${l}</button>`).join("")}</nav>` : "";
   let body = "";
   if (setTab === "account") body = (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
       `<label for="np">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}><button class="btn btn-ghost" id="npb">Save new PIN</button>`)
@@ -752,6 +753,7 @@ function renderSettings() {
        <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${pinAttrs}></div></div>
        <button class="btn btn-primary" id="sfa">Add staff login</button>`);
   if (setTab === "prices") body = priceListHtml();
+  if (setTab === "shops" && isAdmin) body = shopsHtml();
   view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa</p>`;
   wireBack(view);
   view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
@@ -760,6 +762,7 @@ function renderSettings() {
   if (setTab === "branches") wireBranches();
   if (setTab === "staff") wireStaff();
   if (setTab === "prices") wirePrices();
+  if (setTab === "shops" && isAdmin) wireShops();
 }
 const savedToast = ok => { if (ok) toast("Saved"); };
 async function drawPushBox() {
@@ -818,6 +821,50 @@ function wireStaff() {
     const r = await callAdmin({ action: "add_staff", name, phone, pin });
     if (!r.ok) { toast(r.msg); $("#sfa").disabled = false; $("#sfa").textContent = "Add staff login"; return; }
     toast(`${name} can now log in with ${fmtPhone(phone)} and their PIN`); await load(); renderSettings();
+  };
+}
+
+/* ---------- Ordiventa only: add shops and see every shop ---------- */
+let newShop = null, shopRows = null;
+const isoDay = d => d.toISOString().slice(0, 10);
+function shopsHtml() {
+  const trial = (() => { const x = new Date(); x.setMonth(x.getMonth() + 1); return isoDay(x); })();
+  const done = newShop ? card("Shop created", "Send the owner their login. Tell them the PIN in person if you can.",
+      `<div class="wa" id="nsmsg">${esc(newShop.msg)}</div>
+       <a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/234${newShop.phone.slice(1)}?text=${encodeURIComponent(newShop.msg)}">Send on WhatsApp</a>
+       <div class="row"><button class="btn btn-ghost" id="nscopy">Copy</button><button class="btn btn-ghost" id="nsagain">Add another shop</button></div>`) : "";
+  const form = newShop ? "" : card("Add a shop", "Creates the shop with the standard price list. The owner can change prices, add branches and staff in their own Settings.",
+      `<label for="as-n">Shop name</label><input id="as-n" placeholder="e.g. Saheed Dry Cleaners" autocomplete="off">
+       <label for="as-b">Branches</label><input id="as-b" placeholder="Main branch" autocomplete="off"><p class="hint">Separate with commas, e.g. Main branch, Awule point, Oke-Ijebu point.</p>
+       <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" placeholder="e.g. Saheed" autocomplete="off"></div>
+       <div><label for="as-op">Owner's phone</label><input id="as-op" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
+       <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${pinAttrs}></div></div>
+       <div class="sgrid"><div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>
+       <div><label for="as-no">First order number</label><input id="as-no" ${moneyAttrs} value="1"><p class="hint">Use their book's next number if they want to continue it.</p></div></div>
+       <label class="toggle"><span>Founding price (₦3,000 for 12 months)</span><input type="checkbox" id="as-f" checked></label>
+       <button class="btn btn-primary" id="as-go">Create shop</button>`);
+  const list = card("All shops", "", shopRows === null ? `<p class="hint">Loading…</p>` : !shopRows.length ? `<p class="hint">No shops yet.</p>`
+      : shopRows.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")} · ${r.staff} login${r.staff === 1 ? "" : "s"}</span>
+        <span>${r.orders} order${r.orders === 1 ? "" : "s"}${r.last_order ? ` · last ${fmtDay(Date.parse(r.last_order))}` : ""}${r.trial_ends ? ` · trial ends ${fmtDay(Date.parse(r.trial_ends))}` : ""}</span></div></div>`).join(""));
+  return done + form + list;
+}
+async function loadShops() { const { data } = await sb.rpc("admin_shops"); shopRows = data || []; if (setTab === "shops") renderSettings(); }
+function wireShops() {
+  if (shopRows === null) loadShops();
+  if ($("#nscopy")) $("#nscopy").onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(newShop.msg) : Promise.reject()).then(() => toast("Copied")).catch(() => toast("Select the message and copy it")); };
+  if ($("#nsagain")) $("#nsagain").onclick = () => { newShop = null; renderSettings(); };
+  if ($("#as-no")) moneyInput($("#as-no"), () => { });
+  if (!$("#as-go")) return;
+  $("#as-go").onclick = async () => {
+    const shopName = $("#as-n").value.trim(), owner = $("#as-on").value.trim(), phone = digits($("#as-op").value), pin = digits($("#as-pin").value);
+    const branches = $("#as-b").value.split(",").map(x => x.trim()).filter(Boolean);
+    const err = !shopName ? "Type the shop name." : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
+    if (err) { toast(err); return; }
+    $("#as-go").disabled = true; $("#as-go").textContent = "Creating…";
+    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t").value || null, start_no: num($("#as-no").value) || 1, founding: $("#as-f").checked });
+    if (!r.ok) { toast(r.msg); $("#as-go").disabled = false; $("#as-go").textContent = "Create shop"; return; }
+    newShop = { phone, msg: `Hello ${owner.split(" ")[0]}, ${shopName} is now on Tagbook.\n\nOpen tagbook.ordiventa.com and log in with:\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.\n\nWelcome, and thank you for starting with us.` };
+    shopRows = null; renderSettings();
   };
 }
 
@@ -996,6 +1043,7 @@ async function start() {
   }
   if (!st || !st.active) { await sb.auth.signOut(); return showLogin("This login has been removed. Ask the shop owner."); }
   me = st; role = st.role === "owner" ? "own" : "sec";
+  try { const r = await sb.rpc("is_platform_admin"); isAdmin = r.data === true; } catch (_) { isAdmin = false; }
   $("#login").hidden = true; L = null;
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   saveLast({ phone: st.phone, name: st.name, shop: shop.name });
