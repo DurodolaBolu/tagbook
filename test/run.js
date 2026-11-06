@@ -55,6 +55,13 @@ async function handle(route) {
   }
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId);
   if (p === "/rest/v1/rpc/admin_shops") return send(200, db.shops.map(s => ({ id: s.id, name: s.name, created_at: s.created_at, trial_ends: s.trial_ends || null, owner_name: "Bolu", owner_phone: "08120756325", staff: db.staff.length, orders: db.orders.length, last_order: new Date().toISOString() })));
+  if (p === "/rest/v1/rpc/record_payment") {
+    const me = db.staff.find(s => s.user_id === current); const m = db.order_money.find(q => q.order_id === body.p_order); const o = db.orders.find(q => q.id === body.p_order);
+    const nw = m.billed_at ? Math.min(m.total, m.paid + body.p_amount) : m.paid + body.p_amount; const added = nw - m.paid;
+    if (added <= 0) return send(400, { message: "ALREADY_PAID" });
+    m.paid = nw; m.payments.push({ amt: added, at: Date.now(), method: body.p_method, by: me.name }); o.settled = !!m.billed_at && m.paid >= m.total; global.lastPay = { by: me.role, added, method: body.p_method };
+    return send(200, me.role === "owner" ? { added, paid: nw, total: m.total, billed: !!m.billed_at } : { added, settled: o.settled });
+  }
   if (p === "/rest/v1/rpc/find_customer") {
     const ph = db.customer_phones.find(x => x.phone === body.p_phone); const c = ph && db.customers.find(x => x.id === ph.customer_id);
     return send(200, c ? [{ id: c.id, name: c.name, mark: c.mark }] : []);
@@ -68,8 +75,11 @@ async function handle(route) {
       c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
     const no = db.shops[0].next_no++; const id = uid();
     db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, express: x.express, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
-    const paid = me.role === "owner" ? x.paid || 0 : 0;
-    db.order_money.push({ order_id: id, shop_id: shopId, unit: null, custom: {}, delivery: 0, discount: 0, total: 0, billed_at: null, paid, payments: paid ? [{ amt: paid, at: Date.now() }] : [], express_amt: 0 });
+    let auto = !x.express && !x.pickup, unit = [], total = 0;
+    for (const it of x.items) { const item = db.items.find(i => i.id === it.id); const pr = db.item_prices.find(p => p.item_id === it.id); const v = pr && pr.prices[it.svc]; if (!item || item.custom || v == null) { auto = false; unit.push(null); } else { unit.push(v); total += v * it.qty; } }
+    let paid = x.paid || 0; if (auto && paid > total) paid = total;
+    db.order_money.push({ order_id: id, shop_id: shopId, unit: auto ? unit : null, custom: {}, delivery: 0, discount: 0, total: auto ? total : 0, billed_at: auto ? new Date().toISOString() : null, paid, payments: paid ? [{ amt: paid, at: Date.now(), method: x.method, by: me.name }] : [], express_amt: 0 });
+    const oo = db.orders.find(q => q.id === id); oo.billed = auto; oo.settled = auto && paid >= total;
     return send(200, { id, no, customer_id: c.id, name: c.name, mark: c.mark });
   }
   const m = p.match(/^\/rest\/v1\/(\w+)$/);
@@ -132,13 +142,18 @@ async function handle(route) {
   await T('[data-add="it3"]'); await page.fill("#sp", "Wedding gown"); await T("#spa");
   await page.selectOption("#br", "b2");
   await shot("03-sec-log");
-  console.log("sec sees paid field:", await page.$("#pd") !== null);
+  console.log("staff sees paid-now field:", await page.isVisible("#pd"));
+  await page.fill("#pd", "1000"); await page.waitForTimeout(150); await T('[data-dm="transfer"]');
   await T("#save"); await page.waitForTimeout(500); await shot("04-sec-orders");
+  console.log("drop-off payment saved:", JSON.stringify(db.order_money[0].payments), "auto billed (has special item, expect false):", !!db.order_money[0].billed_at);
   console.log("order saved:", JSON.stringify(db.orders.map(o => [o.no, o.status, o.branch_id, o.items.length])));
   console.log("customer:", JSON.stringify(db.customers.map(c => [c.name, c.mark])));
   // secretary opens it, washed, check, ready
   await T(".order"); await shot("05-sec-order");
   console.log("sec order sheet has ₦:", (await page.textContent("#sheet")).includes("₦"));
+  await page.fill("#pay", "500"); await T('[data-pm="cash"]'); await T("#pp"); await page.waitForTimeout(400);
+  await page.evaluate(() => { const s = document.querySelector("#sheet"); s.scrollTop = 300; }); await page.waitForTimeout(150); await page.screenshot({ path: path.join(out, "05b-staff-pay.png") });
+  console.log("staff payment:", JSON.stringify(global.lastPay), "| staff sheet shows amounts:", /₦\s?\d/.test(await page.textContent("#sheet")));
   await T("#washed"); const n = (await page.$$("[data-ck]")).length; for (let i = 0; i < n; i++) { await page.check(`[data-ck="${i}"]`); await page.waitForTimeout(150); }
   await T("#rd"); console.log("status after sec ready:", db.orders[0].status);
   await T("#sheet [data-back]");
@@ -175,6 +190,9 @@ async function handle(route) {
   await T('[data-add="it2"]'); await page.fill("#pd", "2000"); await T("#save"); await page.waitForTimeout(500);
   console.log("orders:", JSON.stringify(db.orders.map(o => [o.no, o.status, o.notified])), "paid #2:", db.order_money[1].paid);
   await shot("11-owner-order2");
+  await page.evaluate(() => { const s = document.querySelector("#sheet"); s.scrollTop = 520; }); await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(out, "11d-owner-order2-bill.png") });
+  console.log("auto-billed order shows:", (await page.textContent("#bill")).trim());
   await T("#sheet [data-back]");
   // reports
   await T('#tabs button[data-tab="reports"]'); await shot("12-reports");
