@@ -110,7 +110,7 @@ async function handle(route) {
   await ctx.route(SB + "/**", handle);
   await ctx.routeWebSocket(/realtime/, ws => {});
   const shot = async n => page.screenshot({ path: path.join(out, n + ".png"), fullPage: true });
-  const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$("#lswitch")) { await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); await page.waitForSelector("#tabs button"); };
+  const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); await page.waitForSelector("#tabs button"); };
   const T = async (sel) => { await page.click(sel); await page.waitForTimeout(250); };
 
   // bad login
