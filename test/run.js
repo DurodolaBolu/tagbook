@@ -208,7 +208,14 @@ async function handle(route) {
   await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T("#out"); await T("#out"); await page.waitForTimeout(500); await login("08120756325");
   // laptop
   await page.setViewportSize({ width: 1440, height: 900 });
+  // pagination: make 45 orders, expect 20 a page
+  for (let i = 0; i < 45; i++) { const o = JSON.parse(JSON.stringify(db.orders[0])); o.id = "pg" + i; o.no = 1000 + i; db.orders.push(o); db.order_money.push({ ...db.order_money[0], order_id: o.id }); }
   await page.goto("http://localhost:8787/#orders"); await page.waitForSelector("#tabs button"); await page.waitForTimeout(500); await shot("20-laptop-orders");
+  await page.reload(); await page.waitForSelector(".pager"); console.log("rows on page 1:", (await page.$$(".order")).length, "|", await page.textContent(".pager span"));
+  await page.click("#pgnext"); await page.waitForTimeout(200); console.log("page 2:", await page.textContent(".pager span"));
+  await page.click("#pgnext"); await page.waitForTimeout(200); console.log("page 3:", await page.textContent(".pager span"), "rows:", (await page.$$(".order")).length, "older disabled:", await page.isDisabled("#pgnext"));
+  await page.fill("#q", "ade"); await page.waitForTimeout(200); console.log("search resets to:", await page.textContent(".pager span"));
+  await page.fill("#q", ""); await page.waitForTimeout(200);
   await page.click(".order"); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, "21-laptop-order.png") });
   await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(400); await T('[data-st="prices"]'); await shot("22-laptop-prices");
   await T('[data-st="shops"]'); await page.waitForTimeout(300);

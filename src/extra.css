@@ -159,3 +159,6 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .alert .pacts{display:flex;gap:6px;flex:none}
 .alert button.later{background:transparent;color:var(--accent-deep);text-decoration:underline;padding:6px 4px}
 .pushon{font-weight:600;color:var(--accent-deep);margin:0 0 4px}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pager .mini{padding:8px 14px;font-size:15px}
+.pager .mini[disabled]{opacity:.4;cursor:default}

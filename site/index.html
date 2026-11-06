@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261106024155";</script>
+<script>window.TB_BUILD="20261106024655";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -320,6 +320,9 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .alert .pacts{display:flex;gap:6px;flex:none}
 .alert button.later{background:transparent;color:var(--accent-deep);text-decoration:underline;padding:6px 4px}
 .pushon{font-weight:600;color:var(--accent-deep);margin:0 0 4px}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pager .mini{padding:8px 14px;font-size:15px}
+.pager .mini[disabled]{opacity:.4;cursor:default}
 </style>
 </head><body>
 <div id="offline" class="offline" hidden>You're offline. Changes won't save until you're back online.</div>
@@ -334,7 +337,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261106024155"></script>
+<script src="/app.js?v=20261106024655"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

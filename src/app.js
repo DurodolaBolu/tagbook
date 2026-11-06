@@ -28,7 +28,8 @@ const busy = () => { const a = document.activeElement; return !!(a && /INPUT|TEX
 /* ---------- State, loaded from the database ---------- */
 let me = null, role = "sec", shop = null, priv = null, isAdmin = false;
 let BRANCHES = [], PRICES = [], customers = [], orders = [], staffList = [];
-let tab = "orders", filter = "all", query = "", openNo = null;
+let tab = "orders", filter = "all", query = "", openNo = null, page = 0;
+const PER_PAGE = 20;
 const own = () => role === "own";
 const theme = () => { try { return localStorage.getItem("tb-theme") || "light"; } catch (_) { return "light"; } };
 const shopName = () => (shop && shop.name.trim()) || "Your laundry";
@@ -271,7 +272,8 @@ function renderOrders() {
     }
     return true;
   }).sort((a, b) => b.no - a.no);
-  const shown = list.slice(0, 200);
+  const pages = Math.max(1, Math.ceil(list.length / PER_PAGE)); if (page >= pages) page = pages - 1; if (page < 0) page = 0;
+  const shown = list.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const askPush = own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
   view.innerHTML = `
     ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
@@ -293,11 +295,16 @@ function renderOrders() {
         <div class="right">${own() && o.billed ? `<b>${naira(o.m.total)}</b>` : ""}${pills(o)}</div>
       </button>`;
     }).join("") : `<div class="empty">${orders.length ? "No orders here. Change the filter or search." : "No orders yet. Tap “+ Log clothes” to add the first one."}</div>`}</div>
-    ${list.length > shown.length ? `<p class="hint" style="text-align:center;margin-top:12px">Showing the newest 200. Search to find older orders.</p>` : ""}
+    ${pages > 1 ? `<div class="pager"><button class="mini" id="pgprev" ${page === 0 ? "disabled" : ""} aria-label="Newer orders">‹ Newer</button>
+      <span>${page * PER_PAGE + 1}–${page * PER_PAGE + shown.length} of ${list.length}</span>
+      <button class="mini" id="pgnext" ${page >= pages - 1 ? "disabled" : ""} aria-label="Older orders">Older ›</button></div>` : ""}
     <p class="foot">Tagbook by Ordiventa</p>`;
-  $("#q").oninput = e => { query = e.target.value; const p = e.target.selectionStart; renderOrders(); const q = $("#q"); q.focus(); q.setSelectionRange(p, p); };
-  view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; renderOrders(); });
-  view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; renderOrders(); });
+  const toTop = () => { const t = $("#q"); if (t) window.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top + window.scrollY - 12) }); };
+  if ($("#pgprev")) $("#pgprev").onclick = () => { page--; renderOrders(); toTop(); };
+  if ($("#pgnext")) $("#pgnext").onclick = () => { page++; renderOrders(); toTop(); };
+  $("#q").oninput = e => { query = e.target.value; page = 0; const p = e.target.selectionStart; renderOrders(); const q = $("#q"); q.focus(); q.setSelectionRange(p, p); };
+  view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; page = 0; renderOrders(); });
+  view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
