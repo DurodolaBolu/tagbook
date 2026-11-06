@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261106031035";</script>
+<script>window.TB_BUILD="20261106184941";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -328,6 +328,35 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .paylist>div:last-child{border-bottom:0}
 .paylist span:first-child{color:var(--fg);font-weight:500}
 .staff-row .refline{color:var(--accent-deep);font-weight:500}
+
+/* Ordiventa dashboard */
+.dtop{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.dtop .ptitle{margin:0}
+.dtop .row{gap:8px}
+.dstats{grid-template-columns:repeat(2,1fr)}
+.dstats .stat{cursor:default}
+.dstats .stat small{font-size:14px;font-weight:600;color:var(--muted)}
+.dlist{display:grid;gap:12px;margin-bottom:16px}
+.dshop{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.dshop.is-test{opacity:.75}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.dhead b{display:block;font-size:17px}
+.dhead span{font-size:14px;color:var(--muted)}
+.dhead a{color:var(--accent);text-decoration:none;font-weight:600}
+.dnums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.dnums b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.dnums span{font-size:12px;color:var(--muted);line-height:1.3}
+.dnums em{font-style:normal;font-weight:700}
+.dnums em.up{color:var(--accent)}.dnums em.down{color:var(--owes)}
+.dmeta{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.dmeta div{min-width:0}
+.dmeta dt{font-size:12px;color:var(--muted)}
+.dmeta dd{margin:0;font-size:14px;font-weight:600}
+.dflags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.dtest{margin:20px 0 10px}
+@media (min-width:900px){.dstats{grid-template-columns:repeat(3,1fr)}.dlist{grid-template-columns:1fr 1fr}}
+.dtop .row .btn,.dcall .btn{width:auto;flex:none;white-space:nowrap;padding:10px 14px;min-height:0}
+.dcall .staff-row{align-items:center}
 </style>
 </head><body>
 <div id="offline" class="offline" hidden>You're offline. Changes won't save until you're back online.</div>
@@ -342,7 +371,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261106031035"></script>
+<script src="/app.js?v=20261106184941"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

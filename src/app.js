@@ -156,15 +156,73 @@ const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (
 
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
+/* ---------- Ordiventa dashboard (platform admin only) ---------- */
+let dash = null, dashAt = 0, dashBusy = false;
+const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
+const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
+async function loadDash() { if (dashBusy) return; dashBusy = true; try { const { data, error } = await sb.rpc("admin_dashboard"); if (!error) { dash = data || []; dashAt = Date.now(); } } finally { dashBusy = false; } if (tab === "admin") renderAdmin(); }
+function shopFlags(r) {
+  const f = [], age = (Date.now() - Date.parse(r.created_at)) / 864e5, left = daysTo(r.trial_ends);
+  if (!r.orders && age > 1) f.push(["No orders yet, " + Math.floor(age) + " day" + (Math.floor(age) === 1 ? "" : "s") + " in", "owes"]);
+  else if (!r.orders) f.push(["No orders yet", "warn"]);
+  else if (r.last_order && Date.now() - Date.parse(r.last_order) > 3 * 864e5) f.push(["No orders for " + ago(r.last_order).replace(" ago", ""), "owes"]);
+  if (left !== null && left <= 7) f.push([left < 0 ? "Trial ended" : left === 0 ? "Trial ends today" : "Trial ends in " + left + " day" + (left === 1 ? "" : "s"), "warn"]);
+  if (!r.staff) f.push(["No staff login", "warn"]);
+  if (!r.push) f.push(["Owner alerts off", "warn"]);
+  return f;
+}
+function renderAdmin() {
+  if (!isAdmin) return go("orders");
+  if (dash === null || Date.now() - dashAt > 60e3) loadDash();
+  if (dash === null) { view.innerHTML = `<h2 class="ptitle">Shops</h2><p class="hint">Loading…</p>`; return; }
+  const real = dash.filter(r => !r.is_test), test = dash.filter(r => r.is_test);
+  const sum = k => real.reduce((s, r) => s + (+r[k] || 0), 0);
+  const active = real.filter(r => r.week > 0).length, trial = real.filter(r => daysTo(r.trial_ends) >= 0).length;
+  const need = real.map(r => [r, shopFlags(r).filter(f => f[1] === "owes")]).filter(x => x[1].length);
+  const wa = p => p ? "https://wa.me/234" + String(p).replace(/^0/, "") : "";
+  const shopCard = r => {
+    const left = daysTo(r.trial_ends), trend = r.prev_week ? Math.round((r.week - r.prev_week) / r.prev_week * 100) : null;
+    return `<section class="dshop${r.is_test ? " is-test" : ""}">
+      <div class="dhead"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")}${r.owner_phone ? ` · <a href="${wa(r.owner_phone)}" target="_blank" rel="noopener">${fmtPhone(r.owner_phone)}</a>` : ""}</span></div>
+        <span class="pill ${r.is_test ? "p-collected" : left !== null && left >= 0 ? "p-billed" : "p-ready"}">${r.is_test ? "Test" : left !== null && left >= 0 ? "Trial" : "Live"}</span></div>
+      <div class="dnums"><div><b>${r.today}</b><span>Today</span></div><div><b>${r.week}</b><span>7 days${trend !== null ? ` <em class="${trend >= 0 ? "up" : "down"}">${trend >= 0 ? "+" : ""}${trend}%</em>` : ""}</span></div><div><b>${r.orders}</b><span>All orders</span></div><div><b>${r.clothes_week}</b><span>Clothes this week</span></div></div>
+      <dl class="dmeta">
+        <div><dt>Last order</dt><dd>${r.last_order ? ago(r.last_order) : "none yet"}</dd></div>
+        <div><dt>Last opened</dt><dd>${ago(r.last_active)}</dd></div>
+        <div><dt>Logins</dt><dd>${r.owners} owner, ${r.staff} staff</dd></div>
+        <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
+        <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}</dd></div>
+        <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}${r.founding ? " · founding" : ""}</dd></div>
+        ${r.referred_by_name || r.referrals ? `<div><dt>Referrals</dt><dd>${r.referred_by_name ? `From ${esc(r.referred_by_name)}` : ""}${r.referred_by_name && r.referrals ? " · " : ""}${r.referrals ? `brought ${r.referrals}` : ""}</dd></div>` : ""}
+      </dl>
+      ${r.is_test ? "" : (f => f.length ? `<div class="dflags">${f.map(([t, k]) => `<span class="pill p-${k === "owes" ? "owed" : "new"}">${t}</span>`).join("")}</div>` : "")(shopFlags(r))}
+    </section>`;
+  };
+  view.innerHTML = `<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
+      <div class="row"><button class="btn btn-ghost" id="dref">Refresh</button><button class="btn btn-primary" id="dadd">Add a shop</button></div></div>
+    <div class="stats dstats">
+      <div class="stat"><b>${real.length}</b><span>Shops</span></div>
+      <div class="stat"><b>${active}<small> of ${real.length}</small></b><span>Logged orders this week</span></div>
+      <div class="stat"><b>${sum("today")}</b><span>Orders today</span></div>
+      <div class="stat"><b>${sum("week")}</b><span>Orders, 7 days</span></div>
+      <div class="stat"><b>${trial}</b><span>On free trial</span></div>
+      <div class="stat"><b>${naira(real.filter(r => r.founding).length * 3000 + real.filter(r => !r.founding).length * 5000)}</b><span>Monthly, once all pay</span></div>
+    </div>
+    ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<a class="btn btn-ghost" href="${wa(r.owner_phone)}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</div>`).join("")}</section>` : ""}
+    <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
+    ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
+  $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
+  $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };
+}
 /* ---------- Navigation ---------- */
-const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports" };
+const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports", admin: "admin" };
 function go(h) { if (location.hash.slice(1) === h) route(); else location.hash = h; }
 function route() {
   if (!me) return;
   const h = location.hash.slice(1);
   const m = h.match(/^order-(\d+)$/);
   if (m && orders.some(o => o.no === +m[1])) { tab = "orders"; openNo = +m[1]; }
-  else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : "orders"; }
+  else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : (h === "admin" && isAdmin) ? "admin" : "orders"; }
   render();
 }
 window.addEventListener("hashchange", route);
@@ -178,13 +236,14 @@ function render() {
   $("#app").hidden = false; $("#tabsnav").hidden = false; $("#app").classList.remove("is-loading");
   $("#shopname").textContent = shopName();
   const tabs = own() ? [["orders", "Orders"], ["new", "+ Log clothes"], ["reports", "Reports"]] : [["orders", "Orders"], ["new", "+ Log clothes"]];
+  if (isAdmin) tabs.push(["admin", "Shops"]);
   const th = $("#themebtn"), dark = theme() === "dark";
   th.innerHTML = dark ? SUN : MOON; th.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode"); th.title = th.getAttribute("aria-label");
   th.onclick = () => { try { localStorage.setItem("tb-theme", dark ? "light" : "dark"); } catch (_) { } render(); };
   const g = $("#gear"); g.hidden = false; g.onclick = () => go("shop"); g.setAttribute("aria-current", tab === "prices" ? "page" : "false");
   $("#tabs").innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" ${k === "new" ? 'class="new"' : ""} ${tab === k ? 'aria-current="page"' : ""}>${l}</button>`).join("");
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => go(TAB_HASH[b.dataset.tab]));
-  if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else renderSettings();
+  if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else if (tab === "admin") renderAdmin(); else renderSettings();
   if (openNo) openOrder(openNo); else $("#sheet").hidden = true;
   document.body.classList.toggle("has-sheet", !!openNo);
 }
