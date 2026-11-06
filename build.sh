@@ -35,7 +35,7 @@ $(cat src/extra.css)
 <div class="app" id="app" hidden>
   <header>
     <div class="brand"><span id="shopname"></span><small>Tagbook</small></div>
-    <div class="hdr-r">$GEAR</div>
+    <div class="hdr-r"><button id="themebtn" class="gear" type="button"></button>$GEAR</div>
   </header>
   <section id="view"></section>
 </div>

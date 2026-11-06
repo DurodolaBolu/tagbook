@@ -153,6 +153,8 @@ function calc(o) {
 }
 const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (o.billed && !o.settled ? 1 : 0);
 
+const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
+const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Navigation ---------- */
 const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports" };
 function go(h) { if (location.hash.slice(1) === h) route(); else location.hash = h; }
@@ -175,11 +177,15 @@ function render() {
   $("#app").hidden = false; $("#tabsnav").hidden = false;
   $("#shopname").textContent = shopName();
   const tabs = own() ? [["orders", "Orders"], ["new", "+ Log clothes"], ["reports", "Reports"]] : [["orders", "Orders"], ["new", "+ Log clothes"]];
+  const th = $("#themebtn"), dark = theme() === "dark";
+  th.innerHTML = dark ? SUN : MOON; th.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode"); th.title = th.getAttribute("aria-label");
+  th.onclick = () => { try { localStorage.setItem("tb-theme", dark ? "light" : "dark"); } catch (_) { } render(); };
   const g = $("#gear"); g.hidden = false; g.onclick = () => go("shop"); g.setAttribute("aria-current", tab === "prices" ? "page" : "false");
   $("#tabs").innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" ${k === "new" ? 'class="new"' : ""} ${tab === k ? 'aria-current="page"' : ""}>${l}</button>`).join("");
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => go(TAB_HASH[b.dataset.tab]));
   if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else renderSettings();
   if (openNo) openOrder(openNo); else $("#sheet").hidden = true;
+  document.body.classList.toggle("has-sheet", !!openNo);
 }
 
 function pills(o) {
@@ -607,79 +613,68 @@ async function callAdmin(body) {
   return { ok: false, msg: msgs[code] || "Something went wrong. Check your internet and try again." };
 }
 const pinAttrs = 'type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off"';
-let resetFor = null;
+let resetFor = null, setTab = "business", priceOpen = null, priceQ = "", addOpen = false;
+const wide = window.matchMedia("(min-width: 900px)");
+wide.addEventListener("change", () => { if (me && tab === "prices") renderSettings(); });
+const SET_TABS = [["business", "Business"], ["prices", "Price list"], ["staff", "Staff"], ["branches", "Branches"], ["account", "My account"]];
+const card = (title, sub, body) => `<section class="scard"><h3 class="stitle">${title}</h3>${sub ? `<p class="ssub">${sub}</p>` : ""}${body}</section>`;
+const shortSvc = { wi: "Wash & iron", wo: "Wash", io: "Iron", wsi: "Starch" };
 function renderSettings() {
-  const meCard = `<p class="who-me">Signed in as <b>${esc(me.name)}</b> (${own() ? "owner" : "staff"}) · ${fmtPhone(me.phone)}</p>`;
-  const appearance = `<div class="check"><p><b>Appearance</b></p>
-      <div class="chips" style="margin:0"><button class="chip" data-th="light" aria-pressed="${theme() !== "dark"}">Light</button><button class="chip" data-th="dark" aria-pressed="${theme() === "dark"}">Dark</button></div></div>`;
-  const myPin = `<div class="check"><p><b>Change my PIN</b></p>
-      <label for="np" style="margin-top:0">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}>
-      <button class="btn btn-ghost" id="npb">Save new PIN</button></div>
-    <button class="btn btn-ghost" id="out" style="margin-top:20px">Log out</button>`;
-  if (!own()) {
-    view.innerHTML = `${backBtn("Orders")}<h2>Settings</h2>${meCard}${appearance}${myPin}<p class="foot">Tagbook by Ordiventa</p>`;
-    wireCommon(); return;
-  }
-  const p = sPriv();
-  view.innerHTML = `${backBtn("Orders")}<h2>Settings</h2>${meCard}
-    <div class="check">
-      <label for="sn" style="margin-top:0">Business name</label>
-      <input id="sn" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off">
-      <p class="hint">This name appears at the top of the app and in every WhatsApp message.</p>
-    </div>
-    ${appearance}
-    <div class="check">
-      <p><b>Bank account for payments</b></p>
-      <p class="hint" style="margin:0">Added to every invoice and payment reminder, so customers know where to pay.</p>
-      <label for="bn">Bank name</label><input id="bn" value="${esc(p.bank_name)}" placeholder="e.g. GTBank" autocomplete="off">
-      <label for="an">Account number</label><input id="an" ${moneyAttrs} maxlength="10" value="${esc(p.acct_no)}" placeholder="10 digits">
-      <p class="hint" id="anx">${p.acct_no.length === 10 ? "" : "Account number must be 10 digits."}</p>
-      <label for="am" style="margin-top:6px">Account name</label><input id="am" value="${esc(p.acct_name)}" placeholder="Name on the account" autocomplete="off">
-    </div>
-    <div class="check">
-      <p><b>Express delivery charge</b></p>
-      <p class="hint" style="margin:0 0 8px">Added to the bill when an order is marked express delivery.</p>
-      <div class="chips" style="margin:0 0 8px"><button class="chip" data-et="percent" aria-pressed="${p.express_type === "percent"}">Percentage extra</button><button class="chip" data-et="fixed" aria-pressed="${p.express_type === "fixed"}">Fixed amount</button></div>
-      <label for="ev" style="margin-top:0">${p.express_type === "percent" ? "Extra percentage (%)" : "Extra amount per order (₦)"}</label>
-      <input id="ev" ${moneyAttrs} value="${p.express_value}">
-      <p class="hint" id="evx">${exampleExpress()}</p>
-    </div>
-    <div class="check">
-      <p><b>Branches</b></p>
-      <p class="hint" style="margin:0">Where customers drop clothes. With one branch, the app doesn't ask.</p>
-      ${liveBranches().map(b => `<div class="row" style="margin-top:8px;align-items:center"><input data-bn="${b.id}" value="${esc(b.name)}" autocomplete="off" aria-label="Branch name">${liveBranches().length > 1 ? `<button class="mini danger" style="flex:none" data-brm="${b.id}">Remove</button>` : ""}</div>`).join("")}
-      <div class="row" style="margin-top:8px"><input id="nb" placeholder="New branch name" autocomplete="off"><button class="mini" style="flex:none" id="nbb">Add</button></div>
-    </div>
-    <div class="check">
-      <p><b>Staff logins</b></p>
-      <p class="hint" style="margin:0 0 4px">Staff log clothes and check them before bagging. They never see prices, money or customer numbers.</p>
-      ${staffList.map(s => `<div class="staff-row"><div><b>${esc(s.name)}${s.user_id === me.user_id ? " (you)" : ""}</b><span>${s.role === "owner" ? "Owner" : "Staff"} · ${fmtPhone(s.phone)}</span></div>
+  if (!own()) setTab = "account";
+  const meLine = `<p class="who-me">Signed in as <b>${esc(me.name)}</b> (${own() ? "owner" : "staff"}) · ${fmtPhone(me.phone)}</p>`;
+  const nav = own() ? `<nav class="stabs" aria-label="Settings sections">${SET_TABS.map(([k, l]) => `<button data-st="${k}" aria-current="${setTab === k ? "page" : "false"}">${l}</button>`).join("")}</nav>` : "";
+  let body = "";
+  if (setTab === "account") body = card("Change my PIN", "You'll use the new PIN next time you log in.",
+      `<label for="np">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}><button class="btn btn-ghost" id="npb">Save new PIN</button>`)
+    + card("Log out", "", `<button class="btn btn-ghost" id="out" style="margin-top:0">Log out</button>`);
+  if (setTab === "business") { const p = sPriv(); body =
+    card("Business name", "Shown at the top of the app and in every WhatsApp message.",
+      `<input id="sn" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off" aria-label="Business name">`)
+    + card("Bank account for payments", "Added to every invoice and payment reminder, so customers know where to pay.",
+      `<label for="bn">Bank name</label><input id="bn" value="${esc(p.bank_name)}" placeholder="e.g. GTBank" autocomplete="off">
+       <label for="an">Account number</label><input id="an" ${moneyAttrs} maxlength="10" value="${esc(p.acct_no)}" placeholder="10 digits">
+       <p class="hint" id="anx">${p.acct_no.length === 10 ? "" : "Account number must be 10 digits."}</p>
+       <label for="am">Account name</label><input id="am" value="${esc(p.acct_name)}" placeholder="Name on the account" autocomplete="off">`)
+    + card("Express delivery charge", "Added to the bill when an order is marked express delivery.",
+      `<div class="chips" style="margin:0 0 4px"><button class="chip" data-et="percent" aria-pressed="${p.express_type === "percent"}">Percentage extra</button><button class="chip" data-et="fixed" aria-pressed="${p.express_type === "fixed"}">Fixed amount</button></div>
+       <label for="ev">${p.express_type === "percent" ? "Extra percentage (%)" : "Extra amount per order (₦)"}</label>
+       <input id="ev" ${moneyAttrs} value="${p.express_value}"><p class="hint" id="evx">${exampleExpress()}</p>`); }
+  if (setTab === "branches") body = card("Branches", "Where customers drop clothes. With one branch, the app doesn't ask.",
+      `${liveBranches().map(b => `<div class="row srow"><input data-bn="${b.id}" value="${esc(b.name)}" autocomplete="off" aria-label="Branch name">${liveBranches().length > 1 ? `<button class="mini danger" data-brm="${b.id}">Remove</button>` : ""}</div>`).join("")}
+       <div class="row srow"><input id="nb" placeholder="New branch name" autocomplete="off" aria-label="New branch name"><button class="mini" id="nbb">Add</button></div>`);
+  if (setTab === "staff") body = card("Staff logins", "Staff log clothes and check them before bagging. They never see prices, money or customer numbers.",
+      staffList.map(s => `<div class="staff-row"><div><b>${esc(s.name)}${s.user_id === me.user_id ? " (you)" : ""}</b><span>${s.role === "owner" ? "Owner" : "Staff"} · ${fmtPhone(s.phone)}</span></div>
         ${s.user_id === me.user_id ? "" : `<div class="acts"><button class="mini" data-rp="${s.user_id}">New PIN</button><button class="mini danger" data-srm="${s.user_id}">Remove</button></div>`}</div>
-        ${resetFor === s.user_id ? `<div class="row" style="margin:6px 0 10px"><input id="rpi" class="pin" ${pinAttrs} placeholder="6 digits" aria-label="New PIN for ${esc(s.name)}"><button class="mini" style="flex:none" id="rpb">Save</button></div>` : ""}`).join("")}
-      <p style="margin:14px 0 0"><b>Add a staff login</b></p>
-      <label for="sfn">Name</label><input id="sfn" placeholder="e.g. Grace" autocomplete="off">
-      <label for="sfp">Phone number</label><input id="sfp" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off">
-      <label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${pinAttrs}>
-      <button class="btn btn-primary" id="sfa">Add staff login</button>
-      <p class="hint">Tell them their PIN in person. They can change it in their own Settings.</p>
-    </div>
-    <h2 style="margin-top:18px">Price list</h2>
-    <p class="hint" style="margin-top:-6px">Tap any name or price to change it. Leave a price empty if the shop does not offer that service for the item. New prices apply to new bills; saved bills keep their prices.</p>
-    ${PRICES.filter(x => !x.custom && !x.hidden).map(x => `<div class="check pitem">
-      <div class="row" style="align-items:flex-end"><div><label for="pn-${x.id}" style="margin-top:0">Item name</label><input id="pn-${x.id}" data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off"></div><button class="x" data-prm="${x.id}" aria-label="Remove ${esc(x.name)}">Remove</button></div>
-      <div class="pgrid">${Object.entries(SERVICES).map(([k, l]) => `<div><label for="pp-${x.id}-${k}">${l} (₦)</label><input id="pp-${x.id}-${k}" data-pp="${x.id}" data-k="${k}" ${moneyAttrs} value="${x.p[k] != null ? x.p[k] : ""}" placeholder="Not offered"></div>`).join("")}</div>
-    </div>`).join("")}
-    <div class="check">
-      <p><b>Add an item</b></p>
-      <label for="ni" style="margin-top:0">Item name</label><input id="ni" placeholder="e.g. Curtain (per panel)" autocomplete="off">
-      <div class="pgrid">${Object.entries(SERVICES).map(([k, l]) => `<div><label for="na-${k}">${l} (₦)</label><input id="na-${k}" data-na="${k}" ${moneyAttrs} placeholder="Not offered"></div>`).join("")}</div>
-      <button class="btn btn-primary" id="nadd">Add to price list</button>
-    </div>
-    <p class="hint">Special items, like a wedding gown, get their price when you make the bill.</p>
-    ${myPin}
-    <p class="foot">Tagbook by Ordiventa</p>`;
-  wireCommon();
-  const savedToast = ok => { if (ok) toast("Saved"); };
+        ${resetFor === s.user_id ? `<div class="row srow"><input id="rpi" class="pin" ${pinAttrs} placeholder="6 digits" aria-label="New PIN for ${esc(s.name)}"><button class="mini" id="rpb">Save</button></div>` : ""}`).join(""))
+    + card("Add a staff login", "Tell them their PIN in person. They can change it in their own Settings.",
+      `<div class="sgrid"><div><label for="sfn">Name</label><input id="sfn" placeholder="e.g. Grace" autocomplete="off"></div>
+       <div><label for="sfp">Phone number</label><input id="sfp" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
+       <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${pinAttrs}></div></div>
+       <button class="btn btn-primary" id="sfa">Add staff login</button>`);
+  if (setTab === "prices") body = priceListHtml();
+  view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa</p>`;
+  wireBack(view);
+  view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
+  if (setTab === "account") wireAccount();
+  if (setTab === "business") wireBusiness();
+  if (setTab === "branches") wireBranches();
+  if (setTab === "staff") wireStaff();
+  if (setTab === "prices") wirePrices();
+}
+const savedToast = ok => { if (ok) toast("Saved"); };
+function wireAccount() {
+  $("#npb").onclick = async () => {
+    const pin = digits($("#np").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; }
+    $("#npb").disabled = true;
+    const { error } = await sb.auth.updateUser({ password: passFor(pin) });
+    $("#npb").disabled = false;
+    if (error) { toast(failMsg(error)); return; }
+    $("#np").value = ""; toast("New PIN saved. Use it next time you log in.");
+  };
+  $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } await sb.auth.signOut(); location.hash = ""; location.reload(); };
+}
+function wireBusiness() {
+  const p = sPriv();
   $("#sn").onchange = async e => { const v = e.target.value.trim().slice(0, 40); if (!v) { e.target.value = shop.name; return; } shop.name = v; $("#shopname").textContent = shopName(); savedToast(await put("shops", { id: shop.id }, { name: v })); };
   const savePriv = async fields => { Object.assign(priv, fields); savedToast(await put("shop_private", { shop_id: shop.id }, fields)); };
   $("#bn").onchange = e => savePriv({ bank_name: e.target.value.trim().slice(0, 40) });
@@ -689,11 +684,13 @@ function renderSettings() {
   view.querySelectorAll("[data-et]").forEach(b => b.onclick = async () => { await savePriv({ express_type: b.dataset.et, express_value: b.dataset.et === "percent" ? 50 : 1000 }); renderSettings(); });
   moneyInput($("#ev"), v => { priv.express_value = p.express_type === "percent" ? Math.min(v, 300) : v; $("#evx").textContent = exampleExpress(); });
   $("#ev").onchange = () => savePriv({ express_value: priv.express_value });
-  // branches
+}
+function wireBranches() {
   view.querySelectorAll("[data-bn]").forEach(i => i.onchange = async () => { const v = i.value.trim().slice(0, 40); if (!v) return; const b = BRANCHES.find(x => x.id === i.dataset.bn); b.name = v; savedToast(await put("branches", { id: b.id }, { name: v })); });
   view.querySelectorAll("[data-brm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again"; return; } const br = BRANCHES.find(x => x.id === b.dataset.brm); br.active = false; renderSettings(); savedToast(await put("branches", { id: br.id }, { active: false })); });
   $("#nbb").onclick = async () => { const v = $("#nb").value.trim().slice(0, 40); if (!v) { toast("Type the branch name first"); return; } const { error } = await sb.from("branches").insert({ shop_id: shop.id, name: v, sort: BRANCHES.length }); if (error) { toast(failMsg(error)); return; } toast(`${v} added`); await load(); renderSettings(); };
-  // staff
+}
+function wireStaff() {
   view.querySelectorAll("[data-rp]").forEach(b => b.onclick = () => { resetFor = resetFor === b.dataset.rp ? null : b.dataset.rp; renderSettings(); const i = $("#rpi"); if (i) i.focus(); });
   if ($("#rpb")) $("#rpb").onclick = async () => { const pin = digits($("#rpi").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; } $("#rpb").disabled = true; const r = await callAdmin({ action: "reset_pin", user_id: resetFor, pin }); toast(r.ok ? "New PIN saved. Tell them in person." : r.msg); if (r.ok) { resetFor = null; renderSettings(); } else $("#rpb").disabled = false; };
   view.querySelectorAll("[data-srm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again"; return; } b.disabled = true; const r = await callAdmin({ action: "remove_staff", user_id: b.dataset.srm }); toast(r.ok ? "Staff login removed" : r.msg); if (r.ok) { await load(); renderSettings(); } });
@@ -706,7 +703,34 @@ function renderSettings() {
     if (!r.ok) { toast(r.msg); $("#sfa").disabled = false; $("#sfa").textContent = "Add staff login"; return; }
     toast(`${name} can now log in with ${fmtPhone(phone)} and their PIN`); await load(); renderSettings();
   };
-  // price list
+}
+
+/* Price list: a table on a laptop, a short list on a phone where you tap an item to change it */
+function priceListHtml() {
+  const all = PRICES.filter(x => !x.custom && !x.hidden);
+  const q = priceQ.trim().toLowerCase();
+  const list = q ? all.filter(x => x.name.toLowerCase().includes(q)) : all;
+  const cell = (x, k) => `<input data-pp="${x.id}" data-k="${k}" ${moneyAttrs} value="${x.p[k] != null ? x.p[k] : ""}" placeholder="—" aria-label="${esc(x.name)}, ${SERVICES[k]}">`;
+  const editor = x => `<div class="pedit">
+      <label for="pn-${x.id}">Item name</label><input id="pn-${x.id}" data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off">
+      <div class="pgrid">${Object.entries(SERVICES).map(([k, l]) => `<div><label for="pp-${x.id}-${k}">${l} (₦)</label><input id="pp-${x.id}-${k}" data-pp="${x.id}" data-k="${k}" ${moneyAttrs} value="${x.p[k] != null ? x.p[k] : ""}" placeholder="Not offered"></div>`).join("")}</div>
+      <div class="row" style="margin-top:10px"><button class="mini danger" data-prm="${x.id}">Remove item</button><button class="mini" data-pclose>Done</button></div></div>`;
+  const summary = x => Object.keys(SERVICES).filter(k => x.p[k] != null).map(k => `${shortSvc[k]} ${naira(x.p[k])}`).join(" · ") || "No prices yet";
+  const rows = wide.matches
+    ? `<div class="ptable" role="table"><div class="ph" role="row"><span>Item</span>${Object.values(SERVICES).map(l => `<span>${l}</span>`).join("")}<span></span></div>
+        ${list.map(x => `<div class="pr" role="row"><input data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off" aria-label="Item name">${Object.keys(SERVICES).map(k => cell(x, k)).join("")}<button class="plink" data-prm="${x.id}" aria-label="Remove ${esc(x.name)}">Remove</button></div>`).join("")}</div>`
+    : `<div class="plist">${list.map(x => priceOpen === x.id ? `<div class="pli open">${editor(x)}</div>`
+        : `<button class="pli" data-popen="${x.id}"><b>${esc(x.name)}</b><span>${summary(x)}</span></button>`).join("")}</div>`;
+  return card("Price list", `${all.length} item${all.length === 1 ? "" : "s"}. ${wide.matches ? "Click any name or price to change it." : "Tap an item to change it."} Leave a price empty if you don't offer that service. Saved bills keep their prices.`,
+      `${all.length > 8 ? `<input class="search" id="pq" placeholder="Search items" value="${esc(priceQ)}" aria-label="Search items" style="margin:4px 0 10px">` : ""}
+       ${list.length ? rows : `<p class="hint">No item matches “${esc(priceQ)}”.</p>`}`)
+    + (!addOpen ? `<button class="btn btn-ghost" id="addopen">+ Add an item</button><p class="hint">Special items, like a wedding gown, get their price when you make the bill.</p>`
+    : card("Add an item", "Special items, like a wedding gown, get their price when you make the bill.",
+      `<label for="ni">Item name</label><input id="ni" placeholder="e.g. Curtain (per panel)" autocomplete="off">
+       <div class="pgrid">${Object.entries(SERVICES).map(([k, l]) => `<div><label for="na-${k}">${l} (₦)</label><input id="na-${k}" data-na="${k}" ${moneyAttrs} placeholder="Not offered"></div>`).join("")}</div>
+       <div class="row"><button class="btn btn-ghost" id="addclose">Cancel</button><button class="btn btn-primary" id="nadd">Add to price list</button></div>`));
+}
+function wirePrices() {
   const savePrice = async x => {
     x.services = Object.keys(SERVICES).filter(k => x.p[k] != null);
     const a = await put("items", { id: x.id }, { name: x.name, services: x.services });
@@ -714,9 +738,14 @@ function renderSettings() {
     if (error) { toast(failMsg(error)); refresh(); return; }
     savedToast(a);
   };
+  const pq = $("#pq"); if (pq) pq.oninput = e => { priceQ = e.target.value; const p = e.target.selectionStart; renderSettings(); const n = $("#pq"); n.focus(); n.setSelectionRange(p, p); };
+  view.querySelectorAll("[data-popen]").forEach(b => b.onclick = () => { priceOpen = b.dataset.popen; renderSettings(); });
+  view.querySelectorAll("[data-pclose]").forEach(b => b.onclick = () => { priceOpen = null; renderSettings(); });
   view.querySelectorAll("[data-pn]").forEach(i => i.onchange = () => { const x = item(i.dataset.pn); const v = i.value.trim().slice(0, 40); if (!v) { i.value = x.name; return; } x.name = v; savePrice(x); });
   view.querySelectorAll("[data-pp]").forEach(i => { moneyInput(i, () => { }); i.onchange = () => { const x = item(i.dataset.pp); x.p = { ...x.p, [i.dataset.k]: i.value === "" ? null : num(i.value) }; savePrice(x); }; });
-  view.querySelectorAll("[data-prm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again to remove"; return; } const x = item(b.dataset.prm); x.hidden = true; renderSettings(); if (await put("items", { id: x.id }, { hidden: true })) toast("Item removed from the price list"); });
+  view.querySelectorAll("[data-prm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = wide.matches ? "Sure?" : "Tap again to remove"; return; } const x = item(b.dataset.prm); x.hidden = true; priceOpen = null; renderSettings(); if (await put("items", { id: x.id }, { hidden: true })) toast("Item removed from the price list"); });
+  if ($("#addopen")) { $("#addopen").onclick = () => { addOpen = true; renderSettings(); $("#ni").focus(); }; return; }
+  $("#addclose").onclick = () => { addOpen = false; renderSettings(); };
   view.querySelectorAll("[data-na]").forEach(i => moneyInput(i, () => { }));
   $("#nadd").onclick = async () => {
     const n = $("#ni").value.trim(); if (!n) { toast("Type the item name first"); $("#ni").focus(); return; }
@@ -728,21 +757,8 @@ function renderSettings() {
     if (error) { toast(failMsg(error)); $("#nadd").disabled = false; return; }
     const r2 = await sb.from("item_prices").insert({ item_id: data.id, shop_id: shop.id, prices: pr });
     if (r2.error) toast(failMsg(r2.error)); else toast(`${n} added`);
-    await load(); renderSettings();
+    addOpen = false; await load(); renderSettings();
   };
-}
-function wireCommon() {
-  wireBack(view);
-  view.querySelectorAll("[data-th]").forEach(b => b.onclick = () => { try { localStorage.setItem("tb-theme", b.dataset.th); } catch (_) { } document.documentElement.dataset.tb = b.dataset.th; renderSettings(); });
-  $("#npb").onclick = async () => {
-    const pin = digits($("#np").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; }
-    $("#npb").disabled = true;
-    const { error } = await sb.auth.updateUser({ password: passFor(pin) });
-    $("#npb").disabled = false;
-    if (error) { toast(failMsg(error)); return; }
-    $("#np").value = ""; toast("New PIN saved. Use it next time you log in.");
-  };
-  $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } await sb.auth.signOut(); location.hash = ""; location.reload(); };
 }
 function exampleExpress() { return `Example: a ${naira(5000)} order marked express delivery costs ${naira(5000 + expressFor(5000))}.`; }
 

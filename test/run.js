@@ -162,16 +162,26 @@ async function handle(route) {
   await T('#tabs button[data-tab="reports"]'); await shot("12-reports");
   console.log("reports received:", await page.textContent(".rhero b"));
   // settings: add staff, price edit, branch add
-  await T("#gear");
+  await T("#gear"); await shot("13a-settings-business");
+  await T('[data-st="staff"]');
   await page.fill("#sfn", "Tolu"); await page.fill("#sfp", "08033334444"); await page.fill("#sfk", "123456"); await T("#sfa"); await page.waitForTimeout(400);
   console.log("staff now:", db.staff.map(s => s.name).join(", "));
-  await page.fill('[data-pp="it0"][data-k="wi"]', "900"); await page.press('[data-pp="it0"][data-k="wi"]', "Tab"); await page.waitForTimeout(300);
+  await T('[data-st="prices"]'); await shot("13b-prices-phone"); await T('[data-popen="it0"]'); await shot("13c-price-open");
+  await page.fill('#pp-it0-wi', "900"); await page.press('#pp-it0-wi', "Tab"); await page.waitForTimeout(300);
   console.log("shirt price:", JSON.stringify(db.item_prices[0].prices));
-  await page.fill("#nb", "Third point"); await T("#nbb"); await page.waitForTimeout(300);
+  await T('[data-st="branches"]'); await page.fill("#nb", "Third point"); await T("#nbb"); await page.waitForTimeout(300);
   console.log("branches:", db.branches.map(b => b.name).join(", "));
   await shot("13-owner-settings");
   // dark mode
-  await T('[data-th="dark"]'); await T("[data-back]"); await shot("14-dark");
+  await T("#themebtn"); await T("[data-back]"); await shot("14-dark"); await T("#themebtn");
+  // laptop
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("http://localhost:8787/#orders"); await page.waitForSelector("#tabs button"); await page.waitForTimeout(500); await shot("20-laptop-orders");
+  await page.click(".order"); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, "21-laptop-order.png") });
+  await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(400); await T('[data-st="prices"]'); await shot("22-laptop-prices");
+  await T('[data-st="business"]'); await shot("23-laptop-business");
+  await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(400); await shot("24-laptop-log");
+  await page.goto("http://localhost:8787/#reports"); await page.waitForTimeout(400); await shot("25-laptop-reports");
   console.log("ERRORS:", errors.length ? errors : "none");
   await browser.close(); srv.close();
 })().catch(e => { console.error(e); process.exit(1); });
