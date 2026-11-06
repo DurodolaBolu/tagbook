@@ -174,7 +174,7 @@ function wireBack(root) { root.querySelectorAll("[data-back]").forEach(b => b.on
 function render() {
   if (!me) return;
   document.documentElement.dataset.tb = theme() === "dark" ? "dark" : "light";
-  $("#app").hidden = false; $("#tabsnav").hidden = false;
+  $("#app").hidden = false; $("#tabsnav").hidden = false; $("#app").classList.remove("is-loading");
   $("#shopname").textContent = shopName();
   const tabs = own() ? [["orders", "Orders"], ["new", "+ Log clothes"], ["reports", "Reports"]] : [["orders", "Orders"], ["new", "+ Log clothes"]];
   const th = $("#themebtn"), dark = theme() === "dark";
@@ -975,12 +975,13 @@ document.addEventListener("keydown", e => {
 // connection must never look like being logged out: show "can't reach" with a retry instead.
 const hasSavedLogin = () => { try { return !!localStorage.getItem("tagbook-auth"); } catch (_) { return false; } };
 function cantReach(msg) {
+  $("#app").classList.remove("is-loading");
   $("#login").hidden = true; $("#app").hidden = false;
   view.innerHTML = `<div class="loading" style="flex-direction:column;gap:14px;text-align:center">${msg}<button class="btn btn-primary" id="retry" style="max-width:220px">Try again</button></div>`;
   $("#retry").onclick = () => start();
 }
 async function start() {
-  view.innerHTML = loadingHtml("Loading your shop…"); $("#app").hidden = false; $("#login").hidden = true;
+  view.innerHTML = loadingHtml("Loading your shop…"); $("#app").classList.add("is-loading"); $("#app").hidden = false; $("#login").hidden = true;
   const timeout = new Promise(r => setTimeout(() => r({ data: null, error: new Error("timeout") }), 9000));
   const { data, error: se } = await Promise.race([sb.auth.getSession(), timeout]);
   const user = data && data.session && data.session.user;

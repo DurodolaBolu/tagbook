@@ -153,7 +153,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
   .washing .machine{animation:wobble .28s ease-in-out infinite}
   @keyframes wobble{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-1.5px,.5px) rotate(-.6deg)}75%{transform:translate(1.5px,-.5px) rotate(.6deg)}}
 }
-#app:has(.washing)>header{visibility:hidden}
+#app.is-loading>header{visibility:hidden}
 .loading.washing{min-height:70vh}
 .alert.push{align-items:center}
 .alert .pacts{display:flex;gap:6px;flex:none}

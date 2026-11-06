@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261106022939";</script>
+<script>window.TB_BUILD="20261106023502";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -314,7 +314,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
   .washing .machine{animation:wobble .28s ease-in-out infinite}
   @keyframes wobble{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-1.5px,.5px) rotate(-.6deg)}75%{transform:translate(1.5px,-.5px) rotate(.6deg)}}
 }
-#app:has(.washing)>header{visibility:hidden}
+#app.is-loading>header{visibility:hidden}
 .loading.washing{min-height:70vh}
 .alert.push{align-items:center}
 .alert .pacts{display:flex;gap:6px;flex:none}
@@ -334,7 +334,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261106022939"></script>
+<script src="/app.js?v=20261106023502"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
