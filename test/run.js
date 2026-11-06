@@ -110,13 +110,13 @@ async function handle(route) {
   await ctx.route(SB + "/**", handle);
   await ctx.routeWebSocket(/realtime/, ws => {});
   const shot = async n => page.screenshot({ path: path.join(out, n + ".png"), fullPage: true });
-  const login = async (phone) => { await page.goto("http://localhost:8787/"); await page.waitForSelector("#lp"); await page.fill("#lp", phone); await page.fill("#lk", "482915"); await page.click("#lb"); await page.waitForSelector("#tabs button"); };
+  const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$("#lswitch")) { await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); await page.waitForSelector("#tabs button"); };
   const T = async (sel) => { await page.click(sel); await page.waitForTimeout(250); };
 
   // bad login
-  await page.goto("http://localhost:8787/"); await page.waitForSelector("#lp"); await shot("01-login");
-  await page.fill("#lp", "08120756325"); await page.fill("#lk", "111111"); await page.click("#lb"); await page.waitForTimeout(400);
-  console.log("bad login message:", await page.textContent("#le"));
+  await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); await shot("01-login");
+  await page.keyboard.type("08120756325"); await page.keyboard.press("Enter"); await page.keyboard.type("111111"); await page.waitForTimeout(600);
+  console.log("bad login message:", await page.textContent(".lerr"));
 
   // SECRETARY logs an order for a new customer
   await login("08000000091"); await shot("02-sec-empty");

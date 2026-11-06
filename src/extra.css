@@ -92,3 +92,55 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .cpicked .mark{background:var(--card)}
 .newc{background:var(--card);border-radius:12px;padding:12px 14px}
 .newc label:first-of-type{margin-top:10px}
+/* ---------- Login ---------- */
+.login{max-width:none;margin:0;padding:0;min-height:100vh;min-height:100dvh;background:var(--bg)}
+.lwrap{min-height:100vh;min-height:100dvh;display:flex}
+.lside{display:none}
+.lmain{position:relative;flex:1;max-width:440px;margin:0 auto;display:flex;flex-direction:column;align-items:center;text-align:center;padding:max(28px,env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-right,0px)) max(20px,env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px))}
+.lhelp{position:absolute;top:max(16px,env(safe-area-inset-top,0px));right:16px;width:40px;height:40px;border-radius:50%;border:1.5px solid var(--fg);background:transparent;color:var(--fg);font:700 18px/1 var(--font);cursor:pointer}
+.lhelp[aria-expanded="true"]{background:var(--fg);color:var(--bg)}
+.lhelptext{font-size:14px;color:var(--accent-deep);background:var(--accent-soft);border-radius:10px;padding:8px 12px;margin:10px 0 0}
+.lart.small{width:132px;height:132px;margin:12px 0 6px}
+.lart svg{width:100%;height:100%;display:block}
+.lhi{font-size:19px;color:var(--muted);margin:6px 0 0}
+.lname{font-size:28px;line-height:1.15;font-weight:700;color:var(--accent-deep);margin:2px 0 0;letter-spacing:-.01em;text-wrap:balance}
+.lshop{font-size:14px;color:var(--muted);margin:4px 0 0}
+.lask{font-size:16px;font-weight:500;color:var(--fg);margin:14px 0 12px}
+.pinboxes{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;width:100%;max-width:330px}
+.pb{aspect-ratio:1/1.15;border:1.5px solid var(--line);border-radius:12px;background:var(--card);display:flex;align-items:center;justify-content:center;position:relative}
+.pb.full::after{content:"";width:12px;height:12px;border-radius:50%;background:var(--fg)}
+.pb.cur{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.pb.cur::before{content:"";width:2px;height:22px;background:var(--muted);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.shake{animation:shake .35s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.phonebox{width:100%;max-width:330px;border:1.5px solid var(--accent);box-shadow:0 0 0 4px var(--accent-soft);border-radius:12px;background:var(--card);padding:14px;font-size:26px;font-weight:600;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.phonebox.empty{color:var(--field);font-weight:500;border-color:var(--line);box-shadow:none}
+.lerr{min-height:22px;font-size:15px;color:var(--owes);margin:10px 0 0;font-weight:500}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;margin-top:auto;padding-top:14px}
+.key{height:62px;border:0;border-radius:999px;background:var(--wait-soft);color:var(--fg);font:500 28px/1 var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.key:active{background:var(--accent-soft);transform:scale(.97)}
+.key[disabled]{opacity:.5}
+.lgo{margin-top:14px}
+.lfoot{font-size:15px;color:var(--muted);margin:16px 0 4px}
+.llink{border:0;background:transparent;color:var(--accent);font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:0}
+.lbusy{font-size:14px;color:var(--muted);margin:8px 0 0}
+@media (max-height:700px){.lart.small{width:96px;height:96px;margin-top:4px}.key{height:54px}.lname{font-size:24px}}
+@media (prefers-reduced-motion:no-preference){
+  .machine .drum{transform-origin:100px 113px;animation:spin 6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .machine .bub{animation:rise 4s ease-in-out infinite}.machine .b2{animation-delay:1.3s}.machine .b3{animation-delay:2.6s}
+  @keyframes rise{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+}
+@media (min-width:900px){
+  .lside{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-ink);padding:40px}
+  .lside .lart{width:min(340px,70%);aspect-ratio:1}
+  .lside .lbrand{font-size:34px;font-weight:700;margin:22px 0 0;letter-spacing:-.01em}
+  .lside .ltag{font-size:18px;opacity:.9;margin:6px 0 0}
+  .lmain{flex:0 0 520px;max-width:520px;justify-content:center;padding:40px 60px}
+  .lmain .lart.small{display:none}
+  .keypad{margin-top:18px;max-width:340px}
+  .key{height:56px}
+}
+
+[hidden]{display:none!important}

@@ -815,38 +815,98 @@ function wirePrices() {
 }
 function exampleExpress() { return `Example: a ${naira(5000)} order marked express delivery costs ${naira(5000 + expressFor(5000))}.`; }
 
-/* ---------- Login ---------- */
+/* ---------- Login: remembers who used this phone; number pad for phone and PIN ---------- */
+const LAST_KEY = "tb-last";
+const lastUser = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY) || "null"); } catch (_) { return null; } };
+const saveLast = v => { try { localStorage.setItem(LAST_KEY, JSON.stringify(v)); } catch (_) { } };
+const ART_MACHINE = `<svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
+  <circle cx="100" cy="104" r="92" fill="var(--accent-soft)"/>
+  <circle class="bub b1" cx="34" cy="70" r="7" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".5"/>
+  <circle class="bub b2" cx="170" cy="58" r="5" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".45"/>
+  <circle class="bub b3" cx="164" cy="150" r="8" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".35"/>
+  <rect x="50" y="36" width="100" height="132" rx="14" fill="var(--card)" stroke="var(--accent-deep)" stroke-width="3.5"/>
+  <line x1="50" y1="62" x2="150" y2="62" stroke="var(--accent-deep)" stroke-width="3"/>
+  <circle cx="66" cy="49" r="4.5" fill="var(--accent)"/><circle cx="80" cy="49" r="4.5" fill="var(--accent-soft)" stroke="var(--accent-deep)" stroke-width="2"/>
+  <rect x="112" y="45" width="26" height="8" rx="4" fill="var(--accent-soft)" stroke="var(--accent-deep)" stroke-width="2"/>
+  <circle cx="100" cy="113" r="36" fill="var(--accent-soft)" stroke="var(--accent-deep)" stroke-width="3.5"/>
+  <g class="drum"><circle cx="100" cy="113" r="27" fill="var(--card)"/>
+    <path d="M73 118c9-7 18 7 27 0s18 7 27 0v6a27 27 0 0 1-54 0z" fill="var(--accent)" opacity=".85"/>
+    <path d="M86 98h10M104 92l7 5" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" opacity=".6"/></g>
+  <rect x="62" y="160" width="12" height="8" rx="3" fill="var(--accent-deep)"/><rect x="126" y="160" width="12" height="8" rx="3" fill="var(--accent-deep)"/>
+</svg>`;
+let L = null;
 function showLogin(msg) {
   me = null;
   document.documentElement.dataset.tb = theme() === "dark" ? "dark" : "light";
-  $("#app").hidden = true; $("#tabsnav").hidden = true; $("#sheet").hidden = true;
-  const box = $("#login"); box.hidden = false;
-  box.innerHTML = `<div class="lbrand">Tagbook<small>For laundry and dry cleaning shops</small></div>
-    <form class="card" id="lf" novalidate>
-      <label for="lp">Phone number</label><input id="lp" type="text" inputmode="tel" autocomplete="username" placeholder="0803 412 7790">
-      <label for="lk">6-digit PIN</label><input id="lk" class="pin" ${pinAttrs} autocomplete="current-password">
-      <p class="bad" id="le" role="alert" ${msg ? "" : "hidden"}>${esc(msg || "")}</p>
-      <button class="btn btn-primary" id="lb" type="submit">Log in</button>
-    </form>
-    <p class="hint" style="margin-top:14px">Forgot your PIN? Ask the shop owner to set a new one.</p>
-    <p class="foot">Tagbook by Ordiventa</p>`;
-  $("#lp").oninput = e => { const v = digits(e.target.value).slice(0, 11); if (e.target.value !== v) e.target.value = v; };
-  $("#lk").oninput = e => { const v = digits(e.target.value).slice(0, 6); if (e.target.value !== v) e.target.value = v; };
-  $("#lf").onsubmit = async e => {
-    e.preventDefault();
-    const phone = digits($("#lp").value), pin = digits($("#lk").value), le = $("#le");
-    const err = !/^0\d{10}$/.test(phone) ? "Type your 11-digit phone number, starting with 0." : pin.length !== 6 ? "Type your 6-digit PIN." : "";
-    if (err) { le.textContent = err; le.hidden = false; return; }
-    $("#lb").disabled = true; $("#lb").textContent = "Logging in…"; le.hidden = true;
-    const { error } = await sb.auth.signInWithPassword({ email: emailFor(phone), password: passFor(pin) });
-    if (error) {
-      $("#lb").disabled = false; $("#lb").textContent = "Log in";
-      le.textContent = /fetch|network/i.test(error.message) ? "Can't reach Tagbook. Check your internet and try again." : "Wrong phone number or PIN.";
-      le.hidden = false; return;
-    }
-    await start();
-  };
+  $("#app").hidden = true; $("#tabsnav").hidden = true; $("#sheet").hidden = true; document.body.classList.remove("has-sheet");
+  const last = lastUser();
+  L = { step: last ? "pin" : "phone", phone: last ? last.phone : "", pin: "", err: msg || "", busy: false, help: false, last };
+  drawLogin();
 }
+function drawLogin() {
+  const box = $("#login"); box.hidden = false;
+  const pinStep = L.step === "pin";
+  const boxes = pinStep
+    ? `<div class="pinboxes${L.err && !L.pin ? " shake" : ""}" aria-label="PIN, ${L.pin.length} of 6 digits entered">${[0, 1, 2, 3, 4, 5].map(i => `<span class="pb ${i < L.pin.length ? "full" : ""} ${i === L.pin.length ? "cur" : ""}"></span>`).join("")}</div>`
+    : `<div class="phonebox ${L.phone ? "" : "empty"}" aria-live="polite">${L.phone ? fmtPhone(L.phone) : "0803 412 7790"}</div>`;
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "back"];
+  box.innerHTML = `<div class="lwrap">
+    <aside class="lside"><div class="lart">${ART_MACHINE}</div>
+      <p class="lbrand">Tagbook</p><p class="ltag">Every cloth, accounted for.</p></aside>
+    <main class="lmain">
+      <button class="lhelp" id="lhelp" aria-label="Help" aria-expanded="${L.help}">?</button>
+      <div class="lart small">${ART_MACHINE}</div>
+      ${pinStep && L.last ? `<p class="lhi">Welcome back,</p><h1 class="lname">${esc(L.last.name)}</h1>${L.last.shop ? `<p class="lshop">${esc(L.last.shop)}</p>` : ""}`
+        : `<h1 class="lname">${pinStep ? "Enter your PIN" : "Welcome to Tagbook"}</h1>`}
+      <p class="lask">${pinStep ? (L.last ? "Enter your 6-digit PIN to continue" : `PIN for ${fmtPhone(L.phone)}`) : "Enter your phone number"}</p>
+      ${L.help ? `<p class="lhelptext">Forgot your PIN? Ask the shop owner to set a new one in Settings.</p>` : ""}
+      ${boxes}
+      <p class="lerr" role="alert">${esc(L.err)}</p>
+      <div class="keypad">${keys.map(k => k === "" ? `<span></span>` : k === "back"
+        ? `<button class="key" data-k="back" aria-label="Delete"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M9 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-6-6zM12 10l4 4m0-4-4 4"/></svg></button>`
+        : `<button class="key" data-k="${k}" ${L.busy ? "disabled" : ""}>${k}</button>`).join("")}</div>
+      ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
+        : L.last ? `<p class="lfoot">Not ${esc(L.last.name.split(" ")[0])}? <button class="llink" id="lswitch">Use another number</button></p>`
+        : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
+      ${L.busy ? `<p class="lbusy">Logging in…</p>` : ""}
+    </main></div>`;
+  box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
+  $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
+  if ($("#lgo")) $("#lgo").onclick = () => next();
+  if ($("#lswitch")) $("#lswitch").onclick = () => { if (L.last) { try { localStorage.removeItem(LAST_KEY); } catch (_) { } } L = { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null }; drawLogin(); };
+}
+function press(k) {
+  if (!L || L.busy) return;
+  if (L.step === "phone") {
+    if (k === "back") L.phone = L.phone.slice(0, -1); else if (L.phone.length < 11) L.phone += k;
+    L.err = ""; drawLogin(); return;
+  }
+  if (k === "back") L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += k;
+  L.err = ""; drawLogin();
+  if (L.pin.length === 6) tryLogin();
+}
+function next() {
+  if (!/^0\d{10}$/.test(L.phone)) { L.err = "Type your 11-digit phone number, starting with 0."; drawLogin(); return; }
+  L.step = "pin"; L.pin = ""; L.err = ""; drawLogin();
+}
+async function tryLogin() {
+  L.busy = true; drawLogin();
+  const { error } = await sb.auth.signInWithPassword({ email: emailFor(L.phone), password: passFor(L.pin) });
+  L.busy = false;
+  if (error) {
+    L.pin = "";
+    L.err = /fetch|network/i.test(error.message) ? "Can't reach Tagbook. Check your internet and try again." : "Wrong PIN. Try again.";
+    drawLogin(); if (navigator.vibrate) try { navigator.vibrate(120); } catch (_) { }
+    return;
+  }
+  await start();
+}
+document.addEventListener("keydown", e => {
+  if (!L || $("#login").hidden) return;
+  if (/^\d$/.test(e.key)) { press(e.key); e.preventDefault(); }
+  else if (e.key === "Backspace") { press("back"); e.preventDefault(); }
+  else if (e.key === "Enter" && L.step === "phone") { next(); e.preventDefault(); }
+});
 
 // A saved login stays until the person logs out or the owner removes them. A weak or missing
 // connection must never look like being logged out: show "can't reach" with a retry instead.
@@ -872,7 +932,9 @@ async function start() {
   }
   if (!st || !st.active) { await sb.auth.signOut(); return showLogin("This login has been removed. Ask the shop owner."); }
   me = st; role = st.role === "owner" ? "own" : "sec";
+  $("#login").hidden = true; L = null;
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
+  saveLast({ phone: st.phone, name: st.name, shop: shop.name });
   reset(); subscribe(); route();
 }
 
