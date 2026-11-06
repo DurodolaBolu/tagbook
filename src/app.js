@@ -861,11 +861,14 @@ function shopsHtml() {
        <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${pinAttrs}></div></div>
        <div class="sgrid"><div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>
        <div><label for="as-no">First order number</label><input id="as-no" ${moneyAttrs} value="1"><p class="hint">Use their book's next number if they want to continue it.</p></div></div>
+       <label for="as-r">Referred by</label><select id="as-r"><option value="">Nobody (we found them)</option>${(shopRows || []).map(r => `<option value="${r.id}">${esc(r.name)}${r.owner_name ? ` (${esc(r.owner_name)})` : ""}</option>`).join("")}</select>
+       <p class="hint">The shop that brought them gets 1 free month once this shop pays.</p>
        <label class="toggle"><span>Founding price (₦3,000 for 12 months)</span><input type="checkbox" id="as-f" checked></label>
        <button class="btn btn-primary" id="as-go">Create shop</button>`);
   const list = card("All shops", "", shopRows === null ? `<p class="hint">Loading…</p>` : !shopRows.length ? `<p class="hint">No shops yet.</p>`
       : shopRows.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")} · ${r.staff} login${r.staff === 1 ? "" : "s"}</span>
-        <span>${r.orders} order${r.orders === 1 ? "" : "s"}${r.last_order ? ` · last ${fmtDay(Date.parse(r.last_order))}` : ""}${r.trial_ends ? ` · trial ends ${fmtDay(Date.parse(r.trial_ends))}` : ""}</span></div></div>`).join(""));
+        <span>${r.orders} order${r.orders === 1 ? "" : "s"}${r.last_order ? ` · last ${fmtDay(Date.parse(r.last_order))}` : ""}${r.trial_ends ? ` · trial ends ${fmtDay(Date.parse(r.trial_ends))}` : ""}</span>
+        ${r.referred_by_name || r.referrals ? `<span class="refline">${r.referred_by_name ? `Referred by ${esc(r.referred_by_name)}` : ""}${r.referred_by_name && r.referrals ? " · " : ""}${r.referrals ? `Brought ${r.referrals} shop${r.referrals === 1 ? "" : "s"}` : ""}</span>` : ""}</div></div>`).join(""));
   return done + form + list;
 }
 async function loadShops() { const { data } = await sb.rpc("admin_shops"); shopRows = data || []; if (setTab === "shops") renderSettings(); }
@@ -881,7 +884,7 @@ function wireShops() {
     const err = !shopName ? "Type the shop name." : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
     if (err) { toast(err); return; }
     $("#as-go").disabled = true; $("#as-go").textContent = "Creating…";
-    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t").value || null, start_no: num($("#as-no").value) || 1, founding: $("#as-f").checked });
+    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t").value || null, start_no: num($("#as-no").value) || 1, founding: $("#as-f").checked, referred_by: $("#as-r").value || null });
     if (!r.ok) { toast(r.msg); $("#as-go").disabled = false; $("#as-go").textContent = "Create shop"; return; }
     newShop = { phone, msg: `Hello ${owner.split(" ")[0]}, ${shopName} is now on Tagbook.\n\nOpen tagbook.ordiventa.com and log in with:\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.\n\nWelcome, and thank you for starting with us.` };
     shopRows = null; renderSettings();

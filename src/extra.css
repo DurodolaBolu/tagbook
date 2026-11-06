@@ -166,3 +166,4 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .paylist>div{display:flex;justify-content:space-between;gap:10px;padding:5px 2px;border-bottom:1px dashed var(--line)}
 .paylist>div:last-child{border-bottom:0}
 .paylist span:first-child{color:var(--fg);font-weight:500}
+.staff-row .refline{color:var(--accent-deep);font-weight:500}

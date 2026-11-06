@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261106030024";</script>
+<script>window.TB_BUILD="20261106031035";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -327,6 +327,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .paylist>div{display:flex;justify-content:space-between;gap:10px;padding:5px 2px;border-bottom:1px dashed var(--line)}
 .paylist>div:last-child{border-bottom:0}
 .paylist span:first-child{color:var(--fg);font-weight:500}
+.staff-row .refline{color:var(--accent-deep);font-weight:500}
 </style>
 </head><body>
 <div id="offline" class="offline" hidden>You're offline. Changes won't save until you're back online.</div>
@@ -341,7 +342,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261106030024"></script>
+<script src="/app.js?v=20261106031035"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
