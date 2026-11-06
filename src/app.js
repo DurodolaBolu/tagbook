@@ -759,7 +759,7 @@ function showLogin(msg) {
       <p class="bad" id="le" role="alert" ${msg ? "" : "hidden"}>${esc(msg || "")}</p>
       <button class="btn btn-primary" id="lb" type="submit">Log in</button>
     </form>
-    <p class="hint" style="margin-top:14px">Forgot your PIN? Ask the shop owner to set a new one. Owners, message Tagbook on WhatsApp: 0812 075 6325.</p>
+    <p class="hint" style="margin-top:14px">Forgot your PIN? Ask the shop owner to set a new one.</p>
     <p class="foot">Tagbook by Ordiventa</p>`;
   $("#lp").oninput = e => { const v = digits(e.target.value).slice(0, 11); if (e.target.value !== v) e.target.value = v; };
   $("#lk").oninput = e => { const v = digits(e.target.value).slice(0, 6); if (e.target.value !== v) e.target.value = v; };
