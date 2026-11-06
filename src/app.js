@@ -202,6 +202,49 @@ function pills(o) {
   return h;
 }
 
+/* ---------- Push notifications (owner): staff logged an order / clothes ready ---------- */
+const VAPID = "BLmHWFO3eEf660xQVHBvFJIPBsEjmjhM_5-BxwgKg0-z9kUpzOKRgtCGoY2_voza_qnZ0_gyqKrnbqixbbpfyIA";
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const b64 = s => { const p = "=".repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+async function swReg() { if (!("serviceWorker" in navigator)) return null; try { return await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register("/sw.js"); } catch (_) { return null; } }
+async function saveSub(sub) {
+  const j = sub.toJSON();
+  const { error } = await sb.from("push_subs").upsert({ endpoint: j.endpoint, user_id: me.user_id, shop_id: shop.id, p256dh: j.keys.p256dh, auth: j.keys.auth });
+  return !error;
+}
+async function pushState() {
+  if (!pushSupported()) return isIOS && !standalone() ? "ios-install" : "unsupported";
+  if (Notification.permission === "denied") return "blocked";
+  if (Notification.permission !== "granted") return "off";
+  const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
+  return sub ? "on" : "off";
+}
+async function enablePush() {
+  if (!pushSupported()) { toast(isIOS ? "On iPhone, add Tagbook to your Home Screen first." : "This browser can't show notifications."); return false; }
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { toast("Notifications not allowed. You can allow them in your phone's settings for this app."); return false; }
+  const reg = await swReg(); if (!reg) { toast("Couldn't turn on notifications. Try again."); return false; }
+  await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  try { if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) }); }
+  catch (_) { toast("Couldn't turn on notifications. Try again."); return false; }
+  if (!await saveSub(sub)) { toast("Not saved. Check your internet and try again."); return false; }
+  toast("Notifications are on"); return true;
+}
+async function disablePush() {
+  const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
+  if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); try { await sub.unsubscribe(); } catch (_) { } }
+}
+// keep this phone's subscription saved (the address can change after updates)
+async function syncPush() {
+  if (!own() || !pushSupported() || Notification.permission !== "granted") return;
+  const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
+  if (sub) saveSub(sub);
+}
+const pushDismissed = () => { try { return localStorage.getItem("tb-push-later") === "1"; } catch (_) { return false; } };
+
 /* ---------- Orders ---------- */
 function renderOrders() {
   const fresh = orders.filter(o => !o.notified);
@@ -229,7 +272,9 @@ function renderOrders() {
     return true;
   }).sort((a, b) => b.no - a.no);
   const shown = list.slice(0, 200);
+  const askPush = own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
   view.innerHTML = `
+    ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
     ${own() ? `<div class="stats">
       <button class="stat ${toList.length ? "hot" : ""}" data-go="new"><b>${toList.length}</b><span>Send list</span></button>
@@ -254,6 +299,8 @@ function renderOrders() {
   view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; renderOrders(); });
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
+  if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
+  if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
     const ids = fresh.map(o => o.id); fresh.forEach(o => o.notified = true); filter = "new"; renderOrders();
     sb.from("orders").update({ notified: true }).in("id", ids).then(({ error }) => { if (error) { toast(failMsg(error)); refresh(); } });
@@ -677,7 +724,7 @@ function renderSettings() {
   const meLine = `<p class="who-me">Signed in as <b>${esc(me.name)}</b> (${own() ? "owner" : "staff"}) · ${fmtPhone(me.phone)}</p>`;
   const nav = own() ? `<nav class="stabs" aria-label="Settings sections">${SET_TABS.map(([k, l]) => `<button data-st="${k}" aria-current="${setTab === k ? "page" : "false"}">${l}</button>`).join("")}</nav>` : "";
   let body = "";
-  if (setTab === "account") body = card("Change my PIN", "You'll use the new PIN next time you log in.",
+  if (setTab === "account") body = (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
       `<label for="np">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}><button class="btn btn-ghost" id="npb">Save new PIN</button>`)
     + card("Log out", "", `<button class="btn btn-ghost" id="out" style="margin-top:0">Log out</button>`);
   if (setTab === "business") { const p = sPriv(); body =
@@ -715,7 +762,23 @@ function renderSettings() {
   if (setTab === "prices") wirePrices();
 }
 const savedToast = ok => { if (ok) toast("Saved"); };
+async function drawPushBox() {
+  const box = $("#pushbox"); if (!box) return;
+  const st = await pushState();
+  const html = {
+    on: `<p class="pushon">On for this phone</p><button class="btn btn-ghost" id="pushoff">Turn off on this phone</button>`,
+    off: `<button class="btn btn-primary" id="pushgo">Turn on notifications</button>`,
+    blocked: `<p class="hint">Notifications are blocked for Tagbook on this phone. Allow them in your phone's settings (Site settings → Notifications), then come back here.</p>`,
+    "ios-install": `<p class="hint">On iPhone: tap Share, then “Add to Home Screen”. Open Tagbook from the Home Screen and turn notifications on here.</p>`,
+    unsupported: `<p class="hint">This browser can't show notifications. Use Chrome on your phone.</p>`,
+  }[st];
+  if (!$("#pushbox")) return;
+  box.innerHTML = html;
+  if ($("#pushgo")) $("#pushgo").onclick = async () => { $("#pushgo").disabled = true; await enablePush(); drawPushBox(); };
+  if ($("#pushoff")) $("#pushoff").onclick = async () => { await disablePush(); toast("Notifications off for this phone"); drawPushBox(); };
+}
 function wireAccount() {
+  drawPushBox();
   $("#npb").onclick = async () => {
     const pin = digits($("#np").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; }
     $("#npb").disabled = true;
@@ -724,7 +787,7 @@ function wireAccount() {
     if (error) { toast(failMsg(error)); return; }
     $("#np").value = ""; toast("New PIN saved. Use it next time you log in.");
   };
-  $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } await sb.auth.signOut(); location.hash = ""; location.reload(); };
+  $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } try { await disablePush(); } catch (_) { } await sb.auth.signOut(); location.hash = ""; location.reload(); };
 }
 function wireBusiness() {
   const p = sPriv();
@@ -935,7 +998,7 @@ async function start() {
   $("#login").hidden = true; L = null;
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   saveLast({ phone: st.phone, name: st.name, shop: shop.name });
-  reset(); subscribe(); route();
+  reset(); subscribe(); route(); syncPush();
 }
 
 (async function boot() {

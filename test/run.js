@@ -108,6 +108,7 @@ async function handle(route) {
   page.on("pageerror", e => errors.push("pageerror: " + e.message));
   page.on("console", m => { if (m.type() === "error" && !/websocket|realtime|ERR_|404/i.test(m.text())) errors.push("console: " + m.text()); });
   await ctx.route(SB + "/**", handle);
+  await ctx.addInitScript(() => { try { Object.defineProperty(Notification, "permission", { get: () => "default" }); } catch (_) {} });
   await ctx.routeWebSocket(/realtime/, ws => {});
   const shot = async n => page.screenshot({ path: path.join(out, n + ".png"), fullPage: true });
   const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); await page.waitForSelector("#tabs button"); };
@@ -120,6 +121,7 @@ async function handle(route) {
 
   // SECRETARY logs an order for a new customer
   await login("08000000091"); await shot("02-sec-empty");
+  console.log("push banner for staff:", await page.isVisible("#pushon"));
   await T("#tabs button.new"); await shot("02b-log-empty"); await T("#cnew");
   await page.fill("#ph", "08011112222"); await page.waitForTimeout(400);
   await page.fill("#nm", "Ade Bello"); await T('[data-hm="no"]');
@@ -142,6 +144,8 @@ async function handle(route) {
 
   // OWNER
   await login("08120756325"); await shot("07-owner-orders");
+  console.log("push banner for owner:", await page.isVisible("#pushon"), "(permission:", await page.evaluate(() => Notification.permission) + ")");
+  if (await page.isVisible("#pushon")) { await page.click("#pushlater"); await page.waitForTimeout(200); console.log("banner gone after Not now:", !(await page.isVisible("#pushon"))); }
   await page.reload(); await page.waitForTimeout(800); console.log("still logged in after reload:", await page.isVisible("#tabs button"));
   await ctx.unroute(SB + "/**"); await ctx.route(SB + "/**", r => r.abort());
   await page.evaluate(() => { const k = JSON.parse(localStorage.getItem("tagbook-auth")); k.expires_at = 1; localStorage.setItem("tagbook-auth", JSON.stringify(k)); });
@@ -174,6 +178,8 @@ async function handle(route) {
   console.log("reports received:", await page.textContent(".rhero b"));
   // settings: add staff, price edit, branch add
   await T("#gear"); await shot("13a-settings-business");
+  await T('[data-st="account"]'); await page.waitForTimeout(400); console.log("account notifications box:", (await page.textContent("#pushbox")).trim().slice(0, 40)); await shot("13x-account");
+  await T('[data-st="business"]');
   await T('[data-st="staff"]');
   await page.fill("#sfn", "Tolu"); await page.fill("#sfp", "08033334444"); await page.fill("#sfk", "123456"); await T("#sfa"); await page.waitForTimeout(400);
   console.log("staff now:", db.staff.map(s => s.name).join(", "));

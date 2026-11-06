@@ -79,6 +79,19 @@ self.addEventListener("fetch", e => {
   if (u.origin !== location.origin || u.pathname === "/version.json") return;
   e.respondWith(fetch(e.request, { cache: "no-cache" }).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); return r; }).catch(() => caches.match(e.request).then(r => r || caches.match("/index.html"))));
 });
+// Push: show the owner's notification; tapping it opens that order
+self.addEventListener("push", e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Tagbook", { body: d.body || "", tag: d.tag, data: { url: d.url || "/#orders" }, icon: "/icon-192.png", badge: "/icon-192.png", renotify: true }));
+});
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "/#orders";
+  e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => {
+    for (const w of ws) { if (new URL(w.url).origin === location.origin) { w.focus(); return w.navigate ? w.navigate(url) : null; } }
+    return clients.openWindow(url);
+  }));
+});
 SW
 printf '{"v":"%s"}\n' "$B" > site/version.json
 printf '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: same-origin\n/sw.js\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n' > site/_headers
