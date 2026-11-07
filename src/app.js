@@ -1223,3 +1223,19 @@ async function start() {
   await start();
 })();
 sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT" && me && !hasSavedLogin()) { location.hash = ""; location.reload(); } });
+
+/* ---------- iPhone fix: after the keyboard closes, iOS sometimes leaves fixed bars stuck mid-screen ---------- */
+(function keepBarsDown() {
+  const vv = window.visualViewport; if (!vv) return;
+  let t = 0;
+  const fix = () => {
+    const nav = document.getElementById("tabsnav"); if (!nav) return;
+    const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    const gap = Math.round(vv.height + vv.offsetTop - window.innerHeight);
+    nav.style.transform = !typing && gap > 2 ? `translateY(${gap}px)` : "";
+  };
+  const soon = () => { clearTimeout(t); t = setTimeout(fix, 60); };
+  vv.addEventListener("resize", soon); vv.addEventListener("scroll", soon); window.addEventListener("resize", soon);
+  document.addEventListener("focusout", () => setTimeout(() => { window.scrollTo(window.scrollX, window.scrollY); fix(); }, 120));
+  window.addEventListener("pageshow", soon); document.addEventListener("visibilitychange", soon);
+})();
