@@ -217,3 +217,27 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .installbar svg{vertical-align:-2px}
 .installbar #instgo{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer;flex:none}
 .installbar #instx{background:none;border:0;color:var(--muted);font-size:24px;line-height:1;padding:4px 6px;cursor:pointer;flex:none}
+/* admin: Shops | Leads switch and leads list */
+.aseg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px;margin-bottom:14px}
+.aseg button{border:0;background:none;font:inherit;font-weight:600;padding:8px 18px;border-radius:9px;color:var(--muted);cursor:pointer}
+.aseg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.osent-top{display:flex;align-items:baseline;gap:8px}
+.osent-top b{font-size:26px;font-variant-numeric:tabular-nums}
+.osent-top span{color:var(--muted)}
+.obar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:8px}
+.obar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.obar i.full{background:var(--warn)}
+.ochips{margin:12px 0 0;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
+.ochips .chip{white-space:nowrap;flex:none}
+.ochips .n{opacity:.65;font-weight:500;margin-left:2px}
+.olead{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.olead.is-no{opacity:.6}
+.ohead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ohead b{display:block;font-size:16px}
+.ohead span{font-size:14px;color:var(--muted)}
+.ohead .pill{flex:none}
+.onote{margin:8px 0 0;font-size:14px;color:var(--muted);line-height:1.4}
+.oact{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}
+.oact .btn{width:auto;flex:1 1 auto;padding:10px 14px;min-height:0;text-align:center;text-decoration:none}
+.oact select{width:auto;flex:none;padding:8px 10px;font-size:14px}
+#oq{margin-top:12px}

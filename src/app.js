@@ -182,8 +182,106 @@ function shopFlags(r) {
   if (!r.push) f.push(["Owner alerts off", "warn"]);
   return f;
 }
+let adminView = (() => { try { return localStorage.getItem("tb-admin-view") || "shops"; } catch (_) { return "shops"; } })();
+const adminSeg = () => `<div class="aseg" role="tablist"><button data-av="shops" aria-pressed="${adminView === "shops"}">Shops</button><button data-av="leads" aria-pressed="${adminView === "leads"}">Leads</button></div>`;
+function wireAdminSeg() { view.querySelectorAll("[data-av]").forEach(b => b.onclick = () => { adminView = b.dataset.av; try { localStorage.setItem("tb-admin-view", adminView); } catch (_) { } renderAdmin(); }); }
+
+/* ---------- Leads: shops to reach, with one-tap WhatsApp messages ---------- */
+let olead = null, olog = [], oleadBusy = false, oCity = "Akure", oStatus = "new", oQ = "", oAdd = false;
+const O_STATUS = { new: "To contact", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
+const O_PILL = { new: "p-new", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
+const DAILY_SAFE = 5;
+const lagosDay = t => new Date(new Date(t).getTime() + 3600e3).toISOString().slice(0, 10);
+async function loadLeads() {
+  if (oleadBusy) return; oleadBusy = true;
+  try {
+    const [a, b] = await Promise.all([sb.from("outreach_leads").select("*").order("created_at"), sb.from("outreach_log").select("lead_id,kind,sent_at").gte("sent_at", new Date(Date.now() - 60 * 864e5).toISOString())]);
+    if (!a.error) olead = a.data || []; if (!b.error) olog = b.data || [];
+  } finally { oleadBusy = false; }
+  if (tab === "admin" && adminView === "leads") keepTyped(renderAdmin);
+}
+function greet() { const h = (new Date().getUTCHours() + 1) % 24; return h < 12 ? "Good morning" : h < 16 ? "Good afternoon" : "Good evening"; }
+function leadMsg(l, kind) {
+  if (kind === "follow") return `${greet()}. Just checking if you saw our message about Tagbook, the app that records your customers' clothes and payments. We're happy to send a 1 minute video if you'd like to see it.\n\nBolu, Tagbook team`;
+  const what = "We built a simple app that helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp, and see who still owes. Shops started using it this week.";
+  return l.city === "Akure"
+    ? `${greet()}. This is Bolu from Tagbook, we're based here in Akure. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we stop by your shop for 10 minutes to show you?\n\nBolu, Tagbook team`
+    : `${greet()}. This is Bolu from Tagbook. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 1 minute video of how it works?\n\nBolu, Tagbook team`;
+}
+const waLink = (phone, text) => `https://wa.me/234${String(phone).replace(/^0/, "")}${text ? "?text=" + encodeURIComponent(text) : ""}`;
+function renderLeads() {
+  if (olead === null) { loadLeads(); view.innerHTML = `${adminSeg()}<p class="hint">Loading leads…</p>`; wireAdminSeg(); return; }
+  const today = lagosDay(Date.now());
+  const sentToday = olog.filter(x => lagosDay(x.sent_at) === today).length;
+  const lastSent = id => olog.filter(x => x.lead_id === id).reduce((m, x) => Math.max(m, Date.parse(x.sent_at)), 0);
+  const cityOrder = ["Akure", "Ondo town", "Ile-Oluji", "Ibadan", "Lagos"];
+  const cities = [...new Set(olead.map(l => l.city))].sort((a, b) => (cityOrder.indexOf(a) + 1 || 99) - (cityOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const inCity = olead.filter(l => oCity === "all" || l.city === oCity);
+  const q = oQ.trim().toLowerCase();
+  const list = inCity.filter(l => (oStatus === "all" || l.status === oStatus) && (!q || (l.name + " " + (l.area || "") + " " + (l.phone || "")).toLowerCase().includes(q)));
+  const groups = cities.map(c => [c, list.filter(l => l.city === c)]).filter(g => g[1].length);
+  const pct = Math.min(100, Math.round(sentToday / DAILY_SAFE * 100));
+  const card = l => {
+    const last = lastSent(l.id), days = last ? (Date.now() - last) / 864e5 : null;
+    let act = "";
+    if (!l.phone) act = `<span class="hint">No phone yet</span>`;
+    else if (l.status === "new") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="first" href="${waLink(l.phone, leadMsg(l, "first"))}" target="_blank" rel="noopener">Message on WhatsApp</a>`;
+    else if (l.status === "messaged") act = days !== null && days >= 2 ? `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="follow" href="${waLink(l.phone, leadMsg(l, "follow"))}" target="_blank" rel="noopener">Send follow-up</a>` : `<span class="hint">Messaged ${ago(new Date(last).toISOString())}</span>`;
+    else if (l.status !== "no") act = `<a class="btn btn-ghost" href="${waLink(l.phone)}" target="_blank" rel="noopener">Open chat</a>`;
+    return `<section class="olead${l.status === "no" ? " is-no" : ""}">
+      <div class="ohead"><div><b>${esc(l.name)}</b><span>${esc(l.area || "")}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</span></div><span class="pill ${O_PILL[l.status]}">${O_STATUS[l.status]}</span></div>
+      ${l.notes ? `<p class="onote">${esc(l.notes)}</p>` : ""}
+      <div class="oact">${act}<select data-ost="${l.id}" aria-label="Change status for ${esc(l.name)}">${Object.entries(O_STATUS).map(([k, v]) => `<option value="${k}" ${k === l.status ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+    </section>`;
+  };
+  view.innerHTML = `${adminSeg()}
+    <div class="dtop"><div><h2 class="ptitle">Leads</h2><p class="hint">${olead.length} shops · tap a button to open WhatsApp with the message ready</p></div><div class="row"><button class="btn btn-ghost" id="oadd">+ Add a lead</button></div></div>
+    <section class="scard osent"><div class="osent-top"><b>${sentToday} of ${DAILY_SAFE}</b><span>messages sent today</span></div><div class="obar"><i style="width:${pct}%" class="${sentToday >= DAILY_SAFE ? "full" : ""}"></i></div>
+      <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the 0812 line." : `${DAILY_SAFE - sentToday} more today keeps the 0812 line safe.`}</p></section>
+    ${oAdd ? `<section class="scard dlead"><h3 class="stitle">Add a lead</h3>
+      <label for="ol-n">Shop name</label><input id="ol-n" autocomplete="off">
+      <div class="sgrid"><div><label for="ol-a">Area</label><input id="ol-a" placeholder="e.g. Oba Ile" autocomplete="off"></div>
+      <div><label for="ol-c">City</label><input id="ol-c" list="ol-cities" value="${oCity === "all" ? "Akure" : esc(oCity)}" autocomplete="off"><datalist id="ol-cities">${cities.map(c => `<option value="${esc(c)}">`).join("")}</datalist></div></div>
+      <label for="ol-p">Phone</label><input id="ol-p" type="text" inputmode="tel" autocomplete="off">
+      <label for="ol-x">Note (optional)</label><input id="ol-x" autocomplete="off">
+      <div class="row"><button class="btn btn-ghost" id="ol-no">Cancel</button><button class="btn btn-primary" id="ol-go">Save lead</button></div></section>` : ""}
+    <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
+    <div class="chips ochips">${[["new", "To contact"], ["messaged", "Messaged"], ["replied", "Replied"], ["demo", "Demo booked"], ["joined", "Joined"], ["no", "Said no"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${oStatus === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
+    <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
+    ${groups.length ? groups.map(([c, ls]) => `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${ls.map(card).join("")}</div>`).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
+  wireAdminSeg();
+  view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); });
+  view.querySelectorAll("[data-os]").forEach(b => b.onclick = () => { oStatus = b.dataset.os; renderAdmin(); });
+  $("#oq").oninput = e => { oQ = e.target.value; clearTimeout(window.__oqT); window.__oqT = setTimeout(() => { const pos = e.target.selectionStart; renderAdmin(); const el = $("#oq"); el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) { } }, 250); };
+  $("#oadd").onclick = () => { oAdd = !oAdd; renderAdmin(); if (oAdd) $("#ol-n").focus(); };
+  if ($("#ol-no")) $("#ol-no").onclick = () => { oAdd = false; renderAdmin(); };
+  if ($("#ol-go")) $("#ol-go").onclick = async () => {
+    const row = { name: $("#ol-n").value.trim(), area: $("#ol-a").value.trim() || null, city: $("#ol-c").value.trim() || "Akure", phone: digits($("#ol-p").value) || null, notes: $("#ol-x").value.trim() || null };
+    if (!row.name) return toast("Type the shop name");
+    if (row.phone && !/^0\d{10}$/.test(row.phone)) return toast("The phone must be 11 digits and start with 0.");
+    const { data, error } = await sb.from("outreach_leads").insert(row).select().single();
+    if (error) return toast("Couldn't save. Check your internet.");
+    olead.push(data); oAdd = false; oCity = data.city; oStatus = "new"; toast("Lead saved"); renderAdmin();
+  };
+  view.querySelectorAll("[data-wa]").forEach(a => a.addEventListener("click", () => {
+    const l = olead.find(x => x.id === a.dataset.wa); if (!l) return;
+    const kind = a.dataset.kind, at = new Date().toISOString();
+    olog.push({ lead_id: l.id, kind, sent_at: at });
+    sb.from("outreach_log").insert({ lead_id: l.id, kind }).then(() => { });
+    if (l.status === "new") { l.status = "messaged"; sb.from("outreach_leads").update({ status: "messaged" }).eq("id", l.id).then(() => { }); }
+    setTimeout(() => renderAdmin(), 400);
+  }));
+  view.querySelectorAll("[data-ost]").forEach(sel => sel.onchange = async () => {
+    const l = olead.find(x => x.id === sel.dataset.ost); const status = sel.value;
+    const { error } = await sb.from("outreach_leads").update({ status }).eq("id", l.id);
+    if (error) return toast("Couldn't save. Check your internet.");
+    l.status = status; toast(`${l.name}: ${O_STATUS[status]}`); renderAdmin();
+  });
+}
+
 function renderAdmin() {
   if (!isAdmin) return go("orders");
+  if (adminView === "leads") return renderLeads();
   if (dash === null || Date.now() - dashAt > 60e3) loadDash();
   if (dash === null) { view.innerHTML = `<h2 class="ptitle">Shops</h2><p class="hint">Loading…</p>`; return; }
   const real = dash.filter(r => !r.is_test), test = dash.filter(r => r.is_test);
@@ -237,7 +335,7 @@ function renderAdmin() {
         <div class="row"><button class="btn btn-ghost" id="ag-no">Cancel</button><button class="btn btn-primary" id="ag-go">Add to team</button></div></div>`
       : `<button class="btn btn-ghost" id="ag-add">+ Add someone</button>`}
   </section>`;
-  view.innerHTML = `<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
+  view.innerHTML = `${adminSeg()}<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
       <div class="row"><button class="btn btn-ghost" id="dref">Refresh</button><button class="btn btn-primary" id="dadd">Add a shop</button></div></div>
     <div class="stats dstats">
       <div class="stat"><b>${real.length}</b><span>Shops</span></div>
@@ -252,6 +350,7 @@ function renderAdmin() {
     ${refHtml}
     ${agentHtml}
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
+  wireAdminSeg();
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
   $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };
   const setLead = async (id, status) => { const { error } = await sb.from("ref_leads").update({ status }).eq("id", id); if (error) return toast("Couldn't save. Check your internet."); const l = leads.find(x => x.id === id); if (l) l.status = status; renderAdmin(); };
