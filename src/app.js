@@ -30,7 +30,9 @@ let me = null, role = "sec", shop = null, priv = null, isAdmin = false, isAgent 
 let BRANCHES = [], PRICES = [], customers = [], orders = [], staffList = [];
 let tab = "orders", filter = "all", query = "", openNo = null, page = 0;
 const PER_PAGE = 20;
-const own = () => role === "own";
+let demoStaff = false;
+const own = () => role === "own" && !demoStaff;
+const demoShop = () => !!(shop && shop.is_test) && role === "own";
 const theme = () => { try { return localStorage.getItem("tb-theme") || "light"; } catch (_) { return "light"; } };
 const shopName = () => (shop && shop.name.trim()) || "Your laundry";
 const branchName = id => (BRANCHES.find(b => b.id === id) || {}).name || "";
@@ -54,7 +56,7 @@ async function fetchAll(table, cols, orderBy) {
 
 async function load() {
   const base = await Promise.all([
-    sb.from("shops").select("id,name,created_at").single(),
+    sb.from("shops").select("id,name,created_at,is_test").single(),
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
     fetchAll("customers", "id,name,mark"),
@@ -291,7 +293,12 @@ function render() {
   $("#app").hidden = false; $("#tabsnav").hidden = false; $("#app").classList.remove("is-loading");
   $("#shopname").textContent = shopName();
   const tabs = own() ? [["orders", "Orders"], ["new", "+ Log clothes"], ["reports", "Reports"]] : [["orders", "Orders"], ["new", "+ Log clothes"]];
-  if (isAdmin) tabs.push(["admin", "Shops"]); else if (isAgent) tabs.push(["agent", "Set up shops"]);
+  if (!demoStaff) { if (isAdmin) tabs.push(["admin", "Shops"]); else if (isAgent) tabs.push(["agent", "Set up shops"]); }
+  const db_ = $("#demobar"); db_.hidden = !demoShop();
+  if (demoShop()) {
+    db_.innerHTML = `<span>Demo shop · show it as</span><div class="seg"><button data-dv="own" aria-pressed="${!demoStaff}">Owner</button><button data-dv="sec" aria-pressed="${demoStaff}">Staff</button></div>`;
+    db_.querySelectorAll("[data-dv]").forEach(b => b.onclick = () => { const v = b.dataset.dv === "sec"; if (v === demoStaff) return; demoStaff = v; if (demoStaff && (tab === "reports" || tab === "admin" || tab === "agent")) go("orders"); else render(); toast(demoStaff ? "Showing what staff see: no money, prices or phone numbers" : "Back to the owner's view"); });
+  }
   const th = $("#themebtn"), dark = theme() === "dark";
   th.innerHTML = dark ? SUN : MOON; th.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode"); th.title = th.getAttribute("aria-label");
   th.onclick = () => { try { localStorage.setItem("tb-theme", dark ? "light" : "dark"); } catch (_) { } render(); };
@@ -316,6 +323,25 @@ function pills(o) {
   }
   return h;
 }
+
+/* ---------- Install banner: Android gets the real install prompt, iPhone gets the steps ---------- */
+let installEvt = null;
+const installLater = () => { try { return Date.now() - (+localStorage.getItem("tb-install-later") || 0) < 3 * 864e5; } catch (_) { return false; } };
+function showInstall() {
+  const bar = document.getElementById("installbar"); if (!bar) return;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
+  if (isStandalone || installLater() || (!installEvt && !ios)) { bar.hidden = true; return; }
+  bar.innerHTML = `<img src="/icon-192.png" alt=""><div><b>Install Tagbook</b><span>${installEvt ? "Opens like an app, straight from your home screen." : "Tap the Share button <svg viewBox='0 0 24 24' width='15' height='15' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg> below, then <b>Add to Home Screen</b>."}</span></div>
+    ${installEvt ? `<button id="instgo">Install</button>` : ""}<button id="instx" aria-label="Not now">×</button>`;
+  bar.hidden = false;
+  const go_ = document.getElementById("instgo");
+  if (go_) go_.onclick = async () => { const e = installEvt; installEvt = null; bar.hidden = true; e.prompt(); try { const c = await e.userChoice; if (c.outcome !== "accepted") localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } };
+  document.getElementById("instx").onclick = () => { try { localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } bar.hidden = true; };
+}
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; showInstall(); });
+window.addEventListener("appinstalled", () => { installEvt = null; const b = document.getElementById("installbar"); if (b) b.hidden = true; toast("Tagbook installed. Open it from your home screen."); });
+setTimeout(showInstall, 1500);
 
 /* ---------- Push notifications (owner): staff logged an order / clothes ready ---------- */
 const VAPID = "BLmHWFO3eEf660xQVHBvFJIPBsEjmjhM_5-BxwgKg0-z9kUpzOKRgtCGoY2_voza_qnZ0_gyqKrnbqixbbpfyIA";

@@ -30,6 +30,7 @@ $(cat src/style.css)
 $(cat src/extra.css)
 </style>
 </head><body>
+<div id="installbar" class="installbar" hidden></div>
 <div id="offline" class="offline" hidden>You're offline. Changes won't save until you're back online.</div>
 <div id="login" class="login" hidden></div>
 <div class="app" id="app" hidden>
@@ -37,6 +38,7 @@ $(cat src/extra.css)
     <div class="brand"><span id="shopname"></span><small>Tagbook</small></div>
     <div class="hdr-r"><button id="themebtn" class="gear" type="button"></button>$GEAR</div>
   </header>
+  <div id="demobar" class="demobar" hidden></div>
   <section id="view"></section>
 </div>
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
