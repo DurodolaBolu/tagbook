@@ -132,11 +132,12 @@ function subscribe() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && me) refresh(); });
 
 /* ---------- Money ---------- */
-const sPriv = () => priv || { express_type: "percent", express_value: 0, bank_name: "", acct_no: "", acct_name: "" };
+const sPriv = () => priv || { express_type: "manual", express_value: 0, bank_name: "", acct_no: "", acct_name: "" };
 const hasBank = () => { const p = sPriv(); return p.bank_name.trim() && p.acct_no.length === 10 && p.acct_name.trim(); };
 const payTo = () => { const p = sPriv(); return hasBank() ? `\n\nPay by transfer to:\n${p.bank_name.trim()}\n${p.acct_no}\n${p.acct_name.trim()}\nPlease send your payment receipt here.` : ""; };
-function expressFor(sub) { const p = sPriv(); return p.express_type === "percent" ? Math.round(sub * p.express_value / 100 / 50) * 50 : p.express_value; }
-const expressLabel = () => { const p = sPriv(); return p.express_type === "percent" ? `+${p.express_value}%` : `+${naira(p.express_value)}`; };
+const expManual = () => sPriv().express_type === "manual";
+function expressFor(sub) { const p = sPriv(); return p.express_type === "manual" ? 0 : p.express_type === "percent" ? Math.round(sub * p.express_value / 100 / 50) * 50 : p.express_value; }
+const expressLabel = () => { const p = sPriv(); return p.express_type === "manual" ? "" : p.express_type === "percent" ? ` (+${p.express_value}%)` : ` (+${naira(p.express_value)})`; };
 function unitPrice(o, it, i) {
   if (o.m.unit && o.m.unit[i] != null) return o.m.unit[i];
   const p = item(it.id) || {};
@@ -148,7 +149,7 @@ function calc(o) {
   const count = o.items.reduce((s, it) => s + it.qty, 0);
   if (!own()) return { sub: 0, exp: 0, total: 0, count };
   const sub = o.items.reduce((s, it, i) => s + unitPrice(o, it, i) * it.qty, 0);
-  const exp = o.express ? (o.billed && o.m.express_amt ? o.m.express_amt : expressFor(sub)) : 0;
+  const exp = o.express ? (expManual() || (o.billed && o.m.express_amt) ? (+o.m.express_amt || 0) : expressFor(sub)) : 0;
   const total = Math.max(0, sub + exp + (+o.m.delivery || 0) - (+o.m.discount || 0));
   return { sub, exp, total, count };
 }
@@ -642,7 +643,7 @@ function openOrder(no) {
     if (canEditBill) {
       html += `<div class="lines">
         ${o.items.map((it, i) => { const p = item(it.id) || {}; return `<div><span>${it.qty} × ${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>${p.custom ? `<input data-cp="${i}" ${moneyAttrs} placeholder="Set price" value="${o.m.custom[i] || ""}" aria-label="Price for ${esc(pname(it))}">` : `<span>${naira(unitPrice(o, it, i) * it.qty)}</span>`}</div>`; }).join("")}
-        <div><label class="ck" style="margin:0"><input type="checkbox" id="ex" ${o.express ? "checked" : ""}> Express delivery (${expressLabel()})</label><span id="exv">${naira(k.exp)}</span></div>
+        <div><label class="ck" style="margin:0"><input type="checkbox" id="ex" ${o.express ? "checked" : ""}> Express delivery${expressLabel()}</label>${expManual() ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.express && o.m.express_amt ? o.m.express_amt : ""}" aria-label="Express delivery amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>
         <div><span>Pickup / delivery${o.pickup ? "<br><small style='color:var(--muted)'>Customer asked for it</small>" : ""}</span><input id="dl" ${moneyAttrs} placeholder="0" value="${o.m.delivery || ""}" aria-label="Pickup or delivery cost"></div>
         <div><span>Discount</span><input id="dc" ${moneyAttrs} placeholder="0" value="${o.m.discount || ""}" aria-label="Discount"></div>
         <div><b>Total</b><b id="tot">${naira(k.total)}</b></div></div>
@@ -703,15 +704,17 @@ function openOrder(no) {
     else again();
   });
   sh.querySelectorAll("[data-again]").forEach(b => b.onclick = () => { o.again[b.dataset.again] = true; again(); });
-  const live = () => { const kk = calc(o); $("#tot").textContent = naira(kk.total); $("#exv").textContent = naira(kk.exp); };
+  const live = () => { const kk = calc(o); $("#tot").textContent = naira(kk.total); if ($("#exv")) $("#exv").textContent = naira(kk.exp); };
   sh.querySelectorAll("[data-cp]").forEach(i => moneyInput(i, v => { o.m.custom[i.dataset.cp] = v; live(); }));
   moneyInput($("#dl"), v => { o.m.delivery = v; live(); });
   moneyInput($("#dc"), v => { o.m.discount = v; live(); });
   moneyInput($("#pay"), () => { });
-  if ($("#ex")) $("#ex").onchange = e => { o.express = e.target.checked; o.m.express_amt = 0; live(); };
+  if ($("#ex")) $("#ex").onchange = e => { o.express = e.target.checked; if (!expManual()) o.m.express_amt = 0; else if (o.express && $("#exa")) $("#exa").focus(); live(); };
+  if ($("#exa")) moneyInput($("#exa"), v => { o.m.express_amt = v; if (v && !o.express) { o.express = true; $("#ex").checked = true; } live(); });
   const bill = $("#bill"); if (bill) bill.onclick = async () => {
     const miss = o.items.find((it, i) => (item(it.id) || {}).custom && !o.m.custom[i]);
     if (miss) { toast(`Set a price for ${pname(miss)} first`); return; }
+    if (o.express && expManual() && !(+o.m.express_amt > 0)) { toast("Type the express delivery amount"); $("#exa").focus(); return; }
     if (!o.billed) lockPrices(o);
     const kk = calc(o);
     o.m.express_amt = kk.exp; o.m.total = kk.total; o.m.billed_at = o.m.billed_at || new Date().toISOString();
@@ -845,9 +848,9 @@ function renderSettings() {
        <p class="hint" id="anx">${p.acct_no.length === 10 ? "" : "Account number must be 10 digits."}</p>
        <label for="am">Account name</label><input id="am" value="${esc(p.acct_name)}" placeholder="Name on the account" autocomplete="off">`)
     + card("Express delivery charge", "Added to the bill when an order is marked express delivery.",
-      `<div class="chips" style="margin:0 0 4px"><button class="chip" data-et="percent" aria-pressed="${p.express_type === "percent"}">Percentage extra</button><button class="chip" data-et="fixed" aria-pressed="${p.express_type === "fixed"}">Fixed amount</button></div>
-       <label for="ev">${p.express_type === "percent" ? "Extra percentage (%)" : "Extra amount per order (₦)"}</label>
-       <input id="ev" ${moneyAttrs} value="${p.express_value}"><p class="hint" id="evx">${exampleExpress()}</p>`); }
+      `<div class="chips" style="margin:0 0 4px"><button class="chip" data-et="manual" aria-pressed="${p.express_type === "manual"}">Type it each time</button><button class="chip" data-et="percent" aria-pressed="${p.express_type === "percent"}">Percentage extra</button><button class="chip" data-et="fixed" aria-pressed="${p.express_type === "fixed"}">Fixed amount</button></div>
+       ${p.express_type === "manual" ? `<p class="hint">You type the express amount on each order's bill, depending on the job.</p>` : `<label for="ev">${p.express_type === "percent" ? "Extra percentage (%)" : "Extra amount per order (₦)"}</label>
+       <input id="ev" ${moneyAttrs} value="${p.express_value}"><p class="hint" id="evx">${exampleExpress()}</p>`}`); }
   if (setTab === "branches") body = card("Branches", "Where customers drop clothes. With one branch, the app doesn't ask.",
       `${liveBranches().map(b => `<div class="row srow"><input data-bn="${b.id}" value="${esc(b.name)}" autocomplete="off" aria-label="Branch name">${liveBranches().length > 1 ? `<button class="mini danger" data-brm="${b.id}">Remove</button>` : ""}</div>`).join("")}
        <div class="row srow"><input id="nb" placeholder="New branch name" autocomplete="off" aria-label="New branch name"><button class="mini" id="nbb">Add</button></div>`);
@@ -908,9 +911,9 @@ function wireBusiness() {
   $("#am").onchange = e => savePriv({ acct_name: e.target.value.trim().slice(0, 60) });
   moneyInput($("#an"), () => { const el = $("#an"); if (el.value.length > 10) el.value = el.value.slice(0, 10); $("#anx").textContent = el.value.length === 10 ? "" : "Account number must be 10 digits."; });
   $("#an").onchange = e => savePriv({ acct_no: e.target.value });
-  view.querySelectorAll("[data-et]").forEach(b => b.onclick = async () => { await savePriv({ express_type: b.dataset.et, express_value: b.dataset.et === "percent" ? 50 : 1000 }); renderSettings(); });
-  moneyInput($("#ev"), v => { priv.express_value = p.express_type === "percent" ? Math.min(v, 300) : v; $("#evx").textContent = exampleExpress(); });
-  $("#ev").onchange = () => savePriv({ express_value: priv.express_value });
+  view.querySelectorAll("[data-et]").forEach(b => b.onclick = async () => { await savePriv({ express_type: b.dataset.et, express_value: b.dataset.et === "percent" ? 50 : b.dataset.et === "fixed" ? 1000 : 0 }); renderSettings(); });
+  if ($("#ev")) { moneyInput($("#ev"), v => { priv.express_value = p.express_type === "percent" ? Math.min(v, 300) : v; $("#evx").textContent = exampleExpress(); });
+  $("#ev").onchange = () => savePriv({ express_value: priv.express_value }); }
 }
 function wireBranches() {
   view.querySelectorAll("[data-bn]").forEach(i => i.onchange = async () => { const v = i.value.trim().slice(0, 40); if (!v) return; const b = BRANCHES.find(x => x.id === i.dataset.bn); b.name = v; savedToast(await put("branches", { id: b.id }, { name: v })); });
