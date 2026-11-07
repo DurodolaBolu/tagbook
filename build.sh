@@ -38,7 +38,6 @@ $(cat src/extra.css)
     <div class="brand"><span id="shopname"></span><small>Tagbook</small></div>
     <div class="hdr-r"><button id="themebtn" class="gear" type="button"></button>$GEAR</div>
   </header>
-  <div id="demobar" class="demobar" hidden></div>
   <section id="view"></section>
 </div>
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>

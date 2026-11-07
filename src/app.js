@@ -30,9 +30,7 @@ let me = null, role = "sec", shop = null, priv = null, isAdmin = false, isAgent 
 let BRANCHES = [], PRICES = [], customers = [], orders = [], staffList = [];
 let tab = "orders", filter = "all", query = "", openNo = null, page = 0;
 const PER_PAGE = 20;
-let demoStaff = false;
-const own = () => role === "own" && !demoStaff;
-const demoShop = () => !!(shop && shop.is_test) && role === "own";
+const own = () => role === "own";
 const theme = () => { try { return localStorage.getItem("tb-theme") || "light"; } catch (_) { return "light"; } };
 const shopName = () => (shop && shop.name.trim()) || "Your laundry";
 const branchName = id => (BRANCHES.find(b => b.id === id) || {}).name || "";
@@ -293,12 +291,8 @@ function render() {
   $("#app").hidden = false; $("#tabsnav").hidden = false; $("#app").classList.remove("is-loading");
   $("#shopname").textContent = shopName();
   const tabs = own() ? [["orders", "Orders"], ["new", "+ Log clothes"], ["reports", "Reports"]] : [["orders", "Orders"], ["new", "+ Log clothes"]];
-  if (!demoStaff) { if (isAdmin) tabs.push(["admin", "Shops"]); else if (isAgent) tabs.push(["agent", "Set up shops"]); }
-  const db_ = $("#demobar"); db_.hidden = !demoShop();
-  if (demoShop()) {
-    db_.innerHTML = `<span>Demo shop · show it as</span><div class="seg"><button data-dv="own" aria-pressed="${!demoStaff}">Owner</button><button data-dv="sec" aria-pressed="${demoStaff}">Staff</button></div>`;
-    db_.querySelectorAll("[data-dv]").forEach(b => b.onclick = () => { const v = b.dataset.dv === "sec"; if (v === demoStaff) return; demoStaff = v; if (demoStaff && (tab === "reports" || tab === "admin" || tab === "agent")) go("orders"); else render(); toast(demoStaff ? "Showing what staff see: no money, prices or phone numbers" : "Back to the owner's view"); });
-  }
+  if (isAdmin) tabs.push(["admin", "Shops"]); else if (isAgent) tabs.push(["agent", "Set up shops"]);
+
   const th = $("#themebtn"), dark = theme() === "dark";
   th.innerHTML = dark ? SUN : MOON; th.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode"); th.title = th.getAttribute("aria-label");
   th.onclick = () => { try { localStorage.setItem("tb-theme", dark ? "light" : "dark"); } catch (_) { } render(); };

@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261107042449";</script>
+<script>window.TB_BUILD="20261107043521";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -378,11 +378,6 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .installbar svg{vertical-align:-2px}
 .installbar #instgo{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer;flex:none}
 .installbar #instx{background:none;border:0;color:var(--muted);font-size:24px;line-height:1;padding:4px 6px;cursor:pointer;flex:none}
-/* demo shop view switch */
-.demobar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:8px 12px;border-radius:12px;background:var(--wait-soft);font-size:14px;color:var(--muted)}
-.demobar .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:2px}
-.demobar .seg button{border:0;background:none;font:inherit;font-weight:600;padding:6px 12px;border-radius:8px;color:var(--muted);cursor:pointer}
-.demobar .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -393,13 +388,12 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
     <div class="brand"><span id="shopname"></span><small>Tagbook</small></div>
     <div class="hdr-r"><button id="themebtn" class="gear" type="button"></button><button id="gear" class="gear" aria-label="Settings" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></div>
   </header>
-  <div id="demobar" class="demobar" hidden></div>
   <section id="view"></section>
 </div>
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261107042449"></script>
+<script src="/app.js?v=20261107043521"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
