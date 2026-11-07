@@ -109,15 +109,25 @@ async function saveMoney(o) {
   return true;
 }
 let reloadTimer = null, pending = false;
+/* Background updates re-draw the screen; keep whatever the user has typed so far. */
+function keepTyped(fn) {
+  const saved = [];
+  document.querySelectorAll("#view [id], #sheet [id]").forEach(el => {
+    if (!/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.type === "file") return;
+    saved.push([el.id, el.type === "checkbox" || el.type === "radio" ? el.checked : el.value, el.type === "checkbox" || el.type === "radio"]);
+  });
+  fn();
+  saved.forEach(([id, v, isCheck]) => { const el = document.getElementById(id); if (!el) return; if (isCheck) el.checked = v; else if (el.value !== v) el.value = v; });
+}
 function refresh() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
     try { await load(); } catch (e) { return; }
     if (busy()) { pending = true; return; }
-    render();
+    keepTyped(render);
   }, 350);
 }
-document.addEventListener("focusout", () => setTimeout(() => { if (pending && !busy()) { pending = false; render(); } }, 50));
+document.addEventListener("focusout", () => setTimeout(() => { if (pending && !busy()) { pending = false; keepTyped(render); } }, 50));
 window.addEventListener("online", () => { $("#offline").hidden = true; refresh(); });
 window.addEventListener("offline", () => { $("#offline").hidden = false; });
 
@@ -161,7 +171,7 @@ const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
 let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
-async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; } finally { dashBusy = false; } if (tab === "admin") renderAdmin(); }
+async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
 function shopFlags(r) {
   const f = [], age = (Date.now() - Date.parse(r.created_at)) / 864e5, left = daysTo(r.trial_ends);
   if (!r.orders && age > 1) f.push(["No orders yet, " + Math.floor(age) + " day" + (Math.floor(age) === 1 ? "" : "s") + " in", "owes"]);
@@ -223,7 +233,7 @@ function renderAdmin() {
         <div class="row"><a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/234${newAgent.phone.slice(1)}?text=${encodeURIComponent(newAgent.msg)}">Send on WhatsApp</a><button class="btn btn-ghost" id="ag-done">Done</button></div></div>`
       : agentForm ? `<div class="dlead"><label for="ag-n">Name</label><input id="ag-n" autocomplete="off">
         <label for="ag-p">Phone</label><input id="ag-p" type="text" inputmode="tel" autocomplete="off">
-        <label for="ag-pin">6-digit PIN</label><input id="ag-pin" class="pin" ${pinAttrs}>
+        <label for="ag-pin">6-digit PIN (made for you, change it if you like)</label><input id="ag-pin" class="pin" ${genPinAttrs()}>
         <div class="row"><button class="btn btn-ghost" id="ag-no">Cancel</button><button class="btn btn-primary" id="ag-go">Add to team</button></div></div>`
       : `<button class="btn btn-ghost" id="ag-add">+ Add someone</button>`}
   </section>`;
@@ -869,6 +879,9 @@ async function callAdmin(body) {
   return { ok: false, msg: msgs[code] || "Something went wrong. Check your internet and try again." };
 }
 const pinAttrs = 'type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off"';
+/* PINs we hand out are made up for the person, and shown so they can be sent on */
+const newPin = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); let p = String(a[0] % 1000000).padStart(6, "0"); if (/^(\d)\1+$/.test(p) || "0123456789".includes(p) || "9876543210".includes(p)) p = String((a[0] >> 3) % 900000 + 100000); return p; };
+const genPinAttrs = () => `type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" value="${newPin()}"`;
 let resetFor = null, setTab = "business", priceOpen = null, priceQ = "", addOpen = false;
 const wide = window.matchMedia("(min-width: 900px)");
 wide.addEventListener("change", () => { if (me && tab === "prices") renderSettings(); });
@@ -906,7 +919,7 @@ function renderSettings() {
     + card("Add a staff login", "Tell them their PIN in person. They can change it in their own Settings.",
       `<div class="sgrid"><div><label for="sfn">Name</label><input id="sfn" placeholder="e.g. Grace" autocomplete="off"></div>
        <div><label for="sfp">Phone number</label><input id="sfp" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
-       <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${pinAttrs}></div></div>
+       <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${genPinAttrs()}></div></div>
        <button class="btn btn-primary" id="sfa">Add staff login</button>`);
   if (setTab === "prices") body = priceListHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
@@ -997,7 +1010,7 @@ function shopsHtml() {
        <label for="as-b">Branches</label><input id="as-b" placeholder="Main branch" autocomplete="off"><p class="hint">Separate with commas, e.g. Main branch, Awule point, Oke-Ijebu point.</p>
        <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" placeholder="e.g. Saheed" autocomplete="off"></div>
        <div><label for="as-op">Owner's phone</label><input id="as-op" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
-       <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${pinAttrs}></div></div>
+       <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${genPinAttrs()}></div></div>
        <div class="sgrid">${agentMode() ? "" : `<div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>`}
        <div><label for="as-no">First order number</label><input id="as-no" ${moneyAttrs} value="1"><p class="hint">Use their book's next number if they want to continue it.</p></div></div>
        <label for="as-r">Referred by</label><select id="as-r"><option value="">Nobody (we found them)</option>${(refOpts || []).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}</select>
@@ -1013,7 +1026,7 @@ function shopsHtml() {
 async function loadShops() {
   const [a, b] = await Promise.all([sb.rpc(agentMode() ? "agent_shops" : "admin_shops"), sb.rpc("agent_ref_options")]);
   shopRows = a.data || []; refOpts = b.data || [];
-  if (agentMode() || (tab === "prices" && setTab === "shops")) rerenderShops();
+  if (agentMode() || (tab === "prices" && setTab === "shops")) keepTyped(rerenderShops);
 }
 function wireShops() {
   if (shopRows === null) loadShops();
