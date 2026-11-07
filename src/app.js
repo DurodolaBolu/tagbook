@@ -442,7 +442,7 @@ function renderOrders() {
     ${pages > 1 ? `<div class="pager"><button class="mini" id="pgprev" ${page === 0 ? "disabled" : ""} aria-label="Newer orders">‹ Newer</button>
       <span>${page * PER_PAGE + 1}–${page * PER_PAGE + shown.length} of ${list.length}</span>
       <button class="mini" id="pgnext" ${page >= pages - 1 ? "disabled" : ""} aria-label="Older orders">Older ›</button></div>` : ""}
-    <p class="foot">Tagbook by Ordiventa</p>`;
+    <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
   const toTop = () => { const t = $("#q"); if (t) window.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top + window.scrollY - 12) }); };
   if ($("#pgprev")) $("#pgprev").onclick = () => { page--; renderOrders(); toTop(); };
   if ($("#pgnext")) $("#pgnext").onclick = () => { page++; renderOrders(); toTop(); };
@@ -923,7 +923,7 @@ function renderSettings() {
        <button class="btn btn-primary" id="sfa">Add staff login</button>`);
   if (setTab === "prices") body = priceListHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
-  view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa</p>`;
+  view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
   wireBack(view);
   view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
   if (setTab === "account") wireAccount();
@@ -1237,18 +1237,34 @@ async function start() {
 })();
 sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT" && me && !hasSavedLogin()) { location.hash = ""; location.reload(); } });
 
-/* ---------- iPhone fix: after the keyboard closes, iOS sometimes leaves fixed bars stuck mid-screen ---------- */
+/* ---------- iPhone fix: iOS sometimes leaves the bottom menu stuck mid-screen (after the keyboard, or in the home-screen app) ---------- */
 (function keepBarsDown() {
-  const vv = window.visualViewport; if (!vv) return;
-  let t = 0;
+  const vv = window.visualViewport;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let raf = 0; const base = [null, null];
   const fix = () => {
+    raf = 0;
     const nav = document.getElementById("tabsnav"); if (!nav) return;
+    if (window.matchMedia("(min-width: 900px)").matches) { nav.style.transform = ""; return; }
     const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-    const gap = Math.round(vv.height + vv.offsetTop - window.innerHeight);
-    nav.style.transform = !typing && gap > 2 ? `translateY(${gap}px)` : "";
+    if (typing) { nav.style.transform = ""; return; }
+    let bottom = vv ? vv.height + vv.offsetTop : window.innerHeight;
+    if (ios && standalone()) {
+      const portrait = window.matchMedia("(orientation: portrait)").matches, H = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+      const missing = H - window.innerHeight; // normally just the status bar; much more means iOS shrank the page and didn't give it back
+      if (missing < 120) base[portrait ? 0 : 1] = missing;
+      else bottom = Math.max(bottom, H - (base[portrait ? 0 : 1] ?? 0));
+    }
+    const gap = Math.round(bottom - window.innerHeight);
+    nav.style.transform = gap > 2 && gap < 600 ? `translateY(${gap}px)` : "";
   };
-  const soon = () => { clearTimeout(t); t = setTimeout(fix, 60); };
-  vv.addEventListener("resize", soon); vv.addEventListener("scroll", soon); window.addEventListener("resize", soon);
-  document.addEventListener("focusout", () => setTimeout(() => { window.scrollTo(window.scrollX, window.scrollY); fix(); }, 120));
+  const soon = () => { if (!raf) raf = requestAnimationFrame(fix); };
+  if (vv) { vv.addEventListener("resize", soon); vv.addEventListener("scroll", soon); }
+  window.addEventListener("resize", soon); window.addEventListener("scroll", soon, { passive: true }); window.addEventListener("orientationchange", () => setTimeout(soon, 300));
+  document.addEventListener("focusout", () => setTimeout(() => { window.scrollTo(window.scrollX, window.scrollY); soon(); }, 120));
+  document.addEventListener("focusin", soon);
   window.addEventListener("pageshow", soon); document.addEventListener("visibilitychange", soon);
+  setInterval(soon, 1500);
+  soon();
 })();
