@@ -225,7 +225,7 @@ function renderLeads() {
   const today = lagosDay(Date.now());
   const sentToday = olog.filter(x => lagosDay(x.sent_at) === today).length;
   const lastSent = id => olog.filter(x => x.lead_id === id).reduce((m, x) => Math.max(m, Date.parse(x.sent_at)), 0);
-  const cityOrder = ["Akure"].concat(ONDO_NEAR, ["Ibadan", "Lagos"]);
+  const cityOrder = ["Akure"].concat(ONDO_NEAR, ["Ado Ekiti", "Osogbo", "Ile-Ife", "Ibadan", "Ilorin", "Abeokuta", "Lagos", "Benin City", "Abuja", "Port Harcourt"]);
   const cities = [...new Set(olead.map(l => l.city))].sort((a, b) => (cityOrder.indexOf(a) + 1 || 99) - (cityOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
   const inCity = olead.filter(l => oCity === "all" || l.city === oCity);
   const q = oQ.trim().toLowerCase();
