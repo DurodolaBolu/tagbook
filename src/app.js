@@ -202,10 +202,12 @@ async function loadLeads() {
   } finally { oleadBusy = false; }
   if (tab === "admin" && adminView === "leads") keepTyped(renderAdmin);
 }
+const ONDO_NEAR = ["Ondo town", "Owo", "Ore", "Ikare-Akoko", "Akungba", "Ile-Oluji", "Okitipupa", "Idanre"];
 function greet() { const h = (new Date().getUTCHours() + 1) % 24; return h < 12 ? "Good morning" : h < 16 ? "Good afternoon" : "Good evening"; }
 function leadMsg(l, kind) {
   if (kind === "follow") return `${greet()}. Just checking if you saw our message about Tagbook, the app that records your customers' clothes and payments. We're happy to send a 2 minute video if you'd like to see it.\n\nBolu, Tagbook team`;
   const what = "We built a simple app that helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp, and see who still owes. Shops started using it this week.";
+  if (ONDO_NEAR.includes(l.city)) return `${greet()}. This is Bolu from Tagbook, we're based in Akure, not far from you. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works?\n\nBolu, Tagbook team`;
   return l.city === "Akure"
     ? `${greet()}. This is Bolu from Tagbook, we're based here in Akure. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works? Since we're in Akure, we can also come by to set it up for you.\n\nBolu, Tagbook team`
     : `${greet()}. This is Bolu from Tagbook. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works?\n\nBolu, Tagbook team`;
@@ -223,7 +225,7 @@ function renderLeads() {
   const today = lagosDay(Date.now());
   const sentToday = olog.filter(x => lagosDay(x.sent_at) === today).length;
   const lastSent = id => olog.filter(x => x.lead_id === id).reduce((m, x) => Math.max(m, Date.parse(x.sent_at)), 0);
-  const cityOrder = ["Akure", "Ondo town", "Ile-Oluji", "Ibadan", "Lagos"];
+  const cityOrder = ["Akure"].concat(ONDO_NEAR, ["Ibadan", "Lagos"]);
   const cities = [...new Set(olead.map(l => l.city))].sort((a, b) => (cityOrder.indexOf(a) + 1 || 99) - (cityOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
   const inCity = olead.filter(l => oCity === "all" || l.city === oCity);
   const q = oQ.trim().toLowerCase();
