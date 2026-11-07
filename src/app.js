@@ -26,7 +26,7 @@ function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; 
 const busy = () => { const a = document.activeElement; return !!(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); };
 
 /* ---------- State, loaded from the database ---------- */
-let me = null, role = "sec", shop = null, priv = null, isAdmin = false;
+let me = null, role = "sec", shop = null, priv = null, isAdmin = false, isAgent = false;
 let BRANCHES = [], PRICES = [], customers = [], orders = [], staffList = [];
 let tab = "orders", filter = "all", query = "", openNo = null, page = 0;
 const PER_PAGE = 20;
@@ -158,10 +158,10 @@ const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
-let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false;
+let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
-async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; } finally { dashBusy = false; } if (tab === "admin") renderAdmin(); }
+async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; } finally { dashBusy = false; } if (tab === "admin") renderAdmin(); }
 function shopFlags(r) {
   const f = [], age = (Date.now() - Date.parse(r.created_at)) / 864e5, left = daysTo(r.trial_ends);
   if (!r.orders && age > 1) f.push(["No orders yet, " + Math.floor(age) + " day" + (Math.floor(age) === 1 ? "" : "s") + " in", "owes"]);
@@ -216,6 +216,17 @@ function renderAdmin() {
       <div class="row"><button class="btn btn-ghost" id="rl-no">Cancel</button><button class="btn btn-primary" id="rl-go">Save lead</button></div></div>`
       : `<button class="btn btn-ghost" id="rl-add">+ Add a referral lead</button>`}
   </section>`;
+  const agentHtml = `<section class="scard dref"><h3 class="stitle">Setup team</h3>
+    <p class="ssub">They can set up shops and demo on their own copy of BrightWash. They can't see this page or any shop's money.</p>
+    ${agents.map(a => `<div class="dref-row" style="padding-left:0"><div><b>${esc(a.name)}</b><span>${fmtPhone(a.phone)} · ${a.shops} shop${a.shops === 1 ? "" : "s"} set up, ${a.active} logged orders this week${a.names.length ? ` · ${a.names.map(esc).join(", ")}` : ""}</span></div></div>`).join("") || `<p class="hint">Nobody yet.</p>`}
+    ${newAgent ? `<div class="dlead"><p class="hint">Send this to ${esc(newAgent.name.split(" ")[0])}:</p><div class="wa">${esc(newAgent.msg)}</div>
+        <div class="row"><a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/234${newAgent.phone.slice(1)}?text=${encodeURIComponent(newAgent.msg)}">Send on WhatsApp</a><button class="btn btn-ghost" id="ag-done">Done</button></div></div>`
+      : agentForm ? `<div class="dlead"><label for="ag-n">Name</label><input id="ag-n" autocomplete="off">
+        <label for="ag-p">Phone</label><input id="ag-p" type="text" inputmode="tel" autocomplete="off">
+        <label for="ag-pin">6-digit PIN</label><input id="ag-pin" class="pin" ${pinAttrs}>
+        <div class="row"><button class="btn btn-ghost" id="ag-no">Cancel</button><button class="btn btn-primary" id="ag-go">Add to team</button></div></div>`
+      : `<button class="btn btn-ghost" id="ag-add">+ Add someone</button>`}
+  </section>`;
   view.innerHTML = `<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
       <div class="row"><button class="btn btn-ghost" id="dref">Refresh</button><button class="btn btn-primary" id="dadd">Add a shop</button></div></div>
     <div class="stats dstats">
@@ -229,12 +240,26 @@ function renderAdmin() {
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<a class="btn btn-ghost" href="${wa(r.owner_phone)}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</div>`).join("")}</section>` : ""}
     <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
     ${refHtml}
+    ${agentHtml}
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
   $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };
   const setLead = async (id, status) => { const { error } = await sb.from("ref_leads").update({ status }).eq("id", id); if (error) return toast("Couldn't save. Check your internet."); const l = leads.find(x => x.id === id); if (l) l.status = status; renderAdmin(); };
   view.querySelectorAll("[data-lj]").forEach(b => b.onclick = () => setLead(b.dataset.lj, "joined"));
   view.querySelectorAll("[data-ll]").forEach(b => b.onclick = () => setLead(b.dataset.ll, "lost"));
+  if ($("#ag-add")) $("#ag-add").onclick = () => { agentForm = true; renderAdmin(); $("#ag-n").focus(); };
+  if ($("#ag-no")) $("#ag-no").onclick = () => { agentForm = false; renderAdmin(); };
+  if ($("#ag-done")) $("#ag-done").onclick = () => { newAgent = null; renderAdmin(); };
+  if ($("#ag-go")) $("#ag-go").onclick = async () => {
+    const name = $("#ag-n").value.trim(), phone = digits($("#ag-p").value), pin = digits($("#ag-pin").value);
+    const err = !name ? "Type their name." : !/^0\d{10}$/.test(phone) ? "The phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
+    if (err) return toast(err);
+    $("#ag-go").disabled = true; $("#ag-go").textContent = "Adding…";
+    const r = await callAdmin({ action: "create_agent", name, phone, pin });
+    if (!r.ok) { toast(r.msg); $("#ag-go").disabled = false; $("#ag-go").textContent = "Add to team"; return; }
+    newAgent = { name, phone, msg: `Hello ${name.split(" ")[0]}, welcome to the Tagbook team.\n\nOpen tagbook.ordiventa.com and log in with:\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nYou'll see a demo shop (BrightWash) to show shop owners, and a "Set up shops" tab to create their accounts.` };
+    agentForm = false; dashAt = 0; loadDash();
+  };
   if ($("#rl-add")) $("#rl-add").onclick = () => { leadForm = true; renderAdmin(); $("#rl-n").focus(); };
   if ($("#rl-no")) $("#rl-no").onclick = () => { leadForm = false; renderAdmin(); };
   if ($("#rl-go")) $("#rl-go").onclick = async () => {
@@ -245,14 +270,14 @@ function renderAdmin() {
   };
 }
 /* ---------- Navigation ---------- */
-const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports", admin: "admin" };
+const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports", admin: "admin", agent: "setup" };
 function go(h) { if (location.hash.slice(1) === h) route(); else location.hash = h; }
 function route() {
   if (!me) return;
   const h = location.hash.slice(1);
   const m = h.match(/^order-(\d+)$/);
   if (m && orders.some(o => o.no === +m[1])) { tab = "orders"; openNo = +m[1]; }
-  else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : (h === "admin" && isAdmin) ? "admin" : "orders"; }
+  else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : (h === "admin" && isAdmin) ? "admin" : (h === "setup" && isAgent) ? "agent" : "orders"; }
   render();
 }
 window.addEventListener("hashchange", route);
@@ -266,14 +291,14 @@ function render() {
   $("#app").hidden = false; $("#tabsnav").hidden = false; $("#app").classList.remove("is-loading");
   $("#shopname").textContent = shopName();
   const tabs = own() ? [["orders", "Orders"], ["new", "+ Log clothes"], ["reports", "Reports"]] : [["orders", "Orders"], ["new", "+ Log clothes"]];
-  if (isAdmin) tabs.push(["admin", "Shops"]);
+  if (isAdmin) tabs.push(["admin", "Shops"]); else if (isAgent) tabs.push(["agent", "Set up shops"]);
   const th = $("#themebtn"), dark = theme() === "dark";
   th.innerHTML = dark ? SUN : MOON; th.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode"); th.title = th.getAttribute("aria-label");
   th.onclick = () => { try { localStorage.setItem("tb-theme", dark ? "light" : "dark"); } catch (_) { } render(); };
   const g = $("#gear"); g.hidden = false; g.onclick = () => go("shop"); g.setAttribute("aria-current", tab === "prices" ? "page" : "false");
   $("#tabs").innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" ${k === "new" ? 'class="new"' : ""} ${tab === k ? 'aria-current="page"' : ""}>${l}</button>`).join("");
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => go(TAB_HASH[b.dataset.tab]));
-  if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else if (tab === "admin") renderAdmin(); else renderSettings();
+  if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else if (tab === "admin") renderAdmin(); else if (tab === "agent") renderAgent(); else renderSettings();
   if (openNo) openOrder(openNo); else $("#sheet").hidden = true;
   document.body.classList.toggle("has-sheet", !!openNo);
 }
@@ -936,7 +961,10 @@ function wireStaff() {
 }
 
 /* ---------- Ordiventa only: add shops and see every shop ---------- */
-let newShop = null, shopRows = null;
+let newShop = null, shopRows = null, refOpts = null;
+const agentMode = () => tab === "agent";
+const rerenderShops = () => agentMode() ? renderAgent() : renderSettings();
+function renderAgent() { if (!isAgent) return go("orders"); view.innerHTML = `<h2 class="ptitle">Set up shops</h2><p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops(); }
 const isoDay = d => d.toISOString().slice(0, 10);
 function shopsHtml() {
   const trial = (() => { const x = new Date(); x.setMonth(x.getMonth() + 1); return isoDay(x); })();
@@ -950,23 +978,27 @@ function shopsHtml() {
        <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" placeholder="e.g. Saheed" autocomplete="off"></div>
        <div><label for="as-op">Owner's phone</label><input id="as-op" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
        <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${pinAttrs}></div></div>
-       <div class="sgrid"><div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>
+       <div class="sgrid">${agentMode() ? "" : `<div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>`}
        <div><label for="as-no">First order number</label><input id="as-no" ${moneyAttrs} value="1"><p class="hint">Use their book's next number if they want to continue it.</p></div></div>
-       <label for="as-r">Referred by</label><select id="as-r"><option value="">Nobody (we found them)</option>${(shopRows || []).map(r => `<option value="${r.id}">${esc(r.name)}${r.owner_name ? ` (${esc(r.owner_name)})` : ""}</option>`).join("")}</select>
+       <label for="as-r">Referred by</label><select id="as-r"><option value="">Nobody (we found them)</option>${(refOpts || []).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}</select>
        <p class="hint">The shop that brought them gets 1 free month once this shop pays.</p>
-       <label class="toggle"><span>Founding price (₦3,000 for 12 months)</span><input type="checkbox" id="as-f" checked></label>
+       ${agentMode() ? "" : `<label class="toggle"><span>Founding price (₦3,000 for 12 months)</span><input type="checkbox" id="as-f" checked></label>`}
        <button class="btn btn-primary" id="as-go">Create shop</button>`);
-  const list = card("All shops", "", shopRows === null ? `<p class="hint">Loading…</p>` : !shopRows.length ? `<p class="hint">No shops yet.</p>`
+  const list = card(agentMode() ? "Shops you set up" : "All shops", "", shopRows === null ? `<p class="hint">Loading…</p>` : !shopRows.length ? `<p class="hint">No shops yet.</p>`
       : shopRows.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")} · ${r.staff} login${r.staff === 1 ? "" : "s"}</span>
         <span>${r.orders} order${r.orders === 1 ? "" : "s"}${r.last_order ? ` · last ${fmtDay(Date.parse(r.last_order))}` : ""}${r.trial_ends ? ` · trial ends ${fmtDay(Date.parse(r.trial_ends))}` : ""}</span>
         ${r.referred_by_name || r.referrals ? `<span class="refline">${r.referred_by_name ? `Referred by ${esc(r.referred_by_name)}` : ""}${r.referred_by_name && r.referrals ? " · " : ""}${r.referrals ? `Brought ${r.referrals} shop${r.referrals === 1 ? "" : "s"}` : ""}</span>` : ""}</div></div>`).join(""));
   return done + form + list;
 }
-async function loadShops() { const { data } = await sb.rpc("admin_shops"); shopRows = data || []; if (setTab === "shops") renderSettings(); }
+async function loadShops() {
+  const [a, b] = await Promise.all([sb.rpc(agentMode() ? "agent_shops" : "admin_shops"), sb.rpc("agent_ref_options")]);
+  shopRows = a.data || []; refOpts = b.data || [];
+  if (agentMode() || (tab === "prices" && setTab === "shops")) rerenderShops();
+}
 function wireShops() {
   if (shopRows === null) loadShops();
   if ($("#nscopy")) $("#nscopy").onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(newShop.msg) : Promise.reject()).then(() => toast("Copied")).catch(() => toast("Select the message and copy it")); };
-  if ($("#nsagain")) $("#nsagain").onclick = () => { newShop = null; renderSettings(); };
+  if ($("#nsagain")) $("#nsagain").onclick = () => { newShop = null; rerenderShops(); };
   if ($("#as-no")) moneyInput($("#as-no"), () => { });
   if (!$("#as-go")) return;
   $("#as-go").onclick = async () => {
@@ -975,10 +1007,10 @@ function wireShops() {
     const err = !shopName ? "Type the shop name." : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
     if (err) { toast(err); return; }
     $("#as-go").disabled = true; $("#as-go").textContent = "Creating…";
-    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t").value || null, start_no: num($("#as-no").value) || 1, founding: $("#as-f").checked, referred_by: $("#as-r").value || null });
+    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t") ? $("#as-t").value || null : null, start_no: num($("#as-no").value) || 1, founding: $("#as-f") ? $("#as-f").checked : true, referred_by: $("#as-r").value || null });
     if (!r.ok) { toast(r.msg); $("#as-go").disabled = false; $("#as-go").textContent = "Create shop"; return; }
     newShop = { phone, msg: `Hello ${owner.split(" ")[0]}, ${shopName} is now on Tagbook.\n\nOpen tagbook.ordiventa.com and log in with:\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.\n\nWelcome, and thank you for starting with us.` };
-    shopRows = null; renderSettings();
+    shopRows = null; rerenderShops();
   };
 }
 
@@ -1158,6 +1190,7 @@ async function start() {
   if (!st || !st.active) { await sb.auth.signOut(); return showLogin("This login has been removed. Ask the shop owner."); }
   me = st; role = st.role === "owner" ? "own" : "sec";
   try { const r = await sb.rpc("is_platform_admin"); isAdmin = r.data === true; } catch (_) { isAdmin = false; }
+  try { const r = await sb.rpc("is_agent"); isAgent = !isAdmin && r.data === true; } catch (_) { isAgent = false; }
   $("#login").hidden = true; L = null;
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   saveLast({ phone: st.phone, name: st.name, shop: shop.name });
