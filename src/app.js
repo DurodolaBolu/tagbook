@@ -187,6 +187,8 @@ const adminSeg = () => `<div class="aseg" role="tablist"><button data-av="shops"
 function wireAdminSeg() { view.querySelectorAll("[data-av]").forEach(b => b.onclick = () => { adminView = b.dataset.av; try { localStorage.setItem("tb-admin-view", adminView); } catch (_) { } renderAdmin(); }); }
 
 /* ---------- Leads: shops to reach, with one-tap WhatsApp messages ---------- */
+let oCopy = null; // iPhone + WhatsApp Business: Apple gives websites no way to open Business, so we copy the message instead
+const iosBiz = () => isIOS && waApp === "business";
 let olead = null, olog = [], oleadBusy = false, oCity = "Akure", oStatus = "new", oQ = "", oAdd = false;
 const O_STATUS = { new: "To contact", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
 const O_PILL = { new: "p-new", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
@@ -214,7 +216,6 @@ const isAndroid = /Android/i.test(navigator.userAgent);
 const waLink = (phone, text) => {
   const num = "234" + String(phone).replace(/^0/, ""), t = text ? encodeURIComponent(text) : "";
   if (waApp === "business" && isAndroid) return `intent://send/?phone=${num}${t ? "&text=" + t : ""}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent("https://wa.me/" + num + (t ? "?text=" + t : ""))};end`;
-  if (waApp === "business" && isIOS) return `whatsapp-business://send?phone=${num}${t ? "&text=" + t : ""}`;
   return `https://wa.me/${num}${t ? "?text=" + t : ""}`;
 };
 function renderLeads() {
@@ -233,12 +234,15 @@ function renderLeads() {
     const last = lastSent(l.id), days = last ? (Date.now() - last) / 864e5 : null;
     let act = "";
     if (!l.phone) act = `<span class="hint">No phone yet</span>`;
-    else if (l.status === "new") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="first" href="${waLink(l.phone, leadMsg(l, "first"))}" target="_blank" rel="noopener">Message on WhatsApp</a>`;
-    else if (l.status === "messaged") act = days !== null && days >= 2 ? `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="follow" href="${waLink(l.phone, leadMsg(l, "follow"))}" target="_blank" rel="noopener">Send follow-up</a>` : `<span class="hint">Messaged ${ago(new Date(last).toISOString())}</span>`;
+    else if (l.status === "new") act = iosBiz() ? `<button class="btn btn-primary" data-wacopy="${l.id}" data-kind="first">Copy message</button>` : `<a class="btn btn-primary" data-wa="${l.id}" data-kind="first" href="${waLink(l.phone, leadMsg(l, "first"))}" target="_blank" rel="noopener">Message on WhatsApp</a>`;
+    else if (l.status === "messaged") act = days !== null && days >= 2 ? (iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="follow">Copy follow-up</button>` : `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="follow" href="${waLink(l.phone, leadMsg(l, "follow"))}" target="_blank" rel="noopener">Send follow-up</a>`) : `<span class="hint">Messaged ${ago(new Date(last).toISOString())}</span>`;
     else if (l.status !== "no") act = `<a class="btn btn-ghost" href="${waLink(l.phone)}" target="_blank" rel="noopener">Open chat</a>`;
     return `<section class="olead${l.status === "no" ? " is-no" : ""}">
       <div class="ohead"><div><b>${esc(l.name)}</b><span>${esc(l.area || "")}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</span></div><span class="pill ${O_PILL[l.status]}">${O_STATUS[l.status]}</span></div>
       ${l.notes ? `<p class="onote">${esc(l.notes)}</p>` : ""}
+      ${oCopy && oCopy.id === l.id ? `<div class="ocopy"><p><b>Message copied.</b> Now open <b>WhatsApp Business</b>, start a new chat with <b>${fmtPhone(l.phone)}</b> and paste the message.</p>
+        <div class="row"><button class="btn btn-ghost" data-copynum="${l.id}">Copy number</button><button class="btn btn-ghost" data-recopy="${l.id}">Copy message again</button></div>
+        <div class="row"><button class="btn btn-primary" data-sent="${l.id}">I've sent it</button><button class="btn btn-ghost" data-nocopy>Not now</button></div></div>` : ""}
       <div class="oact">${act}<select data-ost="${l.id}" aria-label="Change status for ${esc(l.name)}">${Object.entries(O_STATUS).map(([k, v]) => `<option value="${k}" ${k === l.status ? "selected" : ""}>${v}</option>`).join("")}</select></div>
     </section>`;
   };
@@ -273,14 +277,25 @@ function renderLeads() {
     if (error) return toast("Couldn't save. Check your internet.");
     olead.push(data); oAdd = false; oCity = data.city; oStatus = "new"; toast("Lead saved"); renderAdmin();
   };
-  view.querySelectorAll("[data-wa]").forEach(a => a.addEventListener("click", () => {
-    const l = olead.find(x => x.id === a.dataset.wa); if (!l) return;
-    const kind = a.dataset.kind, at = new Date().toISOString();
-    olog.push({ lead_id: l.id, kind, sent_at: at });
+  const markSent = (l, kind) => {
+    olog.push({ lead_id: l.id, kind, sent_at: new Date().toISOString() });
     sb.from("outreach_log").insert({ lead_id: l.id, kind }).then(() => { });
     if (l.status === "new") { l.status = "messaged"; sb.from("outreach_leads").update({ status: "messaged" }).eq("id", l.id).then(() => { }); }
-    setTimeout(() => renderAdmin(), 400);
+  };
+  const copy = async text => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand("copy"); } catch (_) { } t.remove(); return ok; } };
+  view.querySelectorAll("[data-wa]").forEach(a => a.addEventListener("click", () => {
+    const l = olead.find(x => x.id === a.dataset.wa); if (!l) return;
+    markSent(l, a.dataset.kind); setTimeout(() => renderAdmin(), 400);
   }));
+  view.querySelectorAll("[data-wacopy]").forEach(b => b.onclick = async () => {
+    const l = olead.find(x => x.id === b.dataset.wacopy); if (!l) return;
+    oCopy = { id: l.id, kind: b.dataset.kind, text: leadMsg(l, b.dataset.kind) };
+    toast(await copy(oCopy.text) ? "Message copied" : "Couldn't copy. Try again."); renderAdmin();
+  });
+  view.querySelectorAll("[data-recopy]").forEach(b => b.onclick = async () => toast(await copy(oCopy.text) ? "Message copied" : "Couldn't copy"));
+  view.querySelectorAll("[data-copynum]").forEach(b => b.onclick = async () => { const l = olead.find(x => x.id === b.dataset.copynum); toast(await copy("+234" + l.phone.slice(1)) ? "Number copied" : "Couldn't copy"); });
+  view.querySelectorAll("[data-sent]").forEach(b => b.onclick = () => { const l = olead.find(x => x.id === b.dataset.sent); markSent(l, oCopy.kind); oCopy = null; toast(`${l.name}: marked as messaged`); renderAdmin(); });
+  view.querySelectorAll("[data-nocopy]").forEach(b => b.onclick = () => { oCopy = null; renderAdmin(); });
   view.querySelectorAll("[data-ost]").forEach(sel => sel.onchange = async () => {
     const l = olead.find(x => x.id === sel.dataset.ost); const status = sel.value;
     const { error } = await sb.from("outreach_leads").update({ status }).eq("id", l.id);

@@ -244,3 +244,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .owa{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;font-size:14px;color:var(--muted)}
 .owa .aseg{margin:0}
 .owa .aseg button{padding:6px 12px;font-size:14px}
+.ocopy{margin-top:12px;padding:12px;border-radius:12px;background:var(--accent-soft);font-size:14px}
+.ocopy p{margin:0 0 10px;line-height:1.45}
+.ocopy .row{gap:8px;margin-top:8px;flex-wrap:wrap}
+.ocopy .btn{width:auto;flex:1 1 auto;padding:9px 12px;min-height:0}
