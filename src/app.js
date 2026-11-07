@@ -208,7 +208,15 @@ function leadMsg(l, kind) {
     ? `${greet()}. This is Bolu from Tagbook, we're based here in Akure. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we stop by your shop for 10 minutes to show you?\n\nBolu, Tagbook team`
     : `${greet()}. This is Bolu from Tagbook. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 1 minute video of how it works?\n\nBolu, Tagbook team`;
 }
-const waLink = (phone, text) => `https://wa.me/234${String(phone).replace(/^0/, "")}${text ? "?text=" + encodeURIComponent(text) : ""}`;
+/* Leads open in WhatsApp Business by default (the 0812 line); switchable to normal WhatsApp */
+let waApp = (() => { try { return localStorage.getItem("tb-wa-app") || "business"; } catch (_) { return "business"; } })();
+const isAndroid = /Android/i.test(navigator.userAgent);
+const waLink = (phone, text) => {
+  const num = "234" + String(phone).replace(/^0/, ""), t = text ? encodeURIComponent(text) : "";
+  if (waApp === "business" && isAndroid) return `intent://send/?phone=${num}${t ? "&text=" + t : ""}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent("https://wa.me/" + num + (t ? "?text=" + t : ""))};end`;
+  if (waApp === "business" && isIOS) return `whatsapp-business://send?phone=${num}${t ? "&text=" + t : ""}`;
+  return `https://wa.me/${num}${t ? "?text=" + t : ""}`;
+};
 function renderLeads() {
   if (olead === null) { loadLeads(); view.innerHTML = `${adminSeg()}<p class="hint">Loading leads…</p>`; wireAdminSeg(); return; }
   const today = lagosDay(Date.now());
@@ -236,6 +244,7 @@ function renderLeads() {
   };
   view.innerHTML = `${adminSeg()}
     <div class="dtop"><div><h2 class="ptitle">Leads</h2><p class="hint">${olead.length} shops · tap a button to open WhatsApp with the message ready</p></div><div class="row"><button class="btn btn-ghost" id="oadd">+ Add a lead</button></div></div>
+    <div class="owa"><span>Open chats in</span><div class="aseg"><button data-wapp="business" aria-pressed="${waApp === "business"}">WhatsApp Business</button><button data-wapp="normal" aria-pressed="${waApp === "normal"}">WhatsApp</button></div></div>
     <section class="scard osent"><div class="osent-top"><b>${sentToday} of ${DAILY_SAFE}</b><span>messages sent today</span></div><div class="obar"><i style="width:${pct}%" class="${sentToday >= DAILY_SAFE ? "full" : ""}"></i></div>
       <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the 0812 line." : `${DAILY_SAFE - sentToday} more today keeps the 0812 line safe.`}</p></section>
     ${oAdd ? `<section class="scard dlead"><h3 class="stitle">Add a lead</h3>
@@ -250,6 +259,7 @@ function renderLeads() {
     <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
     ${groups.length ? groups.map(([c, ls]) => `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${ls.map(card).join("")}</div>`).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
   wireAdminSeg();
+  view.querySelectorAll("[data-wapp]").forEach(b => b.onclick = () => { waApp = b.dataset.wapp; try { localStorage.setItem("tb-wa-app", waApp); } catch (_) { } renderAdmin(); });
   view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); });
   view.querySelectorAll("[data-os]").forEach(b => b.onclick = () => { oStatus = b.dataset.os; renderAdmin(); });
   $("#oq").oninput = e => { oQ = e.target.value; clearTimeout(window.__oqT); window.__oqT = setTimeout(() => { const pos = e.target.selectionStart; renderAdmin(); const el = $("#oq"); el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) { } }, 250); };

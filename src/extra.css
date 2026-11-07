@@ -241,3 +241,6 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .oact .btn{width:auto;flex:1 1 auto;padding:10px 14px;min-height:0;text-align:center;text-decoration:none}
 .oact select{width:auto;flex:none;padding:8px 10px;font-size:14px}
 #oq{margin-top:12px}
+.owa{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;font-size:14px;color:var(--muted)}
+.owa .aseg{margin:0}
+.owa .aseg button{padding:6px 12px;font-size:14px}
