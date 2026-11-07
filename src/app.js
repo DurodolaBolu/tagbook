@@ -197,7 +197,17 @@ const lagosDay = t => new Date(new Date(t).getTime() + 3600e3).toISOString().sli
 async function loadLeads() {
   if (oleadBusy) return; oleadBusy = true;
   try {
-    const [a, b] = await Promise.all([sb.from("outreach_leads").select("*").order("created_at"), sb.from("outreach_log").select("lead_id,kind,sent_at").gte("sent_at", new Date(Date.now() - 60 * 864e5).toISOString())]);
+    // The server returns at most 1,000 rows per call, so fetch the leads in pages.
+    const allLeads = async () => {
+      let rows = [];
+      for (let from = 0; ; from += 1000) {
+        const r = await sb.from("outreach_leads").select("*").order("created_at").order("id").range(from, from + 999);
+        if (r.error) return r;
+        rows = rows.concat(r.data || []);
+        if (!r.data || r.data.length < 1000) return { data: rows };
+      }
+    };
+    const [a, b] = await Promise.all([allLeads(), sb.from("outreach_log").select("lead_id,kind,sent_at").gte("sent_at", new Date(Date.now() - 60 * 864e5).toISOString())]);
     if (!a.error) olead = a.data || []; if (!b.error) olog = b.data || [];
   } finally { oleadBusy = false; }
   if (tab === "admin" && adminView === "leads") keepTyped(renderAdmin);
@@ -263,10 +273,14 @@ function renderLeads() {
     <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
     <div class="chips ochips">${[["new", "To contact"], ["messaged", "Messaged"], ["replied", "Replied"], ["demo", "Demo booked"], ["joined", "Joined"], ["no", "Said no"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${oStatus === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
     <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
-    ${groups.length ? groups.map(([c, ls]) => `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${ls.map(card).join("")}</div>`).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
+    ${groups.length ? groups.map(([c, ls]) => {
+      // On "All" with no search, show a few per city so the page stays quick on a phone.
+      const cut = oCity === "all" && !q && ls.length > 6;
+      return `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${(cut ? ls.slice(0, 6) : ls).map(card).join("")}</div>${cut ? `<button class="btn btn-ghost omore" data-oc="${esc(c)}">See all ${ls.length} in ${esc(c)}</button>` : ""}`;
+    }).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
   wireAdminSeg();
   view.querySelectorAll("[data-wapp]").forEach(b => b.onclick = () => { waApp = b.dataset.wapp; try { localStorage.setItem("tb-wa-app", waApp); } catch (_) { } renderAdmin(); });
-  view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); });
+  view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); if (b.classList.contains("omore")) window.scrollTo(0, 0); });
   view.querySelectorAll("[data-os]").forEach(b => b.onclick = () => { oStatus = b.dataset.os; renderAdmin(); });
   $("#oq").oninput = e => { oQ = e.target.value; clearTimeout(window.__oqT); window.__oqT = setTimeout(() => { const pos = e.target.selectionStart; renderAdmin(); const el = $("#oq"); el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) { } }, 250); };
   $("#oadd").onclick = () => { oAdd = !oAdd; renderAdmin(); if (oAdd) $("#ol-n").focus(); };
