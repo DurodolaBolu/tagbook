@@ -11,7 +11,7 @@ cp icon-192.png icon-512.png apple-touch-icon.png robots.txt site/
 GEAR=$(cat src/gear.html)
 cat > site/index.html <<HTML
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8"><script>if(location.hostname==="tagbook.pages.dev")location.replace("https://tagbook.ordiventa.com/"+location.hash);</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#0F7B5F">
