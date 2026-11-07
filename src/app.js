@@ -204,11 +204,11 @@ async function loadLeads() {
 }
 function greet() { const h = (new Date().getUTCHours() + 1) % 24; return h < 12 ? "Good morning" : h < 16 ? "Good afternoon" : "Good evening"; }
 function leadMsg(l, kind) {
-  if (kind === "follow") return `${greet()}. Just checking if you saw our message about Tagbook, the app that records your customers' clothes and payments. We're happy to send a 1 minute video if you'd like to see it.\n\nBolu, Tagbook team`;
+  if (kind === "follow") return `${greet()}. Just checking if you saw our message about Tagbook, the app that records your customers' clothes and payments. We're happy to send a 2 minute video if you'd like to see it.\n\nBolu, Tagbook team`;
   const what = "We built a simple app that helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp, and see who still owes. Shops started using it this week.";
   return l.city === "Akure"
-    ? `${greet()}. This is Bolu from Tagbook, we're based here in Akure. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we stop by your shop for 10 minutes to show you?\n\nBolu, Tagbook team`
-    : `${greet()}. This is Bolu from Tagbook. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 1 minute video of how it works?\n\nBolu, Tagbook team`;
+    ? `${greet()}. This is Bolu from Tagbook, we're based here in Akure. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works? Since we're in Akure, we can also come by to set it up for you.\n\nBolu, Tagbook team`
+    : `${greet()}. This is Bolu from Tagbook. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works?\n\nBolu, Tagbook team`;
 }
 /* Leads open in WhatsApp Business by default (the 0812 line); switchable to normal WhatsApp */
 let waApp = (() => { try { return localStorage.getItem("tb-wa-app") || "business"; } catch (_) { return "business"; } })();
