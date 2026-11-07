@@ -213,7 +213,7 @@ function renderAdmin() {
   const refHtml = `<section class="scard dref"><h3 class="stitle">Referrals</h3>
     <p class="ssub">A shop earns 1 free month when a shop it brought starts paying.</p>
     ${referrers.length ? referrers.map(r => {
-      const joined = dash.filter(k => k.referred_by === r.id), ls = leads.filter(l => l.referrer_shop === r.id);
+      const joined = dash.filter(k => k.referred_by === r.id), ls = leads.filter(l => l.referrer_shop === r.id && !l.joined_shop);
       return `<div class="drefb"><b>${esc(r.name)}</b>${r.owner_name ? `<span class="hint">${esc(r.owner_name)}</span>` : ""}
         ${joined.map(k => { const left = daysTo(k.trial_ends); return `<div class="dref-row"><div><b>${esc(k.name)}</b><span>Joined ${fmtDay(Date.parse(k.created_at))} · ${left !== null && left >= 0 ? `free month due once they pay, from ${fmtDay(Date.parse(k.trial_ends))}` : "free month due once they pay"}</span></div><span class="pill p-ready">Joined</span></div>`; }).join("")}
         ${ls.map(l => `<div class="dref-row"><div><b>${esc(l.name)}</b><span>${[l.contact ? fmtPhone(l.contact) : "", l.note ? esc(l.note) : "", "added " + fmtDay(Date.parse(l.created_at))].filter(Boolean).join(" · ")}</span></div>
