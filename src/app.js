@@ -375,7 +375,7 @@ function renderLeads() {
     }).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
   wireAdminSeg();
   view.querySelectorAll("[data-wapp]").forEach(b => b.onclick = () => { waApp = b.dataset.wapp; try { localStorage.setItem("tb-wa-app", waApp); } catch (_) { } renderAdmin(); });
-  view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); if (b.classList.contains("omore")) window.scrollTo(0, 0); });
+  view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); if (b.classList.contains("omore")) mainScroll().scrollTo(0, 0); });
   view.querySelectorAll("[data-os]").forEach(b => b.onclick = () => { oStatus = b.dataset.os; renderAdmin(); });
   $("#oq").oninput = e => { oQ = e.target.value; clearTimeout(window.__oqT); window.__oqT = setTimeout(() => { const pos = e.target.selectionStart; renderAdmin(); const el = $("#oq"); el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) { } }, 250); };
   $("#oadd").onclick = () => { oAdd = !oAdd; renderAdmin(); if (oAdd) $("#ol-n").focus(); };
@@ -700,7 +700,7 @@ function renderOrders() {
       <span>${page * PER_PAGE + 1}–${page * PER_PAGE + shown.length} of ${list.length}</span>
       <button class="mini" id="pgnext" ${page >= pages - 1 ? "disabled" : ""} aria-label="Older orders">Older ›</button></div>` : ""}
     <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
-  const toTop = () => { const t = $("#q"); if (t) window.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top + window.scrollY - 12) }); };
+  const toTop = () => { const t = $("#q"), sc = mainScroll(); if (t) sc.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top - (sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top) + sc.scrollTop - 12) }); };
   if ($("#pgprev")) $("#pgprev").onclick = () => { page--; renderOrders(); toTop(); };
   if ($("#pgnext")) $("#pgnext").onclick = () => { page++; renderOrders(); toTop(); };
   $("#q").oninput = e => { query = e.target.value; page = 0; const p = e.target.selectionStart; renderOrders(); const q = $("#q"); q.focus(); q.setSelectionRange(p, p); };
@@ -1501,34 +1501,6 @@ async function start() {
 })();
 sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT" && me && !hasSavedLogin()) { location.hash = ""; location.reload(); } });
 
-/* ---------- iPhone fix: iOS sometimes leaves the bottom menu stuck mid-screen (after the keyboard, or in the home-screen app) ---------- */
-(function keepBarsDown() {
-  const vv = window.visualViewport;
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-  let raf = 0; const base = [null, null];
-  const fix = () => {
-    raf = 0;
-    const nav = document.getElementById("tabsnav"); if (!nav) return;
-    if (window.matchMedia("(min-width: 900px)").matches) { nav.style.transform = ""; return; }
-    const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-    if (typing) { nav.style.transform = ""; return; }
-    let bottom = vv ? vv.height + vv.offsetTop : window.innerHeight;
-    if (ios && standalone()) {
-      const portrait = window.matchMedia("(orientation: portrait)").matches, H = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
-      const missing = H - window.innerHeight; // normally just the status bar; much more means iOS shrank the page and didn't give it back
-      if (missing < 120) base[portrait ? 0 : 1] = missing;
-      else bottom = Math.max(bottom, H - (base[portrait ? 0 : 1] ?? 0));
-    }
-    const gap = Math.round(bottom - window.innerHeight);
-    nav.style.transform = gap > 2 && gap < 600 ? `translateY(${gap}px)` : "";
-  };
-  const soon = () => { if (!raf) raf = requestAnimationFrame(fix); };
-  if (vv) { vv.addEventListener("resize", soon); vv.addEventListener("scroll", soon); }
-  window.addEventListener("resize", soon); window.addEventListener("scroll", soon, { passive: true }); window.addEventListener("orientationchange", () => setTimeout(soon, 300));
-  document.addEventListener("focusout", () => setTimeout(() => { window.scrollTo(window.scrollX, window.scrollY); soon(); }, 120));
-  document.addEventListener("focusin", soon);
-  window.addEventListener("pageshow", soon); document.addEventListener("visibilitychange", soon);
-  setInterval(soon, 1500);
-  soon();
-})();
+/* ---------- Phones: #app is the scroll area (see extra.css). If the keyboard nudged the page, put it back. ---------- */
+const mainScroll = () => window.matchMedia("(max-width: 899px)").matches ? document.getElementById("app") : document.scrollingElement;
+document.addEventListener("focusout", () => setTimeout(() => { if (window.matchMedia("(max-width: 899px)").matches && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) window.scrollTo(0, 0); }, 150));

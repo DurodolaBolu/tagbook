@@ -28,7 +28,7 @@
   /* ---- pull down to refresh ---- */
   var ind=document.createElement("div");ind.id="tb-ptr";ind.textContent="Pull down to refresh";document.body.appendChild(ind);
   var y0=null,dy=0,GO=110;
-  function scroller(){var sh=$q("#sheet");return sh&&!sh.hidden?sh:document.scrollingElement;}
+  function scroller(){var sh=$q("#sheet");if(sh&&!sh.hidden)return sh;var a=$q("#app"),l=$q("#login");if(window.matchMedia("(max-width: 899px)").matches){if(a&&!a.hidden)return a;if(l&&!l.hidden)return l;}return document.scrollingElement;}
   document.addEventListener("touchstart",function(e){
     if(e.touches.length!==1||scroller().scrollTop>0||busy()){y0=null;return;}
     y0=e.touches[0].clientY;dy=0;

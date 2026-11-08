@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261108101658";</script>
+<script>window.TB_BUILD="20261108105728";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -428,6 +428,17 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .alert.planwarn button{background:var(--owes);color:#fff}
 .dmarkbtn{margin-top:10px}
 .dmark{margin-top:10px}
+/* Phones: the page itself never scrolls. #app is the scroll area and the bottom menu sits under it
+   as a normal block, so iPhone's collapsing toolbar can't drag the menu up the screen. */
+@media (max-width:899px){
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  body{display:flex;flex-direction:column;height:100%;margin:0}
+  #app{padding-top:max(20px,env(safe-area-inset-top,0px))}
+  #login,#app{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+  #login{max-width:none;width:100%;padding-left:max(16px,calc((100% - 408px) / 2));padding-right:max(16px,calc((100% - 408px) / 2))}
+  #app{max-width:none;width:100%;margin:0;padding-left:max(16px,env(safe-area-inset-left,0px),calc((100% - 408px) / 2));padding-right:max(16px,env(safe-area-inset-right,0px),calc((100% - 408px) / 2));padding-bottom:28px}
+  nav.tabs{position:relative;left:auto;right:auto;bottom:auto;flex:none;transform:none!important}
+}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -443,7 +454,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261108101658"></script>
+<script src="/app.js?v=20261108105728"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
@@ -476,7 +487,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
   /* ---- pull down to refresh ---- */
   var ind=document.createElement("div");ind.id="tb-ptr";ind.textContent="Pull down to refresh";document.body.appendChild(ind);
   var y0=null,dy=0,GO=110;
-  function scroller(){var sh=$q("#sheet");return sh&&!sh.hidden?sh:document.scrollingElement;}
+  function scroller(){var sh=$q("#sheet");if(sh&&!sh.hidden)return sh;var a=$q("#app"),l=$q("#login");if(window.matchMedia("(max-width: 899px)").matches){if(a&&!a.hidden)return a;if(l&&!l.hidden)return l;}return document.scrollingElement;}
   document.addEventListener("touchstart",function(e){
     if(e.touches.length!==1||scroller().scrollTop>0||busy()){y0=null;return;}
     y0=e.touches[0].clientY;dy=0;
