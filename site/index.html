@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261108105728";</script>
+<script>window.TB_BUILD="20261108111545";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -439,6 +439,14 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
   #app{max-width:none;width:100%;margin:0;padding-left:max(16px,env(safe-area-inset-left,0px),calc((100% - 408px) / 2));padding-right:max(16px,env(safe-area-inset-right,0px),calc((100% - 408px) / 2));padding-bottom:28px}
   nav.tabs{position:relative;left:auto;right:auto;bottom:auto;flex:none;transform:none!important}
 }
+.dteam{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.dteam:first-of-type{border-top:0}
+.dpay{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;margin:6px 0 10px}
+.dpay>div:not(.row){display:flex;flex-direction:column}
+.dpay b{font-size:20px}
+.dpay span{color:var(--muted);font-size:14px}
+.dpay .row{margin-left:auto;gap:8px}
+.dpay .btn{width:auto;min-height:0;padding:9px 14px}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -454,7 +462,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261108105728"></script>
+<script src="/app.js?v=20261108111545"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

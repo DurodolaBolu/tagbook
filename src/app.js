@@ -170,10 +170,10 @@ const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
-let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = "m6";
+let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = "m6", teamPay = [], editFor = null, payOpen = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
-async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
+async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; try { const T = await sb.rpc("admin_team_pay"); if (!T.error) teamPay = T.data || []; } catch (_) { } } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
 const daysLeft = d => d ? Math.round((Date.parse(String(d).slice(0, 10) + "T00:00:00Z") - Date.parse(lagosDay(Date.now()) + "T00:00:00Z")) / 864e5) : null;
 const coveredUntil = r => [r.trial_ends, r.paid_until].filter(Boolean).sort().pop() || null;
 function shopFlags(r) {
@@ -438,9 +438,16 @@ function renderAdmin() {
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
         <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}</dd></div>
         <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}${r.founding ? " · founding" : ""}</dd></div>
+        <div><dt>Brought by</dt><dd>${esc(r.brought_by_name || "Ordiventa")}${r.setup_by_name ? ` · set up by ${esc(r.setup_by_name)}` : ""}</dd></div>
         <div><dt>Paid</dt><dd>${r.paid_until ? `until ${longDay(r.paid_until)} · ${naira(r.paid_total)} so far` : r.paid_total ? naira(r.paid_total) + " so far" : "not yet"}${r.free_months ? ` · ${r.free_months} free month${r.free_months === 1 ? "" : "s"} earned` : ""}</dd></div>
         ${(pend => r.referred_by_name || r.referrals || pend ? `<div><dt>Referrals</dt><dd>${[r.referred_by_name ? `From ${esc(r.referred_by_name)}` : "", r.referrals ? `brought ${r.referrals}` : "", pend ? `${pend} lead${pend === 1 ? "" : "s"} pending` : ""].filter(Boolean).join(" · ")}</dd></div>` : "")(leads.filter(l => l.referrer_shop === r.id && l.status === "pending").length)}
       </dl>
+      ${r.is_test ? "" : editFor === r.id ? `<div class="dlead dmark">
+          <label for="ep-r">Referred by (shop)</label><select id="ep-r" ${r.reward_given ? "disabled" : ""}><option value="">Nobody</option>${dash.filter(k => !k.is_test && k.id !== r.id).map(k => `<option value="${k.id}" ${r.referred_by === k.id ? "selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
+          ${r.reward_given ? `<p class="hint">The free month was already given, so this can't change.</p>` : ""}
+          <label for="ep-b">Brought by</label><select id="ep-b"><option value="">Ordiventa (no agent pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.brought_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+          <label for="ep-s">Set up by</label><select id="ep-s"><option value="">Ordiventa (no setup pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.setup_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+          <div class="row"><button class="btn btn-ghost" data-epno>Cancel</button><button class="btn btn-primary" data-epgo="${r.id}">Save</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-ep="${r.id}">Edit referral and team</button>`}
       ${r.is_test ? "" : markFor === r.id ? `<div class="dlead dmark"><label>Plan they paid for</label><div class="chips" style="margin:0 0 6px">${["m1", "m6", "m12"].map(k => `<button class="chip" data-mp="${k}" aria-pressed="${markPlan === k}">${PLAN_INFO[k][0]}</button>`).join("")}</div>
           <label for="mk-a">Amount received (₦)</label><input id="mk-a" ${moneyAttrs} value="${(r.founding ? 3000 : 5000) * { m1: 1, m6: 5, m12: 10 }[markPlan]}">
           <label for="mk-n">Note (optional)</label><input id="mk-n" placeholder="e.g. transfer to Ordiventa account" autocomplete="off">
@@ -467,7 +474,11 @@ function renderAdmin() {
   </section>`;
   const agentHtml = `<section class="scard dref"><h3 class="stitle">Setup team</h3>
     <p class="ssub">They can set up shops and demo on their own copy of BrightWash. They can't see this page or any shop's money.</p>
-    ${agents.map(a => `<div class="dref-row" style="padding-left:0"><div><b>${esc(a.name)}</b><span>${fmtPhone(a.phone)} · ${a.shops} shop${a.shops === 1 ? "" : "s"} set up, ${a.active} logged orders this week${a.names.length ? ` · ${a.names.map(esc).join(", ")}` : ""}</span></div></div>`).join("") || `<p class="hint">Nobody yet.</p>`}
+    <p class="ssub">Pay: setup ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Bringing a shop: ₦3,000 once it has paid ₦6,000 in total, plus ₦500 for each paid month, up to 12.</p>
+    ${agents.map(a => { const t = teamPay.find(x => x.user_id === a.user_id) || { due: 0, paid: 0, items: [] }; return `<div class="dteam"><div class="dref-row" style="padding-left:0"><div><b>${esc(a.name)}</b><span>${fmtPhone(a.phone)} · ${a.shops} shop${a.shops === 1 ? "" : "s"} set up, ${a.active} logged orders this week${a.names.length ? ` · ${a.names.map(esc).join(", ")}` : ""}</span></div></div>
+      <div class="dpay"><div><b>${naira(t.due)}</b><span>owed now</span></div><div><b>${naira(t.paid)}</b><span>paid so far</span></div>
+        <div class="row">${t.items.length ? `<button class="btn btn-ghost" data-tpo="${a.user_id}">${payOpen === a.user_id ? "Hide details" : "Details"}</button>` : ""}${t.due ? `<button class="btn btn-primary" data-tpay="${a.user_id}">Mark ${naira(t.due)} paid</button>` : ""}</div></div>
+      ${payOpen === a.user_id ? t.items.map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : "p-billed"}">${i.status === "paid" ? "Paid" : "Owed"}</span></div>`).join("") : ""}</div>`; }).join("") || `<p class="hint">Nobody yet.</p>`}
     ${newAgent ? `<div class="dlead"><p class="hint">Send this to ${esc(newAgent.name.split(" ")[0])}:</p><div class="wa">${esc(newAgent.msg)}</div>
         <div class="row"><a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/234${newAgent.phone.slice(1)}?text=${encodeURIComponent(newAgent.msg)}">Send on WhatsApp</a><button class="btn btn-ghost" id="ag-done">Done</button></div></div>`
       : agentForm ? `<div class="dlead"><label for="ag-n">Name</label><input id="ag-n" autocomplete="off">
@@ -494,6 +505,24 @@ function renderAdmin() {
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
   wireAdminSeg();
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
+  view.querySelectorAll("[data-ep]").forEach(b => b.onclick = () => { editFor = b.dataset.ep; renderAdmin(); });
+  view.querySelectorAll("[data-epno]").forEach(b => b.onclick = () => { editFor = null; renderAdmin(); });
+  view.querySelectorAll("[data-epgo]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const v = id => $(id).value || null;
+    const { error } = await sb.rpc("admin_set_shop_people", { p_shop: b.dataset.epgo, p_referred_by: v("#ep-r"), p_brought_by: v("#ep-b"), p_setup_by: v("#ep-s") });
+    b.disabled = false;
+    if (error) { toast(/REWARD_GIVEN/.test(error.message) ? "The free month was already given for this shop." : "Not saved. Please try again."); return; }
+    editFor = null; toast("Saved"); dashAt = 0; loadDash();
+  });
+  view.querySelectorAll("[data-tpo]").forEach(b => b.onclick = () => { payOpen = payOpen === b.dataset.tpo ? null : b.dataset.tpo; renderAdmin(); });
+  view.querySelectorAll("[data-tpay]").forEach(b => b.onclick = async () => {
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again once you've sent it"; return; }
+    b.disabled = true;
+    const { data, error } = await sb.rpc("admin_pay_agent", { p_agent: b.dataset.tpay });
+    if (error || !data || !data.ok) { b.disabled = false; toast("Not saved. Please try again."); return; }
+    toast(`Marked ${naira(data.amount)} as paid.`); dashAt = 0; loadDash();
+  });
   view.querySelectorAll("[data-mk]").forEach(b => b.onclick = () => { markFor = b.dataset.mk; markPlan = "m6"; renderAdmin(); });
   view.querySelectorAll("[data-mp]").forEach(b => b.onclick = () => { markPlan = b.dataset.mp; keepTyped(renderAdmin); const r = dash.find(x => x.id === markFor); if ($("#mk-a")) $("#mk-a").value = (r.founding ? 3000 : 5000) * { m1: 1, m6: 5, m12: 10 }[markPlan]; });
   view.querySelectorAll("[data-mkno]").forEach(b => b.onclick = () => { markFor = null; renderAdmin(); });
@@ -1261,7 +1290,22 @@ function wireStaff() {
 let newShop = null, shopRows = null, refOpts = null;
 const agentMode = () => tab === "agent";
 const rerenderShops = () => agentMode() ? renderAgent() : renderSettings();
-function renderAgent() { if (!isAgent) return go("orders"); view.innerHTML = `<h2 class="ptitle">Set up shops</h2><p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops(); }
+let myEarn = null, myEarnBusy = false;
+function earningsHtml() {
+  if (!myEarn) return "";
+  const e = myEarn;
+  return `<section class="scard"><h3 class="stitle">Your earnings</h3>
+    <p class="ssub">You're paid when a shop you worked on pays for Tagbook. Setting up a shop: ₦1,500 when it first pays, ₦1,500 more from day 30 if it's still logging orders. Bringing a shop: ₦3,000 once it has paid ₦6,000 in total, plus ₦500 for each paid month, up to 12.</p>
+    <div class="dpay"><div><b>${naira(e.due)}</b><span>owed to you</span></div><div><b>${naira(e.paid)}</b><span>paid so far</span></div></div>
+    ${(e.items || []).map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : "p-billed"}">${i.status === "paid" ? "Paid" : "Owed"}</span></div>`).join("") || `<p class="hint">Nothing yet. You'll see money here once a shop you worked on starts paying.</p>`}
+    ${(e.shops || []).length ? `<h3 class="stitle" style="margin-top:14px">Your shops</h3>${e.shops.map(s => `<div class="staff-row"><div><b>${esc(s.name)}</b><span>${[s.brought ? "You brought it" : "", s.setup ? "You set it up" : ""].filter(Boolean).join(" · ")}</span></div><span class="pill ${s.paying ? "p-ready" : "p-billed"}">${s.paying ? "Paying" : "On trial"}</span></div>`).join("")}` : ""}
+  </section>`;
+}
+function renderAgent() {
+  if (!isAgent) return go("orders");
+  if (!myEarnBusy) { myEarnBusy = true; sb.rpc("my_earnings").then(({ data, error }) => { myEarnBusy = false; if (!error && data && JSON.stringify(data) !== JSON.stringify(myEarn)) { myEarn = data; if (tab === "agent") keepTyped(renderAgent); } }).catch(() => { myEarnBusy = false; }); }
+  view.innerHTML = `<h2 class="ptitle">Set up shops</h2>${earningsHtml()}<p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops();
+}
 const isoDay = d => d.toISOString().slice(0, 10);
 function shopsHtml() {
   const trial = (() => { const x = new Date(); x.setMonth(x.getMonth() + 1); return isoDay(x); })();
