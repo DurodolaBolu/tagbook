@@ -443,11 +443,12 @@ function renderAdmin() {
         ${(pend => r.referred_by_name || r.referrals || pend ? `<div><dt>Referrals</dt><dd>${[r.referred_by_name ? `From ${esc(r.referred_by_name)}` : "", r.referrals ? `brought ${r.referrals}` : "", pend ? `${pend} lead${pend === 1 ? "" : "s"} pending` : ""].filter(Boolean).join(" · ")}</dd></div>` : "")(leads.filter(l => l.referrer_shop === r.id && l.status === "pending").length)}
       </dl>
       ${!r.is_test && r.claim_status === "pending" ? `<div class="dclaim"><p><b>${esc(r.claim_by_name || "An agent")}</b> says <b>${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")}</b> found this shop. No agent pay until you decide.</p>
-        <div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">No, Ordiventa found it</button><button class="btn btn-ghost" data-ep="${r.id}">Change</button></div></div>` : ""}
+        <div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Yes, ${r.claim_kind === "self" ? esc(r.claim_by_name || "they") : esc(r.claim_for_name || "they")} found it</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa found it</button><button class="btn btn-ghost" data-ep="${r.id}">Another team member</button></div></div>` : ""}
       ${r.is_test ? "" : editFor === r.id ? `<div class="dlead dmark">
           <label for="ep-r">Referred by (shop)</label><select id="ep-r" ${r.reward_given ? "disabled" : ""}><option value="">Nobody</option>${dash.filter(k => !k.is_test && k.id !== r.id).map(k => `<option value="${k.id}" ${r.referred_by === k.id ? "selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
           ${r.reward_given ? `<p class="hint">The free month was already given, so this can't change.</p>` : ""}
-          <label for="ep-b">Agent (found and closed the shop)</label><select id="ep-b"><option value="">Ordiventa (no agent pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.brought_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+          <label for="ep-b">Agent (found and closed the shop)</label><select id="ep-b"><option value="">Ordiventa (no agent pay)</option>${agents.map(a => `<option value="${a.user_id}" ${(r.claim_status === "pending" ? null : r.brought_by) === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+          ${r.claim_status === "pending" ? `<p class="hint">Pick the team member who really found this shop, then Save.</p>` : ""}
           <label for="ep-s">Helper (demoed and set it up)</label><select id="ep-s"><option value="">Nobody (no helper pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.setup_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
           <div class="row"><button class="btn btn-ghost" data-epno>Cancel</button><button class="btn btn-primary" data-epgo="${r.id}">Save</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-ep="${r.id}">Edit referral, agent and helper</button>`}
       ${r.is_test ? "" : markFor === r.id ? `<div class="dlead dmark"><label>Plan they paid for</label><div class="chips" style="margin:0 0 6px">${["m1", "m6", "m12"].map(k => `<button class="chip" data-mp="${k}" aria-pressed="${markPlan === k}">${PLAN_INFO[k][0]}</button>`).join("")}</div>
@@ -497,10 +498,10 @@ function renderAdmin() {
       <div class="stat"><b>${sum("today")}</b><span>Orders today</span></div>
       <div class="stat"><b>${sum("week")}</b><span>Orders, 7 days</span></div>
       <div class="stat"><b>${trial}</b><span>On free trial</span></div>
-      <div class="stat"><b>${naira(sum("paid_total"))}</b><span>Collected so far</span></div>
+      <div class="stat"><b>${naira(sum("paid_total"))}</b><span>Shops have paid us</span></div>
       <div class="stat"><b>${naira(real.filter(r => r.founding).length * 3000 + real.filter(r => !r.founding).length * 5000)}</b><span>Monthly, once all pay</span></div>
     </div>
-    ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
+    ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${iosBiz() ? `<button class="btn btn-primary" data-ncopy="${r.id}">Copy message</button>` : `<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
     ${refHtml}
@@ -508,7 +509,7 @@ function renderAdmin() {
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
   wireAdminSeg();
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
-  view.querySelectorAll("[data-ep]").forEach(b => b.onclick = () => { editFor = b.dataset.ep; renderAdmin(); });
+  view.querySelectorAll("[data-ep]").forEach(b => b.onclick = () => { editFor = b.dataset.ep; renderAdmin(); const f = $("#ep-b"); if (f) { f.scrollIntoView({ block: "center" }); f.focus(); } });
   view.querySelectorAll("[data-epno]").forEach(b => b.onclick = () => { editFor = null; renderAdmin(); });
   view.querySelectorAll("[data-epgo]").forEach(b => b.onclick = async () => {
     b.disabled = true;

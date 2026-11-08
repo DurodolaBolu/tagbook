@@ -290,3 +290,6 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .paybar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 .dclaim{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--warn-soft)}
 .dclaim p{margin:0 0 8px}
+/* Secondary buttons: clearly a button on any background */
+.btn-ghost{background:var(--accent-soft);color:var(--accent-deep);border:1.5px solid var(--accent);font-weight:700}
+.btn-ghost:active{filter:brightness(.95)}

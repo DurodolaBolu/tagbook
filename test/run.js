@@ -186,6 +186,7 @@ async function handle(route) {
   await T('[data-done="ready"]'); console.log("status:", db.orders[0].status);
   await page.fill("#pay", "5000"); await T("#pp"); await page.waitForTimeout(300);
   console.log("money after part pay:", db.order_money[0].paid, "settled:", db.orders[0].settled);
+  await page.$eval("#ppall", e => e.scrollIntoView({ block: "center" })); await page.screenshot({ path: path.join(out, "09b-pay-form.png") });
   console.log("pay-all label:", await page.textContent("#ppall")); await T("#ppall"); await page.waitForTimeout(400); console.log("after pay-all:", db.order_money[0].paid, "of", db.order_money[0].total, "settled:", db.orders[0].settled);
   await T("#pick"); console.log("status:", db.orders[0].status); await shot("10-owner-picked");
   await T("#sheet [data-back]");

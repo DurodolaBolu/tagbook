@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261108141301";</script>
+<script>window.TB_BUILD="20261108143031";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -451,6 +451,9 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .paybar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 .dclaim{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--warn-soft)}
 .dclaim p{margin:0 0 8px}
+/* Secondary buttons: clearly a button on any background */
+.btn-ghost{background:var(--accent-soft);color:var(--accent-deep);border:1.5px solid var(--accent);font-weight:700}
+.btn-ghost:active{filter:brightness(.95)}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -466,7 +469,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261108141301"></script>
+<script src="/app.js?v=20261108143031"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
