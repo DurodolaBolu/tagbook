@@ -282,10 +282,10 @@ function planHtml() {
       <span class="hint">${k === "m1" ? "Pay every month" : `${naira(per(k))} a month · ${PLAN_INFO[k][2]} (save ${naira(save(k))})`}</span></button>`).join("");
   const refs = p.referrals || [];
   return card("Your plan", "", `<p class="pstate"><b>${status[0]}</b><span>${status[1]}</span></p>`)
-    + (p.state === "free" ? "" : card("Choose a plan", p.founding ? "You're on the founding price for early shops." : "",
+    + (p.state === "free" && !isAdmin ? "" : card("Choose a plan", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : p.founding ? "You're on the founding price for early shops." : "",
       `<div class="plans">${opts}</div>
        <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[planPick])} with Paystack</button>
-       <p class="hint">Card, bank transfer or USSD. ${p.state === "trial" || p.state === "paid" ? `Paying early adds to the days you have left, so the new plan starts after ${longDay(p.until)}.` : "Logging opens again as soon as you pay."}</p>`))
+       <p class="hint">Card, bank transfer or USSD. ${p.state === "free" ? "" : p.state === "trial" || p.state === "paid" ? `Paying early adds to the days you have left, so the new plan starts after ${longDay(p.until)}.` : "Logging opens again as soon as you pay."}</p>`))
     + card("Refer a laundry, get a free month", "When a shop you bring to Tagbook starts paying, your next month is free. There's no limit.",
       `<p class="pstate"><b>${refs.length} shop${refs.length === 1 ? "" : "s"} referred · ${p.free_months} free month${p.free_months === 1 ? "" : "s"} earned</b></p>
        ${refs.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Joined ${longDay(r.joined)}${r.reward_at ? ` · your free month was added ${longDay(r.reward_at)}` : " · free month comes when they start paying"}</span></div><span class="pill ${r.paying ? "p-ready" : "p-billed"}">${r.paying ? "Paying" : "On trial"}</span></div>`).join("")}
