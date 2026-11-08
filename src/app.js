@@ -478,6 +478,7 @@ function renderAdmin() {
   const agentHtml = `<section class="scard dref"><h3 class="stitle">Agents</h3>
     <p class="ssub">Your team demo Tagbook on their own copy of BrightWash and set shops up. They can't see this page or any shop's money. Helper (demo and setup): ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Agent (found and closed it): ₦3,000 once the shop has paid ₦6,000, plus ₦500 for each paid month, up to 12. Pay from a shop never goes above half of what that shop has paid; anything above that waits until it pays more. Pay out once someone is owed ${naira((teamPay[0] || {}).threshold || 10000)}, or once money has waited ${(teamPay[0] || {}).max_wait || 60} days. You get a notification when someone is ready.</p>
     ${agents.map(a => { const t = teamPay.find(x => x.user_id === a.user_id) || { due: 0, paid: 0, items: [] }; return `<div class="dteam"><div class="dref-row" style="padding-left:0"><div><b>${esc(a.name)}</b><span>${fmtPhone(a.phone)} · ${a.shops} shop${a.shops === 1 ? "" : "s"} set up, ${a.active} logged orders this week${a.names.length ? ` · ${a.names.map(esc).join(", ")}` : ""}</span></div></div>
+      ${t.acct_no ? `<div class="dbank"><span><b>${esc(t.acct_no)}</b> · ${esc(t.bank_name)} · ${esc(t.acct_name)}</span><div class="row"><button class="btn btn-ghost" data-bkc="${esc(t.acct_no)}">Copy number</button><button class="btn btn-ghost" data-bkc="${esc(`${t.acct_name}\n${t.acct_no}\n${t.bank_name}`)}">Copy all</button></div></div>` : `<p class="hint">No bank details yet. Ask them to add them under Set up shops.</p>`}
       ${t.ready ? `<span class="pill p-ready">Ready to pay</span>` : t.due ? `<span class="hint">${naira(t.due)} of ${naira(t.threshold || 10000)} payout level</span>` : ""}
       <div class="dpay"><div><b>${naira(t.due)}</b><span>owed now</span></div>${t.held ? `<div><b>${naira(t.held)}</b><span>waiting on shops</span></div>` : ""}<div><b>${naira(t.paid)}</b><span>paid so far</span></div>
         <div class="row">${t.items.length ? `<button class="btn btn-ghost" data-tpo="${a.user_id}">${payOpen === a.user_id ? "Hide details" : "Details"}</button>` : ""}${t.due ? `<button class="btn btn-primary" data-tpay="${a.user_id}">Mark ${naira(t.due)} paid</button>` : ""}</div></div>
@@ -519,6 +520,7 @@ function renderAdmin() {
     if (error) { toast(/REWARD_GIVEN/.test(error.message) ? "The free month was already given for this shop." : "Not saved. Please try again."); return; }
     editFor = null; toast("Saved"); dashAt = 0; loadDash();
   });
+  view.querySelectorAll("[data-bkc]").forEach(b => b.onclick = async () => toast(await copyText(b.dataset.bkc) ? "Copied" : "Couldn't copy"));
   view.querySelectorAll("[data-cl]").forEach(b => b.onclick = async () => {
     b.disabled = true;
     const { error } = await sb.rpc("admin_decide_claim", { p_shop: b.dataset.cl, p_approve: b.dataset.ok === "1" });
@@ -1302,7 +1304,7 @@ function wireStaff() {
 let newShop = null, shopRows = null, refOpts = null, teamOpts = null;
 const agentMode = () => tab === "agent";
 const rerenderShops = () => agentMode() ? renderAgent() : renderSettings();
-let myEarn = null, myEarnBusy = false;
+let myEarn = null, myEarnBusy = false, bankEdit = false;
 function earningsHtml() {
   if (!myEarn) return "";
   const e = myEarn, th = e.threshold || 10000, wait = e.max_wait || 60;
@@ -1317,13 +1319,39 @@ function earningsHtml() {
     <div class="dpay"><div><b>${naira(e.due)}</b><span>owed to you</span></div>${e.held ? `<div><b>${naira(e.held)}</b><span>waiting on shops</span></div>` : ""}<div><b>${naira(e.paid)}</b><span>paid so far</span></div></div>
     <div class="paybar"><i style="width:${e.ready ? 100 : pct}%"></i></div><p class="hint">${payLine}</p>
     ${(e.items || []).map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : i.status === "held" ? "p-billed" : "p-ready"}">${i.status === "paid" ? "Paid" : i.status === "held" ? "Waiting" : "Owed"}</span></div>`).join("") || `<p class="hint">Nothing yet. You'll see money here once a shop you worked on starts paying.</p>`}
+    ${bankHtml(e)}
     ${(e.shops || []).length ? `<h3 class="stitle" style="margin-top:14px">Your shops</h3>${e.shops.map(s => `<div class="staff-row"><div><b>${esc(s.name)}</b><span>${role(s)}${claim(s)}</span></div><span class="pill ${s.paying ? "p-ready" : "p-billed"}">${s.paying ? "Paying" : "On trial"}</span></div>`).join("")}` : ""}
   </section>`;
+}
+function bankHtml(e) {
+  const b = e.bank;
+  if (b && !bankEdit) return `<h3 class="stitle" style="margin-top:14px">Where we pay you</h3>
+    <div class="staff-row"><div><b>${esc(b.no)} · ${esc(b.bank)}</b><span>${esc(b.name)}</span></div><button class="btn btn-ghost" id="bk-edit" style="width:auto;margin:0;padding:9px 14px">Change</button></div>`;
+  return `<h3 class="stitle" style="margin-top:14px">Where we pay you</h3>
+    <p class="hint">${b ? "Bolu gets a message when you change this." : "Add the account we should send your money to."}</p>
+    <label for="bk-b">Bank</label><input id="bk-b" placeholder="e.g. Opay, GTBank, Moniepoint" autocomplete="off" value="${esc(b ? b.bank : "")}">
+    <label for="bk-n">Account number</label><input id="bk-n" type="text" inputmode="numeric" maxlength="10" placeholder="10 digits" autocomplete="off" value="${esc(b ? b.no : "")}">
+    <label for="bk-a">Account name</label><input id="bk-a" placeholder="Name on the account" autocomplete="off" value="${esc(b ? b.name : "")}">
+    <div class="row">${b ? `<button class="btn btn-ghost" id="bk-no">Cancel</button>` : ""}<button class="btn btn-primary" id="bk-go">Save bank details</button></div>`;
+}
+function wireBank() {
+  if ($("#bk-edit")) $("#bk-edit").onclick = () => { bankEdit = true; renderAgent(); };
+  if ($("#bk-no")) $("#bk-no").onclick = () => { bankEdit = false; renderAgent(); };
+  if (!$("#bk-go")) return;
+  $("#bk-go").onclick = async () => {
+    const bank = $("#bk-b").value.trim(), no = digits($("#bk-n").value), name = $("#bk-a").value.trim();
+    if (!bank || !name) return toast("Fill in the bank and the account name.");
+    if (!/^\d{10}$/.test(no)) return toast("The account number must be 10 digits.");
+    $("#bk-go").disabled = true;
+    const { error } = await sb.rpc("set_my_bank", { p_bank: bank, p_no: no, p_name: name });
+    if (error) { $("#bk-go").disabled = false; return toast("Not saved. Check your internet and try again."); }
+    myEarn = { ...myEarn, bank: { bank, no, name } }; bankEdit = false; toast("Bank details saved"); renderAgent();
+  };
 }
 function renderAgent() {
   if (!isAgent) return go("orders");
   if (!myEarnBusy) { myEarnBusy = true; sb.rpc("my_earnings").then(({ data, error }) => { myEarnBusy = false; if (!error && data && JSON.stringify(data) !== JSON.stringify(myEarn)) { myEarn = data; if (tab === "agent") keepTyped(renderAgent); } }).catch(() => { myEarnBusy = false; }); }
-  view.innerHTML = `<h2 class="ptitle">Set up shops</h2>${earningsHtml()}<p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops();
+  view.innerHTML = `<h2 class="ptitle">Set up shops</h2>${earningsHtml()}<p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops(); wireBank();
 }
 const isoDay = d => d.toISOString().slice(0, 10);
 function shopsHtml() {

@@ -293,3 +293,6 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 /* Secondary buttons: clearly a button on any background */
 .btn-ghost{background:var(--accent-soft);color:var(--accent-deep);border:1.5px solid var(--accent);font-weight:700}
 .btn-ghost:active{filter:brightness(.95)}
+.dbank{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin:4px 0 8px;font-size:15px}
+.dbank .row{display:flex;gap:8px}
+.dbank .btn{width:auto;margin:0;padding:8px 12px;min-height:0;font-size:15px}
