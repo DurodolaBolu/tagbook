@@ -54,6 +54,7 @@ async function handle(route) {
     return send(200, { ok: true });
   }
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId);
+  if (p === "/rest/v1/rpc/my_plan") return send(200, { state: "trial", until: "2099-01-01", grace_until: "2099-01-03", days_left: 9999 });
   if (p === "/rest/v1/rpc/admin_shops") return send(200, db.shops.map(s => ({ id: s.id, name: s.name, created_at: s.created_at, trial_ends: s.trial_ends || null, owner_name: "Bolu", owner_phone: "08120756325", staff: db.staff.length, orders: db.orders.length, last_order: new Date().toISOString(), referred_by: s.referred_by || null, referred_by_name: (db.shops.find(k => k.id === s.referred_by) || {}).name || null, referrals: db.shops.filter(k => k.referred_by === s.id).length })));
   if (p === "/rest/v1/rpc/agent_ref_options") return send(200, db.shops.map(s => ({ id: s.id, name: s.name })));
   if (p === "/rest/v1/rpc/is_agent") return send(200, false);
