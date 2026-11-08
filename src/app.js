@@ -170,7 +170,7 @@ const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
-let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = "m6", teamPay = [], editFor = null, payOpen = null;
+let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = 1, teamPay = [], editFor = null, payOpen = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
 async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; try { const T = await sb.rpc("admin_team_pay"); if (!T.error) teamPay = T.data || []; } catch (_) { } } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
@@ -239,8 +239,9 @@ function nudgeMsg(r) {
   return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it.\n\nBolu, Tagbook team`;
 }
 /* ---------- Plan & billing ---------- */
-let plan = null, planPick = "m6", planBusy = false;
-const PLAN_INFO = { m1: ["1 month", 1, ""], m6: ["6 months", 6, "1 month free"], m12: ["1 year", 12, "2 months free"] };
+let plan = null, planPick = "m1", planBusy = false;
+const PRICE_MONTH = 3000;
+const PLAN_INFO = { m1: ["1 month", 1, ""], m6: ["6 months", 6, ""], m12: ["1 year", 12, ""] };
 const longDay = d => d ? new Date(String(d).slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 const TAGBOOK_LINE = "2348120756325";
 async function loadPlan() {
@@ -250,11 +251,11 @@ async function loadPlan() {
 const planEnded = () => !!plan && plan.state === "ended";
 function planBanner() {
   if (!plan || plan.state === "free") return "";
-  const d = plan.days_left, pay = own() ? `<button data-gopay>${plan.state === "trial" ? "Choose a plan" : "Pay now"}</button>` : "";
+  const d = plan.days_left, pay = own() ? `<button data-gopay>Pay now</button>` : "";
   let t = "";
   if (plan.state === "ended") t = own() ? "New orders are paused. Your records are safe. Pay to start logging clothes again." : "New orders are paused. Ask the owner to pay for Tagbook.";
   else if (plan.state === "grace") t = own() ? `Your Tagbook plan ended on ${longDay(plan.until)}. Pay by ${longDay(plan.grace_until)} to keep logging clothes.` : `The Tagbook plan has ended. Ask the owner to pay by ${longDay(plan.grace_until)}, or logging will pause.`;
-  else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. Pay for 6 months or 1 year and get free months.` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
+  else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. It's ${naira(PRICE_MONTH)} a month after that.` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
   return t ? `<div class="alert ${plan.state === "ended" || plan.state === "grace" ? "planwarn" : ""}"><span>${t}</span>${pay}</div>` : "";
 }
 function wirePlanBanner(root) { root.querySelectorAll("[data-gopay]").forEach(b => b.onclick = () => go("plan")); }
@@ -274,23 +275,17 @@ function planHtml() {
     ended: [`New orders are paused`, `Your records are safe. Pay to start logging clothes again.`],
     free: [`No plan needed`, `This shop isn't billed.`],
   }[p.state];
-  const per = k => Math.round(p.prices[k] / PLAN_INFO[k][1]);
-  const save = k => p.prices.m1 * PLAN_INFO[k][1] - p.prices[k];
-  const opts = ["m1", "m6", "m12"].map(k => `<button class="popt" data-plan="${k}" aria-pressed="${planPick === k}">
-      <span class="pname">${PLAN_INFO[k][0]}${k === "m12" ? ` <em>Best value</em>` : ""}</span>
-      <b>${naira(p.prices[k])}</b>
-      <span class="hint">${k === "m1" ? "Pay every month" : `${naira(per(k))} a month · ${PLAN_INFO[k][2]} (save ${naira(save(k))})`}</span></button>`).join("");
   const refs = p.referrals || [];
   return card("Your plan", "", `<p class="pstate"><b>${status[0]}</b><span>${status[1]}</span></p>`)
-    + (p.state === "free" && !isAdmin ? "" : card("Choose a plan", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : p.founding ? "You're on the founding price for early shops." : "",
-      `<div class="plans">${opts}</div>
+    + (p.state === "free" && !isAdmin ? "" : card("Pay for Tagbook", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : "",
+      `<p class="pstate"><b>${naira(p.prices.m1)} a month</b><span>One price for every shop. No extra charges.</span></p>
        <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[planPick])} with Paystack</button>
        <p class="hint">Card, bank transfer or USSD. ${p.state === "free" ? "" : p.state === "trial" || p.state === "paid" ? `Paying early adds to the days you have left, so the new plan starts after ${longDay(p.until)}.` : "Logging opens again as soon as you pay."}</p>`))
     + card("Refer a laundry, get a free month", "When a shop you bring to Tagbook starts paying, your next month is free. There's no limit.",
       `<p class="pstate"><b>${refs.length} shop${refs.length === 1 ? "" : "s"} referred · ${p.free_months} free month${p.free_months === 1 ? "" : "s"} earned</b></p>
        ${refs.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Joined ${longDay(r.joined)}${r.reward_at ? ` · your free month was added ${longDay(r.reward_at)}` : " · free month comes when they start paying"}</span></div><span class="pill ${r.paying ? "p-ready" : "p-billed"}">${r.paying ? "Paying" : "On trial"}</span></div>`).join("")}
        <a class="btn btn-ghost" target="_blank" rel="noopener" href="https://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hello Tagbook, we want to refer a laundry to you.\n\nShop name:\nOwner's phone:\n\nReferred by: ${shop.name}`)}">Refer a shop on WhatsApp</a>`)
-    + ((p.payments || []).length ? card("Payment history", "", p.payments.map(x => `<div class="staff-row"><div><b>${naira(x.amount)} · ${PLAN_INFO[x.plan] ? PLAN_INFO[x.plan][0] : x.months + " months"}</b><span>${longDay(x.paid_at)}${x.method === "manual" ? " · paid to Tagbook directly" : " · Paystack"} · covered until ${longDay(x.paid_until)}</span></div></div>`).join("")) : "");
+    + ((p.payments || []).length ? card("Payment history", "", p.payments.map(x => `<div class="staff-row"><div><b>${naira(x.amount)} · ${x.months} month${x.months === 1 ? "" : "s"}</b><span>${longDay(x.paid_at)}${x.method === "manual" ? " · paid to Tagbook directly" : " · Paystack"} · covered until ${longDay(x.paid_until)}</span></div></div>`).join("")) : "");
 }
 function wirePlan() {
   if (!plan || !plan.prices) { if (!planBusy) { planBusy = true; loadPlan().finally(() => { planBusy = false; if (tab === "prices" && setTab === "plan") renderSettings(); }); } return; }
@@ -437,7 +432,7 @@ function renderAdmin() {
         <div><dt>Logins</dt><dd>${r.owners} owner, ${r.staff} staff</dd></div>
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
         <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}</dd></div>
-        <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}${r.founding ? " · founding" : ""}</dd></div>
+        <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}</dd></div>
         <div><dt>Agent</dt><dd>${esc(r.brought_by_name || "Ordiventa")} · helper: ${esc(r.setup_by_name || "none")}</dd></div>
         <div><dt>Paid</dt><dd>${r.paid_until ? `until ${longDay(r.paid_until)} · ${naira(r.paid_total)} so far` : r.paid_total ? naira(r.paid_total) + " so far" : "not yet"}${r.free_months ? ` · ${r.free_months} free month${r.free_months === 1 ? "" : "s"} earned` : ""}</dd></div>
         ${(pend => r.referred_by_name || r.referrals || pend ? `<div><dt>Referrals</dt><dd>${[r.referred_by_name ? `From ${esc(r.referred_by_name)}` : "", r.referrals ? `brought ${r.referrals}` : "", pend ? `${pend} lead${pend === 1 ? "" : "s"} pending` : ""].filter(Boolean).join(" · ")}</dd></div>` : "")(leads.filter(l => l.referrer_shop === r.id && l.status === "pending").length)}
@@ -451,8 +446,8 @@ function renderAdmin() {
           ${r.claim_status === "pending" ? `<p class="hint">Pick the team member who really found this shop, then Save.</p>` : ""}
           <label for="ep-s">Helper (demoed and set it up)</label><select id="ep-s"><option value="">Nobody (no helper pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.setup_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
           <div class="row"><button class="btn btn-ghost" data-epno>Cancel</button><button class="btn btn-primary" data-epgo="${r.id}">Save</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-ep="${r.id}">Edit referral, agent and helper</button>`}
-      ${r.is_test ? "" : markFor === r.id ? `<div class="dlead dmark"><label>Plan they paid for</label><div class="chips" style="margin:0 0 6px">${["m1", "m6", "m12"].map(k => `<button class="chip" data-mp="${k}" aria-pressed="${markPlan === k}">${PLAN_INFO[k][0]}</button>`).join("")}</div>
-          <label for="mk-a">Amount received (₦)</label><input id="mk-a" ${moneyAttrs} value="${(r.founding ? 3000 : 5000) * { m1: 1, m6: 5, m12: 10 }[markPlan]}">
+      ${r.is_test ? "" : markFor === r.id ? `<div class="dlead dmark"><label for="mk-m">Months paid for</label><input id="mk-m" type="text" inputmode="numeric" maxlength="2" value="${markPlan}">
+          <label for="mk-a">Amount received (₦)</label><input id="mk-a" ${moneyAttrs} value="${PRICE_MONTH * markPlan}">
           <label for="mk-n">Note (optional)</label><input id="mk-n" placeholder="e.g. transfer to Ordiventa account" autocomplete="off">
           <div class="row"><button class="btn btn-ghost" data-mkno>Cancel</button><button class="btn btn-primary" data-mkgo="${r.id}">Mark as paid</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-mk="${r.id}">Record a cash or transfer payment</button>`}
       ${r.is_test ? "" : (f => f.length ? `<div class="dflags">${f.map(([t, k]) => `<span class="pill p-${k === "owes" ? "owed" : "new"}">${t}</span>`).join("")}</div>` : "")(shopFlags(r))}
@@ -500,7 +495,7 @@ function renderAdmin() {
       <div class="stat"><b>${sum("week")}</b><span>Orders, 7 days</span></div>
       <div class="stat"><b>${trial}</b><span>On free trial</span></div>
       <div class="stat"><b>${naira(sum("paid_total"))}</b><span>Shops have paid us</span></div>
-      <div class="stat"><b>${naira(real.filter(r => r.founding).length * 3000 + real.filter(r => !r.founding).length * 5000)}</b><span>Monthly, once all pay</span></div>
+      <div class="stat"><b>${naira(real.length * PRICE_MONTH)}</b><span>Monthly, once all pay</span></div>
     </div>
     ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${iosBiz() ? `<button class="btn btn-primary" data-ncopy="${r.id}">Copy message</button>` : `<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
@@ -535,13 +530,13 @@ function renderAdmin() {
     if (error || !data || !data.ok) { b.disabled = false; toast("Not saved. Please try again."); return; }
     toast(`Marked ${naira(data.amount)} as paid.`); dashAt = 0; loadDash();
   });
-  view.querySelectorAll("[data-mk]").forEach(b => b.onclick = () => { markFor = b.dataset.mk; markPlan = "m6"; renderAdmin(); });
-  view.querySelectorAll("[data-mp]").forEach(b => b.onclick = () => { markPlan = b.dataset.mp; keepTyped(renderAdmin); const r = dash.find(x => x.id === markFor); if ($("#mk-a")) $("#mk-a").value = (r.founding ? 3000 : 5000) * { m1: 1, m6: 5, m12: 10 }[markPlan]; });
+  view.querySelectorAll("[data-mk]").forEach(b => b.onclick = () => { markFor = b.dataset.mk; markPlan = 1; renderAdmin(); });
+  if ($("#mk-m")) $("#mk-m").oninput = e => { markPlan = Math.max(1, Math.min(24, +digits(e.target.value) || 1)); if ($("#mk-a")) $("#mk-a").value = PRICE_MONTH * markPlan; };
   view.querySelectorAll("[data-mkno]").forEach(b => b.onclick = () => { markFor = null; renderAdmin(); });
   view.querySelectorAll("[data-mkgo]").forEach(b => b.onclick = async () => {
     const amt = +digits($("#mk-a").value); if (!amt) { toast("Enter the amount received."); return; }
     b.disabled = true;
-    const { data, error } = await sb.rpc("admin_mark_paid", { p_shop: b.dataset.mkgo, p_plan: markPlan, p_amount: amt, p_note: $("#mk-n").value });
+    const { data, error } = await sb.rpc("admin_record_payment", { p_shop: b.dataset.mkgo, p_months: markPlan, p_amount: amt, p_note: $("#mk-n").value });
     b.disabled = false;
     if (error || !data || !data.ok) { toast("Not saved. Please try again."); return; }
     markFor = null; toast(`Saved. Paid until ${longDay(data.paid_until)}.`); dashAt = 0; loadDash();
@@ -1374,7 +1369,6 @@ function shopsHtml() {
        <div><label for="as-as">Helper (demo and setup)</label><select id="as-as"><option value="">Ordiventa (no helper pay)</option>${(teamOpts || []).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select></div></div>`}
        <label for="as-r">Referred by</label><select id="as-r"><option value="">Nobody (we found them)</option>${(refOpts || []).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}</select>
        <p class="hint">The shop that brought them gets 1 free month once this shop pays.</p>
-       ${agentMode() ? "" : `<label class="toggle"><span>Founding price (₦3,000 for 12 months)</span><input type="checkbox" id="as-f" checked></label>`}
        <button class="btn btn-primary" id="as-go">Create shop</button>`);
   const list = card(agentMode() ? "Shops you set up" : "All shops", "", shopRows === null ? `<p class="hint">Loading…</p>` : !shopRows.length ? `<p class="hint">No shops yet.</p>`
       : shopRows.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")} · ${r.staff} login${r.staff === 1 ? "" : "s"}</span>
