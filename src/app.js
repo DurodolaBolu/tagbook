@@ -168,7 +168,7 @@ const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
-let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null;
+let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
 async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
@@ -222,6 +222,15 @@ function leadMsg(l, kind) {
     ? `${greet()}. This is Bolu from Tagbook, we're based here in Akure. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works? Since we're in Akure, we can also come by to set it up for you.\n\nBolu, Tagbook team`
     : `${greet()}. This is Bolu from Tagbook. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works?\n\nBolu, Tagbook team`;
 }
+/* Message for a live shop that hasn't started, or has gone quiet */
+function nudgeMsg(r) {
+  const first = String(r.owner_name || "").trim().split(/\s+/)[0];
+  const hi = `${greet()}${first ? " " + first : ""}. This is Bolu from Tagbook.`;
+  if (!r.orders) return `${hi}\n\nWe noticed no clothes have gone into Tagbook yet. Is anything stopping you, or is something not clear?\n\nIf you like, we can come by and log the first few customers with you. Each one takes less than a minute.\n\nBolu, Tagbook team`;
+  const days = Math.floor((Date.now() - Date.parse(r.last_order)) / 864e5);
+  return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it.\n\nBolu, Tagbook team`;
+}
+const copyText = async text => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand("copy"); } catch (_) { } t.remove(); return ok; } };
 /* Leads open in WhatsApp Business by default (the 0812 line); switchable to normal WhatsApp */
 let waApp = (() => { try { return localStorage.getItem("tb-wa-app") || "business"; } catch (_) { return "business"; } })();
 const isAndroid = /Android/i.test(navigator.userAgent);
@@ -386,13 +395,16 @@ function renderAdmin() {
       <div class="stat"><b>${trial}</b><span>On free trial</span></div>
       <div class="stat"><b>${naira(real.filter(r => r.founding).length * 3000 + real.filter(r => !r.founding).length * 5000)}</b><span>Monthly, once all pay</span></div>
     </div>
-    ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<a class="btn btn-ghost" href="${wa(r.owner_phone)}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</div>`).join("")}</section>` : ""}
+    ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${iosBiz() ? `<button class="btn btn-primary" data-ncopy="${r.id}">Copy message</button>` : `<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
     ${refHtml}
     ${agentHtml}
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
   wireAdminSeg();
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
+  view.querySelectorAll("[data-ncopy]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.ncopy); if (await copyText(nudgeMsg(r))) { nCopy = r.id; renderAdmin(); } else toast("Couldn't copy"); });
+  view.querySelectorAll("[data-nnum]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.nnum); toast(await copyText("+234" + String(r.owner_phone).replace(/^0/, "")) ? "Number copied" : "Couldn't copy"); });
+  view.querySelectorAll("[data-nclose]").forEach(b => b.onclick = () => { nCopy = null; renderAdmin(); });
   $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };
   const setLead = async (id, status) => { const { error } = await sb.from("ref_leads").update({ status }).eq("id", id); if (error) return toast("Couldn't save. Check your internet."); const l = leads.find(x => x.id === id); if (l) l.status = status; renderAdmin(); };
   view.querySelectorAll("[data-lj]").forEach(b => b.onclick = () => setLead(b.dataset.lj, "joined"));
