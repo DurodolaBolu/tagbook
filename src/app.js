@@ -239,9 +239,9 @@ function nudgeMsg(r) {
   return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it.\n\nBolu, Tagbook team`;
 }
 /* ---------- Plan & billing ---------- */
-let plan = null, planPick = "m1", planBusy = false;
+let plan = null, planPick = "m6", planBusy = false;
 const PRICE_MONTH = 3000;
-const PLAN_INFO = { m1: ["1 month", 1, ""], m6: ["6 months", 6, ""], m12: ["1 year", 12, ""] };
+const PLAN_INFO = { m1: ["1 month", 1, ""], m6: ["6 months", 6, "1 month free"], m12: ["1 year", 12, "2 months free"] };
 const longDay = d => d ? new Date(String(d).slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 const TAGBOOK_LINE = "2348120756325";
 async function loadPlan() {
@@ -255,7 +255,7 @@ function planBanner() {
   let t = "";
   if (plan.state === "ended") t = own() ? "New orders are paused. Your records are safe. Pay to start logging clothes again." : "New orders are paused. Ask the owner to pay for Tagbook.";
   else if (plan.state === "grace") t = own() ? `Your Tagbook plan ended on ${longDay(plan.until)}. Pay by ${longDay(plan.grace_until)} to keep logging clothes.` : `The Tagbook plan has ended. Ask the owner to pay by ${longDay(plan.grace_until)}, or logging will pause.`;
-  else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. It's ${naira(PRICE_MONTH)} a month after that.` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
+  else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. It's ${naira(PRICE_MONTH)} a month, or pay for 6 months or 1 year and get free months.` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
   return t ? `<div class="alert ${plan.state === "ended" || plan.state === "grace" ? "planwarn" : ""}"><span>${t}</span>${pay}</div>` : "";
 }
 function wirePlanBanner(root) { root.querySelectorAll("[data-gopay]").forEach(b => b.onclick = () => go("plan")); }
@@ -275,10 +275,17 @@ function planHtml() {
     ended: [`New orders are paused`, `Your records are safe. Pay to start logging clothes again.`],
     free: [`No plan needed`, `This shop isn't billed.`],
   }[p.state];
+  const per = k => Math.round(p.prices[k] / PLAN_INFO[k][1]);
+  const save = k => p.prices.m1 * PLAN_INFO[k][1] - p.prices[k];
+  const opts = ["m1", "m6", "m12"].filter(k => p.prices[k]).map(k => `<button class="popt" data-plan="${k}" aria-pressed="${planPick === k}">
+      <span class="pname">${PLAN_INFO[k][0]}${k === "m12" ? ` <em>Best value</em>` : ""}</span>
+      <b>${naira(p.prices[k])}</b>
+      <span class="hint">${k === "m1" ? "Pay every month" : `${PLAN_INFO[k][2]} (save ${naira(save(k))})`}</span></button>`).join("");
   const refs = p.referrals || [];
   return card("Your plan", "", `<p class="pstate"><b>${status[0]}</b><span>${status[1]}</span></p>`)
-    + (p.state === "free" && !isAdmin ? "" : card("Pay for Tagbook", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : "",
-      `<p class="pstate"><b>${naira(p.prices.m1)} a month</b><span>One price for every shop. No extra charges.</span></p>
+    + (p.state === "free" && !isAdmin ? "" : card("Choose a plan", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : "",
+      `<p class="hint" style="margin-top:0">${naira(p.prices.m1)} a month for every shop, with no extra charges. Pay ahead and get free months.</p>
+       <div class="plans">${opts}</div>
        <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[planPick])} with Paystack</button>
        <p class="hint">Card, bank transfer or USSD. ${p.state === "free" ? "" : p.state === "trial" || p.state === "paid" ? `Paying early adds to the days you have left, so the new plan starts after ${longDay(p.until)}.` : "Logging opens again as soon as you pay."}</p>`))
     + card("Refer a laundry, get a free month", "When a shop you bring to Tagbook starts paying, your next month is free. There's no limit.",
@@ -1216,11 +1223,15 @@ function renderSettings() {
       staffList.map(s => `<div class="staff-row"><div><b>${esc(s.name)}${s.user_id === me.user_id ? " (you)" : ""}</b><span>${s.role === "owner" ? "Owner" : "Staff"} · ${fmtPhone(s.phone)}</span></div>
         ${s.user_id === me.user_id ? "" : `<div class="acts"><button class="mini" data-rp="${s.user_id}">New PIN</button><button class="mini danger" data-srm="${s.user_id}">Remove</button></div>`}</div>
         ${resetFor === s.user_id ? `<div class="row srow"><input id="rpi" class="pin" ${pinAttrs} placeholder="6 digits" aria-label="New PIN for ${esc(s.name)}"><button class="mini" id="rpb">Save</button></div>` : ""}`).join(""))
-    + card("Add a staff login", "Tell them their PIN in person. They can change it in their own Settings.",
+    + (newStaff ? card(`Send ${esc(newStaff.name.split(" ")[0])} their login`, "They need this to open Tagbook on their phone.",
+      `<div class="wa">${esc(newStaff.msg)}</div>
+       <a class="btn btn-primary" id="nsfwa" target="_blank" rel="noopener" href="${waLink(newStaff.phone, newStaff.msg)}">Send on WhatsApp</a>
+       <div class="row"><button class="btn btn-ghost" id="nsfcopy">Copy message</button><button class="btn btn-ghost" id="nsfdone">Done</button></div>`)
+    : card("Add a staff login", "After adding, you can send them their login on WhatsApp. They can change their PIN in their own Settings.",
       `<div class="sgrid"><div><label for="sfn">Name</label><input id="sfn" placeholder="e.g. Grace" autocomplete="off"></div>
        <div><label for="sfp">Phone number</label><input id="sfp" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
        <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${genPinAttrs()}></div></div>
-       <button class="btn btn-primary" id="sfa">Add staff login</button>`);
+       <button class="btn btn-primary" id="sfa">Add staff login</button>`));
   if (setTab === "prices") body = priceListHtml();
   if (setTab === "plan" && own()) body = planHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
@@ -1280,10 +1291,14 @@ function wireBranches() {
   view.querySelectorAll("[data-brm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again"; return; } const br = BRANCHES.find(x => x.id === b.dataset.brm); br.active = false; renderSettings(); savedToast(await put("branches", { id: br.id }, { active: false })); });
   $("#nbb").onclick = async () => { const v = $("#nb").value.trim().slice(0, 40); if (!v) { toast("Type the branch name first"); return; } const { error } = await sb.from("branches").insert({ shop_id: shop.id, name: v, sort: BRANCHES.length }); if (error) { toast(failMsg(error)); return; } toast(`${v} added`); await load(); renderSettings(); };
 }
+let newStaff = null;
 function wireStaff() {
   view.querySelectorAll("[data-rp]").forEach(b => b.onclick = () => { resetFor = resetFor === b.dataset.rp ? null : b.dataset.rp; renderSettings(); const i = $("#rpi"); if (i) i.focus(); });
   if ($("#rpb")) $("#rpb").onclick = async () => { const pin = digits($("#rpi").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; } $("#rpb").disabled = true; const r = await callAdmin({ action: "reset_pin", user_id: resetFor, pin }); toast(r.ok ? "New PIN saved. Tell them in person." : r.msg); if (r.ok) { resetFor = null; renderSettings(); } else $("#rpb").disabled = false; };
   view.querySelectorAll("[data-srm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again"; return; } b.disabled = true; const r = await callAdmin({ action: "remove_staff", user_id: b.dataset.srm }); toast(r.ok ? "Staff login removed" : r.msg); if (r.ok) { await load(); renderSettings(); } });
+  if ($("#nsfcopy")) $("#nsfcopy").onclick = async () => toast(await copyText(newStaff.msg) ? "Message copied" : "Couldn't copy");
+  if ($("#nsfdone")) $("#nsfdone").onclick = () => { newStaff = null; renderSettings(); };
+  if (!$("#sfa")) return;
   $("#sfa").onclick = async () => {
     const name = $("#sfn").value.trim(), phone = digits($("#sfp").value), pin = digits($("#sfk").value);
     const err = !name ? "Type the staff member's name." : !/^0\d{10}$/.test(phone) ? "The phone number must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
@@ -1291,7 +1306,8 @@ function wireStaff() {
     $("#sfa").disabled = true; $("#sfa").textContent = "Adding…";
     const r = await callAdmin({ action: "add_staff", name, phone, pin });
     if (!r.ok) { toast(r.msg); $("#sfa").disabled = false; $("#sfa").textContent = "Add staff login"; return; }
-    toast(`${name} can now log in with ${fmtPhone(phone)} and their PIN`); await load(); renderSettings();
+    newStaff = { name, phone, msg: `Hello ${name.split(" ")[0]}, you've been added to ${shopName()} on Tagbook.\n\nOpen tagbook.ordiventa.com and log in with:\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.` };
+    toast(`${name} added`); await load(); renderSettings();
   };
 }
 

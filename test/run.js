@@ -213,6 +213,7 @@ async function handle(route) {
   await T('[data-st="business"]');
   await T('[data-st="staff"]');
   await page.fill("#sfn", "Tolu"); await page.fill("#sfp", "08033334444"); await page.fill("#sfk", "123456"); await T("#sfa"); await page.waitForTimeout(400);
+  console.log("staff share card:", !!(await page.$("#nsfwa")), (await page.getAttribute("#nsfwa", "href") || "").slice(0, 60)); await page.$eval("#nsfwa", e => e.scrollIntoView({ block: "center" })); await page.screenshot({ path: path.join(out, "15b-staff-share.png") }); await T("#nsfdone");
   console.log("staff now:", db.staff.map(s => s.name).join(", "));
   await T('[data-st="prices"]'); await shot("13b-prices-phone"); await T('[data-popen="it0"]'); await shot("13c-price-open");
   await page.fill('#pp-it0-wi', "900"); await page.press('#pp-it0-wi', "Tab"); await page.waitForTimeout(300);
