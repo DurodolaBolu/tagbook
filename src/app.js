@@ -62,6 +62,7 @@ async function load() {
   ]);
   if (base[0].error) throw base[0].error;
   shop = base[0].data; BRANCHES = base[1]; customers = base[3];
+  loadPlan().then(() => { if (me && (tab === "orders" || tab === "new" || (tab === "prices" && setTab === "plan"))) render(); });
   let prices = {}, phones = {}, money = {};
   if (own()) {
     const [p, ip, ph, om, st] = await Promise.all([
@@ -91,6 +92,7 @@ function failMsg(e) {
   const m = (e && (e.message || e.error_description)) || "";
   if (/fetch|network|Failed to/i.test(m)) return "Not saved. Check your internet and try again.";
   if (/OWNER_ONLY/.test(m)) return "Only the owner can do that.";
+  if (/PLAN_ENDED/.test(m)) { loadPlan().then(render); return "New orders are paused until the Tagbook plan is paid."; }
   return "Not saved. Please try again.";
 }
 async function put(table, key, fields) {
@@ -168,16 +170,20 @@ const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
-let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null;
+let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = "m6";
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
 async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
+const daysLeft = d => d ? Math.round((Date.parse(String(d).slice(0, 10) + "T00:00:00Z") - Date.parse(lagosDay(Date.now()) + "T00:00:00Z")) / 864e5) : null;
+const coveredUntil = r => [r.trial_ends, r.paid_until].filter(Boolean).sort().pop() || null;
 function shopFlags(r) {
   const f = [], age = (Date.now() - Date.parse(r.created_at)) / 864e5, left = daysTo(r.trial_ends);
   if (!r.orders && age > 1) f.push(["No orders yet, " + Math.floor(age) + " day" + (Math.floor(age) === 1 ? "" : "s") + " in", "owes"]);
   else if (!r.orders) f.push(["No orders yet", "warn"]);
   else if (r.last_order && Date.now() - Date.parse(r.last_order) > 3 * 864e5) f.push(["No orders for " + ago(r.last_order).replace(" ago", ""), "owes"]);
-  if (left !== null && left <= 7) f.push([left < 0 ? "Trial ended" : left === 0 ? "Trial ends today" : "Trial ends in " + left + " day" + (left === 1 ? "" : "s"), "warn"]);
+  const cov = coveredUntil(r), cl = daysLeft(cov);
+  if (cl !== null && cl < 0) f.push([cl < -2 ? "Plan ended, orders paused" : "Plan ended, in 2-day grace", "owes"]);
+  else if (cl !== null && cl <= 7) f.push([(r.paid_until && r.paid_until >= cov ? "Plan" : "Trial") + (cl === 0 ? " ends today" : " ends in " + cl + " day" + (cl === 1 ? "" : "s")), "warn"]);
   if (!r.staff) f.push(["No staff login", "warn"]);
   if (!r.push) f.push(["Owner alerts off", "warn"]);
   return f;
@@ -226,9 +232,89 @@ function leadMsg(l, kind) {
 function nudgeMsg(r) {
   const first = String(r.owner_name || "").trim().split(/\s+/)[0];
   const hi = `${greet()}${first ? " " + first : ""}. This is Bolu from Tagbook.`;
+  const cl = daysLeft(coveredUntil(r));
+  if (cl !== null && cl < 0) return `${hi}\n\nYour Tagbook plan ended on ${longDay(coveredUntil(r))}.${cl >= -2 ? " You can still log clothes for a short while, but it will pause soon." : " New orders are paused for now, but all your records are safe."}\n\nYou can pay in the app under Settings, Plan & billing. The 6 months plan gives you 1 month free.\n\nIf you'd rather pay us directly, just reply here.\n\nBolu, Tagbook team`;
   if (!r.orders) return `${hi}\n\nWe noticed no clothes have gone into Tagbook yet. Is anything stopping you, or is something not clear?\n\nIf you like, we can come by and log the first few customers with you. Each one takes less than a minute.\n\nBolu, Tagbook team`;
   const days = Math.floor((Date.now() - Date.parse(r.last_order)) / 864e5);
   return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it.\n\nBolu, Tagbook team`;
+}
+/* ---------- Plan & billing ---------- */
+let plan = null, planPick = "m6", planBusy = false;
+const PLAN_INFO = { m1: ["1 month", 1, ""], m6: ["6 months", 6, "1 month free"], m12: ["1 year", 12, "2 months free"] };
+const longDay = d => d ? new Date(String(d).slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+const TAGBOOK_LINE = "2348120756325";
+async function loadPlan() {
+  try { const { data, error } = await sb.rpc("my_plan"); if (!error) plan = data; } catch (_) { }
+  return plan;
+}
+const planEnded = () => !!plan && plan.state === "ended";
+function planBanner() {
+  if (!plan || plan.state === "free") return "";
+  const d = plan.days_left, pay = own() ? `<button data-gopay>${plan.state === "trial" ? "Choose a plan" : "Pay now"}</button>` : "";
+  let t = "";
+  if (plan.state === "ended") t = own() ? "New orders are paused. Your records are safe. Pay to start logging clothes again." : "New orders are paused. Ask the owner to pay for Tagbook.";
+  else if (plan.state === "grace") t = own() ? `Your Tagbook plan ended on ${longDay(plan.until)}. Pay by ${longDay(plan.grace_until)} to keep logging clothes.` : `The Tagbook plan has ended. Ask the owner to pay by ${longDay(plan.grace_until)}, or logging will pause.`;
+  else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. Pay for 6 months or 1 year and get free months.` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
+  return t ? `<div class="alert ${plan.state === "ended" || plan.state === "grace" ? "planwarn" : ""}"><span>${t}</span>${pay}</div>` : "";
+}
+function wirePlanBanner(root) { root.querySelectorAll("[data-gopay]").forEach(b => b.onclick = () => go("plan")); }
+async function billingCall(body) {
+  const { data, error } = await sb.functions.invoke("billing", { body });
+  if (!error) return data || {};
+  let j = {}; try { j = await error.context.json(); } catch (_) { }
+  return { error: j.error || "NETWORK" };
+}
+function planHtml() {
+  if (!plan || !plan.prices) return card("Plan & billing", "", `<p class="hint">Loading…</p>`);
+  const p = plan, d = p.days_left;
+  const status = {
+    trial: [`Free trial`, `Ends ${longDay(p.until)} · ${d} day${d === 1 ? "" : "s"} left`],
+    paid: [`Paid until ${longDay(p.until)}`, `${d} day${d === 1 ? "" : "s"} left`],
+    grace: [`Your plan ended on ${longDay(p.until)}`, `You can still log clothes until ${longDay(p.grace_until)}. Pay before then.`],
+    ended: [`New orders are paused`, `Your records are safe. Pay to start logging clothes again.`],
+    free: [`No plan needed`, `This shop isn't billed.`],
+  }[p.state];
+  const per = k => Math.round(p.prices[k] / PLAN_INFO[k][1]);
+  const save = k => p.prices.m1 * PLAN_INFO[k][1] - p.prices[k];
+  const opts = ["m1", "m6", "m12"].map(k => `<button class="popt" data-plan="${k}" aria-pressed="${planPick === k}">
+      <span class="pname">${PLAN_INFO[k][0]}${k === "m12" ? ` <em>Best value</em>` : ""}</span>
+      <b>${naira(p.prices[k])}</b>
+      <span class="hint">${k === "m1" ? "Pay every month" : `${naira(per(k))} a month · ${PLAN_INFO[k][2]} (save ${naira(save(k))})`}</span></button>`).join("");
+  const refs = p.referrals || [];
+  return card("Your plan", "", `<p class="pstate"><b>${status[0]}</b><span>${status[1]}</span></p>`)
+    + (p.state === "free" ? "" : card("Choose a plan", p.founding ? "You're on the founding price for early shops." : "",
+      `<div class="plans">${opts}</div>
+       <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[planPick])} with Paystack</button>
+       <p class="hint">Card, bank transfer or USSD. ${p.state === "trial" || p.state === "paid" ? `Paying early adds to the days you have left, so the new plan starts after ${longDay(p.until)}.` : "Logging opens again as soon as you pay."}</p>`))
+    + card("Refer a laundry, get a free month", "When a shop you bring to Tagbook starts paying, your next month is free. There's no limit.",
+      `<p class="pstate"><b>${refs.length} shop${refs.length === 1 ? "" : "s"} referred · ${p.free_months} free month${p.free_months === 1 ? "" : "s"} earned</b></p>
+       ${refs.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Joined ${longDay(r.joined)}${r.reward_at ? ` · your free month was added ${longDay(r.reward_at)}` : " · free month comes when they start paying"}</span></div><span class="pill ${r.paying ? "p-ready" : "p-billed"}">${r.paying ? "Paying" : "On trial"}</span></div>`).join("")}
+       <a class="btn btn-ghost" target="_blank" rel="noopener" href="https://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hello Tagbook, we want to refer a laundry to you.\n\nShop name:\nOwner's phone:\n\nReferred by: ${shop.name}`)}">Refer a shop on WhatsApp</a>`)
+    + ((p.payments || []).length ? card("Payment history", "", p.payments.map(x => `<div class="staff-row"><div><b>${naira(x.amount)} · ${PLAN_INFO[x.plan] ? PLAN_INFO[x.plan][0] : x.months + " months"}</b><span>${longDay(x.paid_at)}${x.method === "manual" ? " · paid to Tagbook directly" : " · Paystack"} · covered until ${longDay(x.paid_until)}</span></div></div>`).join("")) : "");
+}
+function wirePlan() {
+  if (!plan || !plan.prices) { if (!planBusy) { planBusy = true; loadPlan().finally(() => { planBusy = false; if (tab === "prices" && setTab === "plan") renderSettings(); }); } return; }
+  view.querySelectorAll("[data-plan]").forEach(b => b.onclick = () => { planPick = b.dataset.plan; renderSettings(); });
+  const go_ = $("#paygo"); if (!go_) return;
+  go_.onclick = async () => {
+    go_.disabled = true; go_.textContent = "Opening Paystack…";
+    const r = await billingCall({ action: "start", plan: planPick });
+    if (r.url) { location.href = r.url; return; }
+    go_.disabled = false; go_.textContent = `Pay ${naira(plan.prices[planPick])} with Paystack`;
+    toast(r.error === "NOT_READY" ? "Online payment isn't switched on yet. Message Tagbook to pay." : r.error === "NETWORK" ? "Check your internet and try again." : "Couldn't open Paystack. Please try again.");
+  };
+}
+async function checkPaystackReturn() {
+  const q = new URLSearchParams(location.search), ref = q.get("reference") || q.get("trxref");
+  if (!ref) return;
+  history.replaceState(null, "", location.pathname + "#plan");
+  toast("Checking your payment…");
+  const r = await billingCall({ action: "verify", reference: ref });
+  await loadPlan();
+  if (r.ok) toast(`Payment received. Tagbook is paid until ${longDay(r.paid_until)}.`);
+  else if (r.error === "NOT_PAID") toast("The payment wasn't completed. You can try again.");
+  else toast("We couldn't confirm the payment yet. If you paid, it will show here shortly.");
+  route();
 }
 const copyText = async text => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand("copy"); } catch (_) { } t.remove(); return ok; } };
 /* Leads open in WhatsApp Business by default (the 0812 line); switchable to normal WhatsApp */
@@ -352,8 +438,13 @@ function renderAdmin() {
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
         <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}</dd></div>
         <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}${r.founding ? " · founding" : ""}</dd></div>
+        <div><dt>Paid</dt><dd>${r.paid_until ? `until ${longDay(r.paid_until)} · ${naira(r.paid_total)} so far` : r.paid_total ? naira(r.paid_total) + " so far" : "not yet"}${r.free_months ? ` · ${r.free_months} free month${r.free_months === 1 ? "" : "s"} earned` : ""}</dd></div>
         ${(pend => r.referred_by_name || r.referrals || pend ? `<div><dt>Referrals</dt><dd>${[r.referred_by_name ? `From ${esc(r.referred_by_name)}` : "", r.referrals ? `brought ${r.referrals}` : "", pend ? `${pend} lead${pend === 1 ? "" : "s"} pending` : ""].filter(Boolean).join(" · ")}</dd></div>` : "")(leads.filter(l => l.referrer_shop === r.id && l.status === "pending").length)}
       </dl>
+      ${r.is_test ? "" : markFor === r.id ? `<div class="dlead dmark"><label>Plan they paid for</label><div class="chips" style="margin:0 0 6px">${["m1", "m6", "m12"].map(k => `<button class="chip" data-mp="${k}" aria-pressed="${markPlan === k}">${PLAN_INFO[k][0]}</button>`).join("")}</div>
+          <label for="mk-a">Amount received (₦)</label><input id="mk-a" ${moneyAttrs} value="${(r.founding ? 3000 : 5000) * { m1: 1, m6: 5, m12: 10 }[markPlan]}">
+          <label for="mk-n">Note (optional)</label><input id="mk-n" placeholder="e.g. transfer to Ordiventa account" autocomplete="off">
+          <div class="row"><button class="btn btn-ghost" data-mkno>Cancel</button><button class="btn btn-primary" data-mkgo="${r.id}">Mark as paid</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-mk="${r.id}">Record a cash or transfer payment</button>`}
       ${r.is_test ? "" : (f => f.length ? `<div class="dflags">${f.map(([t, k]) => `<span class="pill p-${k === "owes" ? "owed" : "new"}">${t}</span>`).join("")}</div>` : "")(shopFlags(r))}
     </section>`;
   };
@@ -393,6 +484,7 @@ function renderAdmin() {
       <div class="stat"><b>${sum("today")}</b><span>Orders today</span></div>
       <div class="stat"><b>${sum("week")}</b><span>Orders, 7 days</span></div>
       <div class="stat"><b>${trial}</b><span>On free trial</span></div>
+      <div class="stat"><b>${naira(sum("paid_total"))}</b><span>Collected so far</span></div>
       <div class="stat"><b>${naira(real.filter(r => r.founding).length * 3000 + real.filter(r => !r.founding).length * 5000)}</b><span>Monthly, once all pay</span></div>
     </div>
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${iosBiz() ? `<button class="btn btn-primary" data-ncopy="${r.id}">Copy message</button>` : `<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
@@ -402,6 +494,17 @@ function renderAdmin() {
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
   wireAdminSeg();
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
+  view.querySelectorAll("[data-mk]").forEach(b => b.onclick = () => { markFor = b.dataset.mk; markPlan = "m6"; renderAdmin(); });
+  view.querySelectorAll("[data-mp]").forEach(b => b.onclick = () => { markPlan = b.dataset.mp; keepTyped(renderAdmin); const r = dash.find(x => x.id === markFor); if ($("#mk-a")) $("#mk-a").value = (r.founding ? 3000 : 5000) * { m1: 1, m6: 5, m12: 10 }[markPlan]; });
+  view.querySelectorAll("[data-mkno]").forEach(b => b.onclick = () => { markFor = null; renderAdmin(); });
+  view.querySelectorAll("[data-mkgo]").forEach(b => b.onclick = async () => {
+    const amt = +digits($("#mk-a").value); if (!amt) { toast("Enter the amount received."); return; }
+    b.disabled = true;
+    const { data, error } = await sb.rpc("admin_mark_paid", { p_shop: b.dataset.mkgo, p_plan: markPlan, p_amount: amt, p_note: $("#mk-n").value });
+    b.disabled = false;
+    if (error || !data || !data.ok) { toast("Not saved. Please try again."); return; }
+    markFor = null; toast(`Saved. Paid until ${longDay(data.paid_until)}.`); dashAt = 0; loadDash();
+  });
   view.querySelectorAll("[data-ncopy]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.ncopy); if (await copyText(nudgeMsg(r))) { nCopy = r.id; renderAdmin(); } else toast("Couldn't copy"); });
   view.querySelectorAll("[data-nnum]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.nnum); toast(await copyText("+234" + String(r.owner_phone).replace(/^0/, "")) ? "Number copied" : "Couldn't copy"); });
   view.querySelectorAll("[data-nclose]").forEach(b => b.onclick = () => { nCopy = null; renderAdmin(); });
@@ -439,6 +542,7 @@ function route() {
   const h = location.hash.slice(1);
   const m = h.match(/^order-(\d+)$/);
   if (m && orders.some(o => o.no === +m[1])) { tab = "orders"; openNo = +m[1]; }
+  else if (h === "plan") { openNo = null; tab = "prices"; setTab = own() ? "plan" : "account"; }
   else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : (h === "admin" && isAdmin) ? "admin" : (h === "setup" && isAgent) ? "agent" : "orders"; }
   render();
 }
@@ -572,6 +676,7 @@ function renderOrders() {
   const shown = list.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const askPush = own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
   view.innerHTML = `
+    ${planBanner()}
     ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
     ${own() ? `<div class="stats">
@@ -602,6 +707,7 @@ function renderOrders() {
   view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; page = 0; renderOrders(); });
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
+  wirePlanBanner(view);
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
@@ -682,6 +788,10 @@ function customerBlock() {
   return b + `</div>`;
 }
 function renderNew() {
+  if (planEnded()) {
+    view.innerHTML = `${backBtn("Orders")}<h2>Log clothes</h2>${planBanner()}<p class="hint">You can still open every order you already logged. ${own() ? "Once you pay, logging opens again straight away." : "Logging opens again as soon as the owner pays."}</p>`;
+    wireBack(view); wirePlanBanner(view); return;
+  }
   if (!d.branch || !liveBranches().some(b => b.id === d.branch)) d.branch = (liveBranches()[0] || {}).id || null;
   const count = d.items.reduce((s, it) => s + it.qty, 0);
   const pickable = PRICES.filter(p => !p.hidden && (p.custom || (p.services || []).includes(d.svc)));
@@ -1037,7 +1147,7 @@ const genPinAttrs = () => `type="text" inputmode="numeric" pattern="[0-9]*" maxl
 let resetFor = null, setTab = "business", priceOpen = null, priceQ = "", addOpen = false;
 const wide = window.matchMedia("(min-width: 900px)");
 wide.addEventListener("change", () => { if (me && tab === "prices") renderSettings(); });
-const SET_TABS = [["business", "Business"], ["prices", "Price list"], ["staff", "Staff"], ["branches", "Branches"], ["account", "My account"]];
+const SET_TABS = [["business", "Business"], ["plan", "Plan & billing"], ["prices", "Price list"], ["staff", "Staff"], ["branches", "Branches"], ["account", "My account"]];
 const card = (title, sub, body) => `<section class="scard"><h3 class="stitle">${title}</h3>${sub ? `<p class="ssub">${sub}</p>` : ""}${body}</section>`;
 const shortSvc = { wi: "Wash & iron", wo: "Wash", io: "Iron", wsi: "Starch" };
 function renderSettings() {
@@ -1074,15 +1184,17 @@ function renderSettings() {
        <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${genPinAttrs()}></div></div>
        <button class="btn btn-primary" id="sfa">Add staff login</button>`);
   if (setTab === "prices") body = priceListHtml();
+  if (setTab === "plan" && own()) body = planHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
   view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
   wireBack(view);
-  view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
+  view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
   if (setTab === "account") wireAccount();
   if (setTab === "business") wireBusiness();
   if (setTab === "branches") wireBranches();
   if (setTab === "staff") wireStaff();
   if (setTab === "prices") wirePrices();
+  if (setTab === "plan" && own()) wirePlan();
   if (setTab === "shops" && isAdmin) wireShops();
 }
 const savedToast = ok => { if (ok) toast("Saved"); };
@@ -1379,7 +1491,7 @@ async function start() {
   $("#login").hidden = true; L = null;
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   saveLast({ phone: st.phone, name: st.name, shop: shop.name });
-  reset(); subscribe(); route(); syncPush();
+  reset(); subscribe(); route(); syncPush(); checkPaystackReturn();
 }
 
 (async function boot() {

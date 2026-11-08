@@ -251,3 +251,19 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .dcall .staff-row{flex-wrap:wrap;gap:8px}
 .dcall .staff-row>.row{margin-left:auto}
 .dcall .ocopy{margin:2px 0 12px}
+/* Plan & billing */
+.pstate{margin:0;display:flex;flex-direction:column;gap:2px}
+.pstate b{font-size:18px}
+.pstate span{color:var(--muted)}
+.plans{display:grid;gap:8px;margin-bottom:12px}
+@media (min-width:700px){.plans{grid-template-columns:repeat(3,1fr)}}
+.popt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;font:inherit;color:var(--fg);background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer}
+.popt b{font-size:20px}
+.popt .pname{font-weight:600}
+.popt .pname em{font-style:normal;font-size:13px;font-weight:600;background:var(--accent-soft);color:var(--accent-deep);border-radius:6px;padding:1px 6px;margin-left:4px}
+.popt .hint{margin:0}
+.popt[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.alert.planwarn{background:var(--owes-soft);color:var(--owes)}
+.alert.planwarn button{background:var(--owes);color:#fff}
+.dmarkbtn{margin-top:10px}
+.dmark{margin-top:10px}
