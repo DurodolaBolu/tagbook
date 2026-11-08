@@ -756,7 +756,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { method: "cash", cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
+function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -853,7 +853,7 @@ function renderNew() {
     <label class="toggle"><span>Express delivery</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>
     <label class="toggle"><span>Pickup and delivery</span><input type="checkbox" id="pk" ${d.pickup ? "checked" : ""}></label>
     <label for="pd">Paid now (₦)</label><input id="pd" ${moneyAttrs} placeholder="0" value="${d.paid || ""}">
-    ${d.paid ? methodChips(d.method, "dm") : `<p class="hint">Leave empty if the customer will pay later.</p>`}
+    ${d.paid ? "" : `<p class="hint">Leave empty if the customer will pay later.</p>`}
     <div class="lines"><div><b>Clothes logged</b><b>${count}</b></div></div>
     <p class="hint">${own() ? "After saving, you can send the list of clothes to the customer straight away." : "Saving sends this order to the owner's phone. The owner sends the list of clothes to the customer."}</p>
     <p class="bad" id="saveerr" role="alert" hidden></p>
@@ -968,10 +968,10 @@ const sentLine = (o, type, text) => o.again[type] ? waBlock(o, type, false) : `<
 
 /* ---------- Payments ---------- */
 const METHODS = [["cash", "Cash"], ["transfer", "Transfer"], ["pos", "POS"]];
-let payMethod = "cash";
+let payMethod = null;
 const methodChips = (cur, attr) => `<div class="chips" style="margin:8px 0 0" role="group" aria-label="How did they pay?">${METHODS.map(([k, l]) => `<button class="chip" data-${attr}="${k}" aria-pressed="${cur === k}">${l}</button>`).join("")}</div>`;
-const payForm = ph => `<label for="pay">Amount received (₦)</label><input id="pay" ${moneyAttrs} placeholder="${ph}">${methodChips(payMethod, "pm")}<button class="btn btn-primary" id="pp">Record payment</button>`;
-const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)} ${(METHODS.find(m => m[0] === p.method) || ["", "cash"])[1].toLowerCase()}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
+const payForm = (ph, full) => `${full ? `<button class="btn btn-primary" id="ppall">${full === true ? "Paid in full" : `Paid in full · ${naira(full)}`}</button><p class="hint" style="margin:6px 0 2px">Paid only part? Type the amount below.</p>` : ""}<label for="pay">Amount received (₦)</label><input id="pay" ${moneyAttrs} placeholder="${ph}"><button class="btn ${full ? "btn-ghost" : "btn-primary"}" id="pp">Record payment</button>`;
+const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
 
 /* ---------- Order detail ---------- */
 function openOrder(no) {
@@ -1018,7 +1018,7 @@ function openOrder(no) {
       ${o.billed ? `<div><b ${owed(o) ? 'style="color:var(--owes)"' : ""}>Still to pay</b><b ${owed(o) ? 'style="color:var(--owes)"' : ""}>${naira(owed(o))}</b></div>`
         : `<div><span style="color:var(--muted)">Balance shows once the bill is saved</span><span></span></div>`}</div>
       ${payList(o)}
-      ${!o.billed || owed(o) ? payForm(owed(o) || "0") + (!o.billed ? `<p class="hint">Use this when a customer pays before the clothes are ready.</p>` : "") : `<p class="hint">Fully paid.</p>`}`;
+      ${!o.billed || owed(o) ? payForm(owed(o) || "0", o.billed && owed(o) ? owed(o) : 0) + (!o.billed ? `<p class="hint">Use this when a customer pays before the clothes are ready.</p>` : "") : `<p class="hint">Fully paid.</p>`}`;
     if (o.status === "picked" && owed(o)) html += waBlock(o, "owe", false);
     html += checkHtml();
   } else {
@@ -1026,7 +1026,7 @@ function openOrder(no) {
       <div><b>Clothes</b><b>${k.count}</b></div>
       ${o.billed && (o.status === "told" || o.status === "picked") ? `<div><span>Payment</span><span class="pill ${owed(o) ? "p-owed" : "p-collected"}">${owed(o) ? "Not paid" : "Paid"}</span></div>` : ""}</div>`;
     html += `<h2 style="margin-top:18px">Payment</h2>` + (o.billed && o.settled ? `<p class="hint"><span class="pill p-collected">Paid in full</span></p>`
-      : payForm("0") + `<p class="hint">Type what the customer gave you. The owner sees it straight away.</p>`);
+      : payForm("0", o.billed) + `<p class="hint">${o.billed ? "Tap Paid in full if the customer paid everything. Otherwise type what they gave you." : "Type what the customer gave you."} The owner sees it straight away.</p>`);
     html += checkHtml();
     if (o.status === "ready") html += `<p class="hint" style="margin-top:12px">Ready and bagged. Waiting for the owner to tell the customer.</p>`;
   }
@@ -1078,17 +1078,19 @@ function openOrder(no) {
     again();
   };
   sh.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { payMethod = b.dataset.pm; sh.querySelectorAll("[data-pm]").forEach(x => x.setAttribute("aria-pressed", x.dataset.pm === payMethod)); });
-  const pp = $("#pp"); if (pp) pp.onclick = async () => {
-    const v = num($("#pay").value); if (!v) { toast("Type the amount received"); return; }
-    pp.disabled = true; pp.textContent = "Recording…";
+  // Paid in full: we send the largest amount allowed and the server caps it at what's still owed.
+  const doPay = async (pp, v) => {
+    const label = pp.textContent; pp.disabled = true; pp.textContent = "Recording…";
     const { data, error } = await sb.rpc("record_payment", { p_order: o.id, p_amount: v, p_method: payMethod });
-    if (error) { toast(/ALREADY_PAID/.test(error.message || "") ? "This order is already fully paid." : failMsg(error)); pp.disabled = false; pp.textContent = "Record payment"; return; }
-    payMethod = "cash";
+    if (error) { toast(/ALREADY_PAID/.test(error.message || "") ? "This order is already fully paid." : failMsg(error)); pp.disabled = false; pp.textContent = label; return; }
+    v = data.added;
     try { await load(); } catch (_) { }
     if (own()) toast(data.billed && data.paid < data.total ? `Recorded ${naira(data.added)}. ${naira(data.total - data.paid)} still to pay.` : data.billed ? "Recorded. Fully paid." : `Recorded ${naira(data.added)} paid early`);
     else toast(data.settled ? "Recorded. The customer has now paid in full. The owner has been told." : `Recorded ${naira(v)}. The owner has been told.`);
     render();
   };
+  const pp = $("#pp"); if (pp) pp.onclick = () => { const v = num($("#pay").value); if (!v) { toast("Type the amount received"); return; } doPay(pp, v); };
+  const pa = $("#ppall"); if (pa) pa.onclick = () => doPay(pa, 100000000);
   const w = $("#washed"); if (w) w.onclick = () => { o.checking = true; again(); put("orders", { id: o.id }, { checking: true }); };
   sh.querySelectorAll("[data-ck]").forEach(b => b.onchange = () => { o.checked = { ...o.checked, [b.dataset.ck]: b.checked }; again(); put("orders", { id: o.id }, { checked: o.checked }); });
   const rd = $("#rd"); if (rd) rd.onclick = () => setStatus("ready", own() ? "Marked ready. Send the ready message." : "Marked ready. The owner has been told.");

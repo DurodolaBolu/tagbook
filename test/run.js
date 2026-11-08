@@ -147,7 +147,7 @@ async function handle(route) {
   await page.selectOption("#br", "b2");
   await shot("03-sec-log");
   console.log("staff sees paid-now field:", await page.isVisible("#pd"));
-  await page.fill("#pd", "1000"); await page.waitForTimeout(150); await T('[data-dm="transfer"]');
+  await page.fill("#pd", "1000"); await page.waitForTimeout(150);
   await T("#save"); await page.waitForTimeout(500); await shot("04-sec-orders");
   console.log("drop-off payment saved:", JSON.stringify(db.order_money[0].payments), "auto billed (has special item, expect false):", !!db.order_money[0].billed_at);
   console.log("order saved:", JSON.stringify(db.orders.map(o => [o.no, o.status, o.branch_id, o.items.length])));
@@ -155,7 +155,7 @@ async function handle(route) {
   // secretary opens it, washed, check, ready
   await T(".order"); await shot("05-sec-order");
   console.log("sec order sheet has ₦:", (await page.textContent("#sheet")).includes("₦"));
-  await page.fill("#pay", "500"); await T('[data-pm="cash"]'); await T("#pp"); await page.waitForTimeout(400);
+  await page.fill("#pay", "500"); await T("#pp"); await page.waitForTimeout(400);
   await page.evaluate(() => { const s = document.querySelector("#sheet"); s.scrollTop = 300; }); await page.waitForTimeout(150); await page.screenshot({ path: path.join(out, "05b-staff-pay.png") });
   console.log("staff payment:", JSON.stringify(global.lastPay), "| staff sheet shows amounts:", /₦\s?\d/.test(await page.textContent("#sheet")));
   await T("#washed"); const n = (await page.$$("[data-ck]")).length; for (let i = 0; i < n; i++) { await page.check(`[data-ck="${i}"]`); await page.waitForTimeout(150); }
@@ -186,6 +186,7 @@ async function handle(route) {
   await T('[data-done="ready"]'); console.log("status:", db.orders[0].status);
   await page.fill("#pay", "5000"); await T("#pp"); await page.waitForTimeout(300);
   console.log("money after part pay:", db.order_money[0].paid, "settled:", db.orders[0].settled);
+  console.log("pay-all label:", await page.textContent("#ppall")); await T("#ppall"); await page.waitForTimeout(400); console.log("after pay-all:", db.order_money[0].paid, "of", db.order_money[0].total, "settled:", db.orders[0].settled);
   await T("#pick"); console.log("status:", db.orders[0].status); await shot("10-owner-picked");
   await T("#sheet [data-back]");
   // owner logs a returning customer with early payment
