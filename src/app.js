@@ -442,6 +442,8 @@ function renderAdmin() {
         <div><dt>Paid</dt><dd>${r.paid_until ? `until ${longDay(r.paid_until)} · ${naira(r.paid_total)} so far` : r.paid_total ? naira(r.paid_total) + " so far" : "not yet"}${r.free_months ? ` · ${r.free_months} free month${r.free_months === 1 ? "" : "s"} earned` : ""}</dd></div>
         ${(pend => r.referred_by_name || r.referrals || pend ? `<div><dt>Referrals</dt><dd>${[r.referred_by_name ? `From ${esc(r.referred_by_name)}` : "", r.referrals ? `brought ${r.referrals}` : "", pend ? `${pend} lead${pend === 1 ? "" : "s"} pending` : ""].filter(Boolean).join(" · ")}</dd></div>` : "")(leads.filter(l => l.referrer_shop === r.id && l.status === "pending").length)}
       </dl>
+      ${!r.is_test && r.claim_status === "pending" ? `<div class="dclaim"><p><b>${esc(r.claim_by_name || "An agent")}</b> says <b>${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")}</b> found this shop. No agent pay until you decide.</p>
+        <div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">No, Ordiventa found it</button><button class="btn btn-ghost" data-ep="${r.id}">Change</button></div></div>` : ""}
       ${r.is_test ? "" : editFor === r.id ? `<div class="dlead dmark">
           <label for="ep-r">Referred by (shop)</label><select id="ep-r" ${r.reward_given ? "disabled" : ""}><option value="">Nobody</option>${dash.filter(k => !k.is_test && k.id !== r.id).map(k => `<option value="${k.id}" ${r.referred_by === k.id ? "selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
           ${r.reward_given ? `<p class="hint">The free month was already given, so this can't change.</p>` : ""}
@@ -473,8 +475,9 @@ function renderAdmin() {
       : `<button class="btn btn-ghost" id="rl-add">+ Add a referral lead</button>`}
   </section>`;
   const agentHtml = `<section class="scard dref"><h3 class="stitle">Agents</h3>
-    <p class="ssub">Your team demo Tagbook on their own copy of BrightWash and set shops up. They can't see this page or any shop's money. Helper (demo and setup): ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Agent (found and closed it): ₦3,000 once the shop has paid ₦6,000, plus ₦500 for each paid month, up to 12. Pay from a shop never goes above half of what that shop has paid; anything above that waits until it pays more.</p>
+    <p class="ssub">Your team demo Tagbook on their own copy of BrightWash and set shops up. They can't see this page or any shop's money. Helper (demo and setup): ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Agent (found and closed it): ₦3,000 once the shop has paid ₦6,000, plus ₦500 for each paid month, up to 12. Pay from a shop never goes above half of what that shop has paid; anything above that waits until it pays more. Pay out once someone is owed ${naira((teamPay[0] || {}).threshold || 10000)}, or once money has waited ${(teamPay[0] || {}).max_wait || 60} days. You get a notification when someone is ready.</p>
     ${agents.map(a => { const t = teamPay.find(x => x.user_id === a.user_id) || { due: 0, paid: 0, items: [] }; return `<div class="dteam"><div class="dref-row" style="padding-left:0"><div><b>${esc(a.name)}</b><span>${fmtPhone(a.phone)} · ${a.shops} shop${a.shops === 1 ? "" : "s"} set up, ${a.active} logged orders this week${a.names.length ? ` · ${a.names.map(esc).join(", ")}` : ""}</span></div></div>
+      ${t.ready ? `<span class="pill p-ready">Ready to pay</span>` : t.due ? `<span class="hint">${naira(t.due)} of ${naira(t.threshold || 10000)} payout level</span>` : ""}
       <div class="dpay"><div><b>${naira(t.due)}</b><span>owed now</span></div>${t.held ? `<div><b>${naira(t.held)}</b><span>waiting on shops</span></div>` : ""}<div><b>${naira(t.paid)}</b><span>paid so far</span></div>
         <div class="row">${t.items.length ? `<button class="btn btn-ghost" data-tpo="${a.user_id}">${payOpen === a.user_id ? "Hide details" : "Details"}</button>` : ""}${t.due ? `<button class="btn btn-primary" data-tpay="${a.user_id}">Mark ${naira(t.due)} paid</button>` : ""}</div></div>
       ${payOpen === a.user_id ? t.items.map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : i.status === "held" ? "p-billed" : "p-ready"}">${i.status === "paid" ? "Paid" : i.status === "held" ? "Waiting" : "Owed"}</span></div>`).join("") : ""}</div>`; }).join("") || `<p class="hint">Nobody yet.</p>`}
@@ -497,6 +500,7 @@ function renderAdmin() {
       <div class="stat"><b>${naira(sum("paid_total"))}</b><span>Collected so far</span></div>
       <div class="stat"><b>${naira(real.filter(r => r.founding).length * 3000 + real.filter(r => !r.founding).length * 5000)}</b><span>Monthly, once all pay</span></div>
     </div>
+    ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${iosBiz() ? `<button class="btn btn-primary" data-ncopy="${r.id}">Copy message</button>` : `<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
     ${refHtml}
@@ -513,6 +517,12 @@ function renderAdmin() {
     b.disabled = false;
     if (error) { toast(/REWARD_GIVEN/.test(error.message) ? "The free month was already given for this shop." : "Not saved. Please try again."); return; }
     editFor = null; toast("Saved"); dashAt = 0; loadDash();
+  });
+  view.querySelectorAll("[data-cl]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const { error } = await sb.rpc("admin_decide_claim", { p_shop: b.dataset.cl, p_approve: b.dataset.ok === "1" });
+    if (error) { b.disabled = false; toast("Not saved. Please try again."); return; }
+    toast(b.dataset.ok === "1" ? "Approved. Agent pay will count for this shop." : "Saved. No agent pay for this shop."); dashAt = 0; loadDash();
   });
   view.querySelectorAll("[data-tpo]").forEach(b => b.onclick = () => { payOpen = payOpen === b.dataset.tpo ? null : b.dataset.tpo; renderAdmin(); });
   view.querySelectorAll("[data-tpay]").forEach(b => b.onclick = async () => {
@@ -1286,18 +1296,25 @@ function wireStaff() {
 }
 
 /* ---------- Ordiventa only: add shops and see every shop ---------- */
-let newShop = null, shopRows = null, refOpts = null;
+let newShop = null, shopRows = null, refOpts = null, teamOpts = null;
 const agentMode = () => tab === "agent";
 const rerenderShops = () => agentMode() ? renderAgent() : renderSettings();
 let myEarn = null, myEarnBusy = false;
 function earningsHtml() {
   if (!myEarn) return "";
-  const e = myEarn;
+  const e = myEarn, th = e.threshold || 10000, wait = e.max_wait || 60;
+  const pct = Math.min(100, Math.round((e.due || 0) / th * 100));
+  const payLine = !e.due ? `We pay once you're owed ${naira(th)}, or once money has waited ${wait} days.`
+    : e.ready ? `<b>Ready to be paid.</b> Bolu will send ${naira(e.due)} soon.`
+    : `${naira(e.due)} of ${naira(th)}. We pay once you reach ${naira(th)}${e.oldest_due ? `, or on ${longDay(isoDay(new Date(Date.parse(e.oldest_due) + wait * 864e5)))} at the latest` : ""}.`;
+  const role = s => [s.brought ? "Agent" : "", s.setup ? "Helper" : ""].filter(Boolean).join(" and ") || "Set up by you";
+  const claim = s => s.claim === "pending" ? " · waiting for Bolu to confirm who found it" : s.claim === "changed" ? " · Bolu changed who found it" : "";
   return `<section class="scard"><h3 class="stitle">Your earnings</h3>
-    <p class="ssub">You're paid when a shop you worked on pays for Tagbook. Helper (demo and setup): ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Agent (found and closed it): ₦3,000 once the shop has paid ₦6,000, plus ₦500 for each paid month, up to 12. Pay from a shop never goes above half of what that shop has paid; anything above that waits until it pays more.</p>
+    <p class="ssub">You're paid when a shop you worked on pays for Tagbook. Helper (demo and setup): ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Agent (found the shop): ₦3,000 once the shop has paid ₦6,000, plus ₦500 for each paid month, up to 12. Pay from a shop never goes above half of what that shop has paid; anything above that waits until it pays more.</p>
     <div class="dpay"><div><b>${naira(e.due)}</b><span>owed to you</span></div>${e.held ? `<div><b>${naira(e.held)}</b><span>waiting on shops</span></div>` : ""}<div><b>${naira(e.paid)}</b><span>paid so far</span></div></div>
+    <div class="paybar"><i style="width:${e.ready ? 100 : pct}%"></i></div><p class="hint">${payLine}</p>
     ${(e.items || []).map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : i.status === "held" ? "p-billed" : "p-ready"}">${i.status === "paid" ? "Paid" : i.status === "held" ? "Waiting" : "Owed"}</span></div>`).join("") || `<p class="hint">Nothing yet. You'll see money here once a shop you worked on starts paying.</p>`}
-    ${(e.shops || []).length ? `<h3 class="stitle" style="margin-top:14px">${[s.brought ? "Agent" : "", s.setup ? "Helper" : ""].filter(Boolean).join(" · ")}s</h3>${e.shops.map(s => `<div class="staff-row"><div><b>${esc(s.name)}</b><span>Your shop</span></div><span class="pill ${s.paying ? "p-ready" : "p-billed"}">${s.paying ? "Paying" : "On trial"}</span></div>`).join("")}` : ""}
+    ${(e.shops || []).length ? `<h3 class="stitle" style="margin-top:14px">Your shops</h3>${e.shops.map(s => `<div class="staff-row"><div><b>${esc(s.name)}</b><span>${role(s)}${claim(s)}</span></div><span class="pill ${s.paying ? "p-ready" : "p-billed"}">${s.paying ? "Paying" : "On trial"}</span></div>`).join("")}` : ""}
   </section>`;
 }
 function renderAgent() {
@@ -1320,6 +1337,10 @@ function shopsHtml() {
        <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${genPinAttrs()}></div></div>
        <div class="sgrid">${agentMode() ? "" : `<div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>`}
        <div><label for="as-no">First order number</label><input id="as-no" ${moneyAttrs} value="1"><p class="hint">Use their book's next number if they want to continue it.</p></div></div>
+       ${agentMode() ? `<label for="as-cf">Who found this shop?</label><select id="as-cf"><option value="ordiventa">Ordiventa sent me to this shop</option><option value="self">I found it myself</option>${(teamOpts || []).filter(t => t.id !== (me && me.user_id)).map(t => `<option value="${t.id}">${esc(t.name)} found it</option>`).join("")}</select>
+       <p class="hint">You are the helper for every shop you set up. If you say you or someone else found it, Bolu checks before any agent pay.</p>`
+       : `<div class="sgrid"><div><label for="as-ab">Agent (found the shop)</label><select id="as-ab"><option value="">Ordiventa (no agent pay)</option>${(teamOpts || []).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select></div>
+       <div><label for="as-as">Helper (demo and setup)</label><select id="as-as"><option value="">Ordiventa (no helper pay)</option>${(teamOpts || []).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select></div></div>`}
        <label for="as-r">Referred by</label><select id="as-r"><option value="">Nobody (we found them)</option>${(refOpts || []).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}</select>
        <p class="hint">The shop that brought them gets 1 free month once this shop pays.</p>
        ${agentMode() ? "" : `<label class="toggle"><span>Founding price (₦3,000 for 12 months)</span><input type="checkbox" id="as-f" checked></label>`}
@@ -1331,8 +1352,8 @@ function shopsHtml() {
   return done + form + list;
 }
 async function loadShops() {
-  const [a, b] = await Promise.all([sb.rpc(agentMode() ? "agent_shops" : "admin_shops"), sb.rpc("agent_ref_options")]);
-  shopRows = a.data || []; refOpts = b.data || [];
+  const [a, b, c] = await Promise.all([sb.rpc(agentMode() ? "agent_shops" : "admin_shops"), sb.rpc("agent_ref_options"), sb.rpc("team_options")]);
+  shopRows = a.data || []; refOpts = b.data || []; teamOpts = c.data || [];
   if (agentMode() || (tab === "prices" && setTab === "shops")) keepTyped(rerenderShops);
 }
 function wireShops() {
@@ -1347,7 +1368,8 @@ function wireShops() {
     const err = !shopName ? "Type the shop name." : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
     if (err) { toast(err); return; }
     $("#as-go").disabled = true; $("#as-go").textContent = "Creating…";
-    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t") ? $("#as-t").value || null : null, start_no: num($("#as-no").value) || 1, founding: $("#as-f") ? $("#as-f").checked : true, referred_by: $("#as-r").value || null });
+    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t") ? $("#as-t").value || null : null, start_no: num($("#as-no").value) || 1, founding: $("#as-f") ? $("#as-f").checked : true, referred_by: $("#as-r").value || null,
+      ...(agentMode() ? (v => v === "ordiventa" || v === "self" ? { claim_kind: v } : { claim_kind: "team", claim_for: v })($("#as-cf").value) : { brought_by: $("#as-ab").value || null, setup_by: $("#as-as").value || null }) });
     if (!r.ok) { toast(r.msg); $("#as-go").disabled = false; $("#as-go").textContent = "Create shop"; return; }
     newShop = { phone, msg: `Hello ${owner.split(" ")[0]}, ${shopName} is now on Tagbook.\n\nOpen tagbook.ordiventa.com and log in with:\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.\n\nWelcome, and thank you for starting with us.` };
     shopRows = null; rerenderShops();
