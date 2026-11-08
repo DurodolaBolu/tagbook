@@ -438,15 +438,16 @@ function renderAdmin() {
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
         <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}</dd></div>
         <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}${r.founding ? " · founding" : ""}</dd></div>
-        <div><dt>Agent</dt><dd>${esc(r.brought_by_name || r.setup_by_name || "None (Ordiventa)")}</dd></div>
+        <div><dt>Agent</dt><dd>${esc(r.brought_by_name || "Ordiventa")} · helper: ${esc(r.setup_by_name || "none")}</dd></div>
         <div><dt>Paid</dt><dd>${r.paid_until ? `until ${longDay(r.paid_until)} · ${naira(r.paid_total)} so far` : r.paid_total ? naira(r.paid_total) + " so far" : "not yet"}${r.free_months ? ` · ${r.free_months} free month${r.free_months === 1 ? "" : "s"} earned` : ""}</dd></div>
         ${(pend => r.referred_by_name || r.referrals || pend ? `<div><dt>Referrals</dt><dd>${[r.referred_by_name ? `From ${esc(r.referred_by_name)}` : "", r.referrals ? `brought ${r.referrals}` : "", pend ? `${pend} lead${pend === 1 ? "" : "s"} pending` : ""].filter(Boolean).join(" · ")}</dd></div>` : "")(leads.filter(l => l.referrer_shop === r.id && l.status === "pending").length)}
       </dl>
       ${r.is_test ? "" : editFor === r.id ? `<div class="dlead dmark">
           <label for="ep-r">Referred by (shop)</label><select id="ep-r" ${r.reward_given ? "disabled" : ""}><option value="">Nobody</option>${dash.filter(k => !k.is_test && k.id !== r.id).map(k => `<option value="${k.id}" ${r.referred_by === k.id ? "selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
           ${r.reward_given ? `<p class="hint">The free month was already given, so this can't change.</p>` : ""}
-          <label for="ep-b">Agent (brought and set up this shop)</label><select id="ep-b"><option value="">None, Ordiventa did it (no agent pay)</option>${agents.map(a => `<option value="${a.user_id}" ${(r.brought_by || r.setup_by) === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
-          <div class="row"><button class="btn btn-ghost" data-epno>Cancel</button><button class="btn btn-primary" data-epgo="${r.id}">Save</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-ep="${r.id}">Edit referral and agent</button>`}
+          <label for="ep-b">Agent (found and closed the shop)</label><select id="ep-b"><option value="">Ordiventa (no agent pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.brought_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+          <label for="ep-s">Helper (demoed and set it up)</label><select id="ep-s"><option value="">Nobody (no helper pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.setup_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+          <div class="row"><button class="btn btn-ghost" data-epno>Cancel</button><button class="btn btn-primary" data-epgo="${r.id}">Save</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-ep="${r.id}">Edit referral, agent and helper</button>`}
       ${r.is_test ? "" : markFor === r.id ? `<div class="dlead dmark"><label>Plan they paid for</label><div class="chips" style="margin:0 0 6px">${["m1", "m6", "m12"].map(k => `<button class="chip" data-mp="${k}" aria-pressed="${markPlan === k}">${PLAN_INFO[k][0]}</button>`).join("")}</div>
           <label for="mk-a">Amount received (₦)</label><input id="mk-a" ${moneyAttrs} value="${(r.founding ? 3000 : 5000) * { m1: 1, m6: 5, m12: 10 }[markPlan]}">
           <label for="mk-n">Note (optional)</label><input id="mk-n" placeholder="e.g. transfer to Ordiventa account" autocomplete="off">
@@ -472,11 +473,11 @@ function renderAdmin() {
       : `<button class="btn btn-ghost" id="rl-add">+ Add a referral lead</button>`}
   </section>`;
   const agentHtml = `<section class="scard dref"><h3 class="stitle">Agents</h3>
-    <p class="ssub">Agents find shops, demo Tagbook on their own copy of BrightWash, and set the shop up. They can't see this page or any shop's money. Pay per shop: ₦1,500 when it first pays, ₦3,000 once it has paid ₦6,000 in total, ₦1,500 more from day 30 if it's still logging orders, and ₦500 for each paid month, up to 12.</p>
+    <p class="ssub">Your team demo Tagbook on their own copy of BrightWash and set shops up. They can't see this page or any shop's money. Helper (demo and setup): ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Agent (found and closed it): ₦3,000 once the shop has paid ₦6,000, plus ₦500 for each paid month, up to 12. Pay from a shop never goes above half of what that shop has paid; anything above that waits until it pays more.</p>
     ${agents.map(a => { const t = teamPay.find(x => x.user_id === a.user_id) || { due: 0, paid: 0, items: [] }; return `<div class="dteam"><div class="dref-row" style="padding-left:0"><div><b>${esc(a.name)}</b><span>${fmtPhone(a.phone)} · ${a.shops} shop${a.shops === 1 ? "" : "s"} set up, ${a.active} logged orders this week${a.names.length ? ` · ${a.names.map(esc).join(", ")}` : ""}</span></div></div>
-      <div class="dpay"><div><b>${naira(t.due)}</b><span>owed now</span></div><div><b>${naira(t.paid)}</b><span>paid so far</span></div>
+      <div class="dpay"><div><b>${naira(t.due)}</b><span>owed now</span></div>${t.held ? `<div><b>${naira(t.held)}</b><span>waiting on shops</span></div>` : ""}<div><b>${naira(t.paid)}</b><span>paid so far</span></div>
         <div class="row">${t.items.length ? `<button class="btn btn-ghost" data-tpo="${a.user_id}">${payOpen === a.user_id ? "Hide details" : "Details"}</button>` : ""}${t.due ? `<button class="btn btn-primary" data-tpay="${a.user_id}">Mark ${naira(t.due)} paid</button>` : ""}</div></div>
-      ${payOpen === a.user_id ? t.items.map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : "p-billed"}">${i.status === "paid" ? "Paid" : "Owed"}</span></div>`).join("") : ""}</div>`; }).join("") || `<p class="hint">Nobody yet.</p>`}
+      ${payOpen === a.user_id ? t.items.map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : i.status === "held" ? "p-billed" : "p-ready"}">${i.status === "paid" ? "Paid" : i.status === "held" ? "Waiting" : "Owed"}</span></div>`).join("") : ""}</div>`; }).join("") || `<p class="hint">Nobody yet.</p>`}
     ${newAgent ? `<div class="dlead"><p class="hint">Send this to ${esc(newAgent.name.split(" ")[0])}:</p><div class="wa">${esc(newAgent.msg)}</div>
         <div class="row"><a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/234${newAgent.phone.slice(1)}?text=${encodeURIComponent(newAgent.msg)}">Send on WhatsApp</a><button class="btn btn-ghost" id="ag-done">Done</button></div></div>`
       : agentForm ? `<div class="dlead"><label for="ag-n">Name</label><input id="ag-n" autocomplete="off">
@@ -508,7 +509,7 @@ function renderAdmin() {
   view.querySelectorAll("[data-epgo]").forEach(b => b.onclick = async () => {
     b.disabled = true;
     const v = id => $(id).value || null;
-    const { error } = await sb.rpc("admin_set_shop_people", { p_shop: b.dataset.epgo, p_referred_by: v("#ep-r"), p_brought_by: v("#ep-b"), p_setup_by: v("#ep-b") });
+    const { error } = await sb.rpc("admin_set_shop_people", { p_shop: b.dataset.epgo, p_referred_by: v("#ep-r"), p_brought_by: v("#ep-b"), p_setup_by: v("#ep-s") });
     b.disabled = false;
     if (error) { toast(/REWARD_GIVEN/.test(error.message) ? "The free month was already given for this shop." : "Not saved. Please try again."); return; }
     editFor = null; toast("Saved"); dashAt = 0; loadDash();
@@ -1293,10 +1294,10 @@ function earningsHtml() {
   if (!myEarn) return "";
   const e = myEarn;
   return `<section class="scard"><h3 class="stitle">Your earnings</h3>
-    <p class="ssub">You're paid when a shop you brought pays for Tagbook. Per shop: ₦1,500 when it first pays, ₦3,000 once it has paid ₦6,000 in total, ₦1,500 more from day 30 if it's still logging orders, and ₦500 for each paid month, up to 12.</p>
-    <div class="dpay"><div><b>${naira(e.due)}</b><span>owed to you</span></div><div><b>${naira(e.paid)}</b><span>paid so far</span></div></div>
-    ${(e.items || []).map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : "p-billed"}">${i.status === "paid" ? "Paid" : "Owed"}</span></div>`).join("") || `<p class="hint">Nothing yet. You'll see money here once a shop you worked on starts paying.</p>`}
-    ${(e.shops || []).length ? `<h3 class="stitle" style="margin-top:14px">Your shops</h3>${e.shops.map(s => `<div class="staff-row"><div><b>${esc(s.name)}</b><span>Your shop</span></div><span class="pill ${s.paying ? "p-ready" : "p-billed"}">${s.paying ? "Paying" : "On trial"}</span></div>`).join("")}` : ""}
+    <p class="ssub">You're paid when a shop you worked on pays for Tagbook. Helper (demo and setup): ₦1,500 when the shop first pays, ₦1,500 more from day 30 if it's still logging orders. Agent (found and closed it): ₦3,000 once the shop has paid ₦6,000, plus ₦500 for each paid month, up to 12. Pay from a shop never goes above half of what that shop has paid; anything above that waits until it pays more.</p>
+    <div class="dpay"><div><b>${naira(e.due)}</b><span>owed to you</span></div>${e.held ? `<div><b>${naira(e.held)}</b><span>waiting on shops</span></div>` : ""}<div><b>${naira(e.paid)}</b><span>paid so far</span></div></div>
+    ${(e.items || []).map(i => `<div class="staff-row"><div><b>${naira(i.amount)} · ${esc(i.shop)}</b><span>${esc(i.what)} · ${longDay(i.due_on)}</span></div><span class="pill ${i.status === "paid" ? "p-collected" : i.status === "held" ? "p-billed" : "p-ready"}">${i.status === "paid" ? "Paid" : i.status === "held" ? "Waiting" : "Owed"}</span></div>`).join("") || `<p class="hint">Nothing yet. You'll see money here once a shop you worked on starts paying.</p>`}
+    ${(e.shops || []).length ? `<h3 class="stitle" style="margin-top:14px">${[s.brought ? "Agent" : "", s.setup ? "Helper" : ""].filter(Boolean).join(" · ")}s</h3>${e.shops.map(s => `<div class="staff-row"><div><b>${esc(s.name)}</b><span>Your shop</span></div><span class="pill ${s.paying ? "p-ready" : "p-billed"}">${s.paying ? "Paying" : "On trial"}</span></div>`).join("")}` : ""}
   </section>`;
 }
 function renderAgent() {
