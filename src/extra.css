@@ -336,3 +336,10 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .sinst .isteps{padding-left:22px;font-size:15px;line-height:1.5}
 .sinst .isteps li{margin-bottom:4px}
 .sinst .isteps svg{vertical-align:-3px}
+/* Referral line on Orders */
+.refl{display:flex;align-items:center;gap:10px;padding:12px 2px 2px;margin-top:8px;border-top:1px dashed var(--line);font-size:15px;color:var(--muted)}
+.refl .gift{width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent-deep);display:grid;place-items:center;flex:none}
+.refl p{margin:0;flex:1;line-height:1.35}
+.refl p b{color:var(--fg);font-weight:600}
+.refl .share{border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent-deep);font-weight:700;font-size:14px;border-radius:10px;padding:6px 12px;text-decoration:none;white-space:nowrap}
+.refl .x{border:0;background:none;color:var(--field);font-size:18px;line-height:1;cursor:pointer;padding:4px}

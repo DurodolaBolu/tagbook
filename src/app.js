@@ -288,10 +288,11 @@ function planHtml() {
        <div class="plans">${opts}</div>
        <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[planPick])} with Paystack</button>
        <p class="hint">Card, bank transfer or USSD. ${p.state === "free" ? "" : p.state === "trial" || p.state === "paid" ? `Paying early adds to the days you have left, so the new plan starts after ${longDay(p.until)}.` : "Logging opens again as soon as you pay."}</p>`))
-    + card("Refer a laundry, get a free month", "When a shop you bring to Tagbook starts paying, your next month is free. There's no limit.",
+    + card("Refer a laundry, get a month free", "When a shop you refer pays for Tagbook, your next month is free. Refer 12 and use Tagbook free for a year.",
       `<p class="pstate"><b>${refs.length} shop${refs.length === 1 ? "" : "s"} referred · ${p.free_months} free month${p.free_months === 1 ? "" : "s"} earned</b></p>
        ${refs.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Joined ${longDay(r.joined)}${r.reward_at ? ` · your free month was added ${longDay(r.reward_at)}` : " · free month comes when they start paying"}</span></div><span class="pill ${r.paying ? "p-ready" : "p-billed"}">${r.paying ? "Paying" : "On trial"}</span></div>`).join("")}
-       <a class="btn btn-ghost" target="_blank" rel="noopener" href="https://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hello Tagbook, we want to refer a laundry to you.\n\nShop name:\nOwner's phone:\n\nReferred by: ${shop.name}`)}">Refer a shop on WhatsApp</a>`)
+       <a class="btn btn-primary" target="_blank" rel="noopener" href="${refShareLink()}">Share with a laundry</a>
+       <a class="btn btn-ghost" target="_blank" rel="noopener" href="https://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hello Tagbook, we want to refer a laundry to you.\n\nShop name:\nOwner's phone:\n\nReferred by: ${shop.name}`)}">Or send us their details</a>`)
     + ((p.payments || []).length ? card("Payment history", "", p.payments.map(x => `<div class="staff-row"><div><b>${naira(x.amount)} · ${x.months} month${x.months === 1 ? "" : "s"}</b><span>${longDay(x.paid_at)}${x.method === "manual" ? " · paid to Tagbook directly" : " · Paystack"} · covered until ${longDay(x.paid_until)}</span></div></div>`).join("")) : "");
 }
 function wirePlan() {
@@ -642,6 +643,18 @@ function showInstall() {
   if (go_) go_.onclick = async () => { const e = installEvt; installEvt = null; bar.hidden = true; e.prompt(); try { const c = await e.userChoice; if (c.outcome !== "accepted") localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } };
   document.getElementById("instx").onclick = () => { try { localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } bar.hidden = true; };
 }
+/* ---------- Referral: share message + quiet line on Orders ---------- */
+const refShareLink = () => "https://wa.me/?text=" + encodeURIComponent(
+  `We now use Tagbook in our laundry to record customers' clothes, send bills on WhatsApp and see who still owes. It has made things easier for us.\n\nThe first month is free. Message them here and tell them ${shop.name} sent you:\nhttps://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hi, ${shop.name} referred me to Tagbook`)}`);
+const refLater = () => { try { return Date.now() - (+localStorage.getItem("tb-ref-later") || 0) < 30 * 864e5; } catch (_) { return false; } };
+const GIFT = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 1 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 1 1 0 5"/></svg>`;
+function refLine() {
+  if (!own() || !priv || !setupState().complete || orders.length < 10 || refLater()) return "";
+  return `<div class="refl"><span class="gift">${GIFT}</span><p><b>Know another laundry?</b> Refer them and get 1 month free.</p>
+    <a class="share" target="_blank" rel="noopener" href="${refShareLink()}">Share</a><button class="x" id="refx" aria-label="Hide for 30 days">✕</button></div>`;
+}
+function wireRefLine() { const x = $("#refx"); if (x) x.onclick = () => { try { localStorage.setItem("tb-ref-later", Date.now()); } catch (_) { } renderOrders(); }; }
+
 /* ---------- Owner's setup checklist on the Orders screen ---------- */
 let instOpen = false;
 const setupState = () => (priv && priv.setup) || {};
@@ -814,6 +827,7 @@ function renderOrders() {
     ${pages > 1 ? `<div class="pager"><button class="mini" id="pgprev" ${page === 0 ? "disabled" : ""} aria-label="Newer orders">‹ Newer</button>
       <span>${page * PER_PAGE + 1}–${page * PER_PAGE + shown.length} of ${list.length}</span>
       <button class="mini" id="pgnext" ${page >= pages - 1 ? "disabled" : ""} aria-label="Older orders">Older ›</button></div>` : ""}
+    ${refLine()}
     <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
   const toTop = () => { const t = $("#q"), sc = mainScroll(); if (t) sc.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top - (sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top) + sc.scrollTop - 12) }); };
   if ($("#pgprev")) $("#pgprev").onclick = () => { page--; renderOrders(); toTop(); };
@@ -822,7 +836,7 @@ function renderOrders() {
   view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; page = 0; renderOrders(); });
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
-  wirePlanBanner(view); wireInstallCard(); wireSetup();
+  wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine();
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
