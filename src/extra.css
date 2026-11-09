@@ -296,3 +296,12 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .dbank{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin:4px 0 8px;font-size:15px}
 .dbank .row{display:flex;gap:8px}
 .dbank .btn{width:auto;margin:0;padding:8px 12px;min-height:0;font-size:15px}
+.icard .ihead{display:flex;gap:12px;align-items:center}
+.icard .ihead img{width:44px;height:44px;border-radius:11px;flex:none}
+.icard .ihead b{display:block;font-size:16px}
+.icard .ihead span{font-size:14px;color:var(--muted);line-height:1.35}
+.icard .isteps{margin:12px 0 4px;padding-left:22px;font-size:15px;line-height:1.5}
+.icard .isteps li{margin-bottom:4px}
+.icard .isteps svg{vertical-align:-3px}
+.icard .row{display:flex;gap:8px;margin-top:8px}
+.icard .row .btn{margin:0}

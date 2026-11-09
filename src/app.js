@@ -634,7 +634,7 @@ function showInstall() {
   const bar = document.getElementById("installbar"); if (!bar) return;
   const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
-  if (isStandalone || installLater() || (!installEvt && !ios)) { bar.hidden = true; return; }
+  if (isStandalone || installLater() || (!installEvt && !ios) || (typeof me !== "undefined" && me)) { bar.hidden = true; return; }
   bar.innerHTML = `<img src="/icon-192.png" alt=""><div><b>Install Tagbook</b><span>${installEvt ? "Opens like an app, straight from your home screen." : "Tap the Share button <svg viewBox='0 0 24 24' width='15' height='15' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg> below, then <b>Add to Home Screen</b>."}</span></div>
     ${installEvt ? `<button id="instgo">Install</button>` : ""}<button id="instx" aria-label="Not now">×</button>`;
   bar.hidden = false;
@@ -642,7 +642,23 @@ function showInstall() {
   if (go_) go_.onclick = async () => { const e = installEvt; installEvt = null; bar.hidden = true; e.prompt(); try { const c = await e.userChoice; if (c.outcome !== "accepted") localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } };
   document.getElementById("instx").onclick = () => { try { localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } bar.hidden = true; };
 }
-window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; showInstall(); });
+/* After login: a card on the main screen until Tagbook is installed on this phone */
+const isPhone = () => /Android|iPhone|iPod/i.test(navigator.userAgent);
+const installCardLater = () => { try { return Date.now() - (+localStorage.getItem("tb-install-card") || 0) < 864e5; } catch (_) { return false; } };
+function installCard() {
+  if (standalone() || installCardLater() || (!installEvt && !isPhone())) return "";
+  const share = `<svg viewBox='0 0 24 24' width='16' height='16' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg>`;
+  const steps = installEvt ? "" : isIOS
+    ? `<ol class="isteps"><li>Tap the Share button ${share} ${/CriOS/.test(navigator.userAgent) ? "at the top right" : "at the bottom of the screen"}.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Then open Tagbook from your Home Screen.</li></ol>`
+    : `<ol class="isteps"><li>Tap the menu <b>⋮</b> at the top right of your browser.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li><li>Then open Tagbook from your Home Screen.</li></ol>`;
+  return `<section class="scard icard"><div class="ihead"><img src="/icon-192.png" alt=""><div><b>Install Tagbook on this phone</b><span>It opens like an app, stays logged in and can send you notifications.</span></div></div>
+    ${steps}<div class="row">${installEvt ? `<button class="btn btn-primary" id="icgo">Install</button>` : ""}<button class="btn btn-ghost" id="iclater">Later</button></div></section>`;
+}
+function wireInstallCard() {
+  if ($("#icgo")) $("#icgo").onclick = async () => { const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (_) { } render(); };
+  if ($("#iclater")) $("#iclater").onclick = () => { try { localStorage.setItem("tb-install-card", Date.now()); } catch (_) { } render(); };
+}
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; showInstall(); if (typeof me !== "undefined" && me && $("#view") && !standalone()) render(); });
 window.addEventListener("appinstalled", () => { installEvt = null; const b = document.getElementById("installbar"); if (b) b.hidden = true; toast("Tagbook installed. Open it from your home screen."); });
 setTimeout(showInstall, 1500);
 
@@ -720,6 +736,7 @@ function renderOrders() {
   const askPush = own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
   view.innerHTML = `
     ${planBanner()}
+    ${installCard()}
     ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
     ${own() ? `<div class="stats">
@@ -750,7 +767,7 @@ function renderOrders() {
   view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; page = 0; renderOrders(); });
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
-  wirePlanBanner(view);
+  wirePlanBanner(view); wireInstallCard();
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
