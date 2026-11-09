@@ -305,3 +305,34 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .icard .isteps svg{vertical-align:-3px}
 .icard .row{display:flex;gap:8px;margin-top:8px}
 .icard .row .btn{margin:0}
+/* Setup checklist */
+.setup .cl-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.setup .cl-top h3{margin:0;font-size:18px}
+.setup .count{font-size:14px;color:var(--muted);white-space:nowrap}
+.setup .segs{display:flex;gap:4px;margin:10px 0 6px}
+.setup .segs i{flex:1;height:6px;border-radius:99px;background:var(--wait-soft)}
+.setup .segs i.on{background:var(--accent)}
+.ssteps{list-style:none;margin:6px 0 4px;padding:0}
+.sstep{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.sstep:first-child{border-top:0}
+.sstep .tick{width:26px;height:26px;border-radius:50%;border:2px solid var(--field);flex:none;display:grid;place-items:center;color:transparent}
+.sstep.done .tick{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.sstep .txt{flex:1;min-width:0}
+.sstep .txt b{display:block;font-size:16px;font-weight:600}
+.sstep .txt span{display:block;font-size:14px;color:var(--muted);line-height:1.35}
+.sstep.done .txt b{color:var(--muted);font-weight:500}
+.sstep .go{border:0;background:var(--accent-soft);color:var(--accent-deep);font:inherit;font-weight:700;font-size:14px;border-radius:10px;padding:7px 12px;white-space:nowrap;cursor:pointer}
+.sstep.next{background:var(--accent-soft);margin:0 -10px;padding:10px;border-radius:12px;border-top-color:transparent}
+.sstep.next + .sstep, .sstep.next + .sinst + .sstep{border-top-color:transparent}
+.sstep.next .go{background:var(--accent);color:var(--accent-ink)}
+.sinst{list-style:none;padding:0 0 6px}
+.sinst .isteps{margin:6px 0 0}
+.linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:14px;padding:4px 0;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.sstep .txt .linkbtn{display:inline;padding:0;font-size:14px}
+.sdone{display:flex;gap:12px;align-items:center}
+.sdone .sbig{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.sdone b{display:block}
+.sdone span{font-size:14px;color:var(--muted)}
+.sinst .isteps{padding-left:22px;font-size:15px;line-height:1.5}
+.sinst .isteps li{margin-bottom:4px}
+.sinst .isteps svg{vertical-align:-3px}

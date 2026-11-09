@@ -642,17 +642,71 @@ function showInstall() {
   if (go_) go_.onclick = async () => { const e = installEvt; installEvt = null; bar.hidden = true; e.prompt(); try { const c = await e.userChoice; if (c.outcome !== "accepted") localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } };
   document.getElementById("instx").onclick = () => { try { localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } bar.hidden = true; };
 }
+/* ---------- Owner's setup checklist on the Orders screen ---------- */
+let instOpen = false;
+const setupState = () => (priv && priv.setup) || {};
+async function markSetup(k, v = true) {
+  if (!own() || !priv) return;
+  if (setupState()[k] === v) return;
+  priv.setup = { ...setupState(), [k]: v };
+  await sb.from("shop_private").update({ setup: priv.setup }).eq("shop_id", shop.id);
+}
+const setupLater = () => { try { return Date.now() - (+localStorage.getItem("tb-setup-later") || 0) < 864e5; } catch (_) { return false; } };
+function setupSteps() {
+  const st = setupState();
+  if (standalone() && !st.installed) markSetup("installed");
+  return [
+    { k: "login", t: "Log in", done: true },
+    { k: "install", t: "Install Tagbook on this phone", d: "So it opens like an app and can notify you.", go: "Show me", done: !!st.installed || standalone() || (!isPhone() && !installEvt) },
+    { k: "prices", t: "Check your price list", d: "Change any price that's different in your shop.", go: "Open", done: !!st.prices },
+    { k: "bank", t: "Add your bank details", d: "Your bill shows customers where to pay.", go: "Add", done: !!hasBank() },
+    { k: "staff", t: "Add your staff", d: "Each staff gets their own login.", go: "Add", done: staffList.some(x => x.role !== "owner") || !!st.alone, alone: true },
+    { k: "push", t: "Turn on notifications", d: "Get a buzz when staff log clothes.", go: "Turn on", done: pushSupported() && Notification.permission === "granted" },
+    { k: "order", t: "Log your first customer's clothes", d: "Try it with the next customer who walks in.", go: "Log", done: orders.length > 0 },
+  ];
+}
+function setupCard() {
+  if (!own() || !priv || setupState().complete || setupLater()) return "";
+  const steps = setupSteps(), n = steps.filter(x => x.done).length;
+  if (n === steps.length) { markSetup("complete"); return `<section class="scard sdone"><span class="sbig">${TICK}</span><div><b>Your shop is ready</b><span>Every customer's clothes, bill and payment, now in one place.</span></div></section>`; }
+  const next = steps.findIndex(x => !x.done);
+  return `<section class="scard setup"><div class="cl-top"><h3>Get your shop ready</h3><span class="count">${n} of ${steps.length} done</span></div>
+    <div class="segs">${steps.map(x => `<i class="${x.done ? "on" : ""}"></i>`).join("")}</div>
+    <ul class="ssteps">${steps.map((x, i) => `<li class="sstep ${x.done ? "done" : ""} ${i === next ? "next" : ""}">
+      <span class="tick">${TICK}</span><span class="txt"><b>${x.t}</b>${x.done ? "" : `<span>${x.d}${x.alone ? ` <button class="linkbtn" data-salone>I work alone</button>` : ""}</span>`}</span>
+      ${x.done ? "" : `<button class="go" data-sgo="${x.k}">${x.go}</button>`}</li>
+      ${x.k === "install" && !x.done && instOpen ? `<li class="sinst">${installSteps()}</li>` : ""}`).join("")}</ul>
+    <button class="linkbtn" id="slater">Hide for now</button></section>`;
+}
+const TICK = `<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function wireSetup() {
+  view.querySelectorAll("[data-sgo]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.sgo;
+    if (k === "install") { if (installEvt) { const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (_) { } } else instOpen = !instOpen; return renderOrders(); }
+    if (k === "prices") { await markSetup("prices"); setTab = "prices"; return go("shop"); }
+    if (k === "bank") { setTab = "business"; go("shop"); setTimeout(() => { const f = $("#an"); if (f) { f.scrollIntoView({ block: "center" }); f.focus(); } }, 250); return; }
+    if (k === "staff") { setTab = "staff"; return go("shop"); }
+    if (k === "push") { if (!pushSupported()) { toast(isIOS ? "Install Tagbook first (the step above), then open it from your Home Screen." : "This browser can't show notifications."); return; } await enablePush(); return renderOrders(); }
+    if (k === "order") return go("log");
+  });
+  const a = view.querySelector("[data-salone]"); if (a) a.onclick = async () => { await markSetup("alone"); renderOrders(); };
+  const l = $("#slater"); if (l) l.onclick = () => { try { localStorage.setItem("tb-setup-later", Date.now()); } catch (_) { } renderOrders(); };
+}
+
 /* After login: a card on the main screen until Tagbook is installed on this phone */
 const isPhone = () => /Android|iPhone|iPod/i.test(navigator.userAgent);
 const installCardLater = () => { try { return Date.now() - (+localStorage.getItem("tb-install-card") || 0) < 864e5; } catch (_) { return false; } };
 function installCard() {
   if (standalone() || installCardLater() || (!installEvt && !isPhone())) return "";
-  const share = `<svg viewBox='0 0 24 24' width='16' height='16' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg>`;
-  const steps = installEvt ? "" : isIOS
-    ? `<ol class="isteps"><li>Tap the Share button ${share} ${/CriOS/.test(navigator.userAgent) ? "at the top right" : "at the bottom of the screen"}.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Then open Tagbook from your Home Screen.</li></ol>`
-    : `<ol class="isteps"><li>Tap the menu <b>⋮</b> at the top right of your browser.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li><li>Then open Tagbook from your Home Screen.</li></ol>`;
+  const steps = installEvt ? "" : installSteps();
   return `<section class="scard icard"><div class="ihead"><img src="/icon-192.png" alt=""><div><b>Install Tagbook on this phone</b><span>It opens like an app, stays logged in and can send you notifications.</span></div></div>
     ${steps}<div class="row">${installEvt ? `<button class="btn btn-primary" id="icgo">Install</button>` : ""}<button class="btn btn-ghost" id="iclater">Later</button></div></section>`;
+}
+function installSteps() {
+  const share = `<svg viewBox='0 0 24 24' width='16' height='16' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg>`;
+  return isIOS
+    ? `<ol class="isteps"><li>Tap the Share button ${share} ${/CriOS/.test(navigator.userAgent) ? "at the top right" : "at the bottom of the screen"}.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Then open Tagbook from your Home Screen.</li></ol>`
+    : `<ol class="isteps"><li>Tap the menu <b>⋮</b> at the top right of your browser.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li><li>Then open Tagbook from your Home Screen.</li></ol>`;
 }
 function wireInstallCard() {
   if ($("#icgo")) $("#icgo").onclick = async () => { const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (_) { } render(); };
@@ -733,10 +787,11 @@ function renderOrders() {
   }).sort((a, b) => b.no - a.no);
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE)); if (page >= pages) page = pages - 1; if (page < 0) page = 0;
   const shown = list.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
-  const askPush = own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
+  const setupHtml = setupCard();
+  const askPush = !setupHtml.includes("setup") && own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
   view.innerHTML = `
     ${planBanner()}
-    ${installCard()}
+    ${setupHtml || installCard()}
     ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
     ${own() ? `<div class="stats">
@@ -767,7 +822,7 @@ function renderOrders() {
   view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; page = 0; renderOrders(); });
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
-  wirePlanBanner(view); wireInstallCard();
+  wirePlanBanner(view); wireInstallCard(); wireSetup();
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
@@ -1254,7 +1309,7 @@ function renderSettings() {
   if (setTab === "shops" && isAdmin) body = shopsHtml();
   view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
   wireBack(view);
-  view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
+  view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "prices") markSetup("prices"); if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
   if (setTab === "account") wireAccount();
   if (setTab === "business") wireBusiness();
   if (setTab === "branches") wireBranches();
