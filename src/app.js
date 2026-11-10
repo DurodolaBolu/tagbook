@@ -501,6 +501,7 @@ function renderAdmin() {
       <div class="stat"><b>${active}<small> of ${real.length}</small></b><span>Logged orders this week</span></div>
       <div class="stat"><b>${sum("today")}</b><span>Orders today</span></div>
       <div class="stat"><b>${sum("week")}</b><span>Orders, 7 days</span></div>
+      <div class="stat"><b>${sum("clothes").toLocaleString()}</b><span>Clothes logged · ${sum("clothes_week").toLocaleString()} this week</span></div>
       <div class="stat"><b>${trial}</b><span>On free trial</span></div>
       <div class="stat"><b>${naira(sum("paid_total"))}</b><span>Shops have paid us</span></div>
       <div class="stat"><b>${naira(real.length * PRICE_MONTH)}</b><span>Monthly, once all pay</span></div>
@@ -1085,6 +1086,10 @@ function renderNew() {
   function showErr(err) { const e = $("#saveerr"); e.textContent = err; e.hidden = false; toast(err); e.scrollIntoView({ block: "center", behavior: "smooth" }); }
 }
 
+/* Names typed or pasted in: drop invisible characters WhatsApp copies along, squeeze spaces. */
+const tidy = v => String(v || "").replace(/[\u200B-\u200F\u2060\uFEFF]/g, "").replace(/\s+/g, " ").trim();
+const NAME_MAX = 50;
+
 /* ---------- Messages ---------- */
 function billLines(o) {
   const k = calc(o);
@@ -1323,7 +1328,7 @@ async function callAdmin(body) {
   if (!error) return { ok: true, data };
   let code = ""; try { code = (await error.context.json()).error; } catch (_) { }
   const msgs = {
-    PHONE_IN_USE: "This phone number already has a Tagbook login.", BAD_PHONE: "The phone number must be 11 digits and start with 0.",
+    PHONE_IN_USE: "This phone number already has a Tagbook login.", NAME_TOO_LONG: "The shop name is too long. Keep it to 50 letters.", BAD_PHONE: "The phone number must be 11 digits and start with 0.",
     BAD_PIN: "The PIN must be 6 digits.", MISSING_NAME: "Type the name.", OWNER_ONLY: "Only the owner can do that.", CANNOT_REMOVE_SELF: "You can't remove yourself.",
   };
   return { ok: false, msg: msgs[code] || "Something went wrong. Check your internet and try again." };
@@ -1349,7 +1354,7 @@ function renderSettings() {
     + card("Log out", "", `<button class="btn btn-ghost" id="out" style="margin-top:0">Log out</button>`);
   if (setTab === "business") { const p = sPriv(); body =
     card("Business name", "Shown at the top of the app and in every WhatsApp message.",
-      `<input id="sn" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off" aria-label="Business name">`)
+      `<input id="sn" maxlength="${NAME_MAX}" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off" aria-label="Business name">`)
     + card("Bank account for payments", "Added to every invoice and payment reminder, so customers know where to pay.",
       `<label for="bn">Bank name</label><input id="bn" value="${esc(p.bank_name)}" placeholder="e.g. GTBank" autocomplete="off">
        <label for="an">Account number</label><input id="an" ${moneyAttrs} maxlength="10" value="${esc(p.acct_no)}" placeholder="10 digits">
@@ -1419,7 +1424,7 @@ function wireAccount() {
 }
 function wireBusiness() {
   const p = sPriv();
-  $("#sn").onchange = async e => { const v = e.target.value.trim().slice(0, 40); if (!v) { e.target.value = shop.name; return; } shop.name = v; $("#shopname").textContent = shopName(); savedToast(await put("shops", { id: shop.id }, { name: v })); };
+  $("#sn").onchange = async e => { const v = tidy(e.target.value).slice(0, NAME_MAX); if (!v) { e.target.value = shop.name; return; } shop.name = v; $("#shopname").textContent = shopName(); savedToast(await put("shops", { id: shop.id }, { name: v })); };
   const savePriv = async fields => { Object.assign(priv, fields); savedToast(await put("shop_private", { shop_id: shop.id }, fields)); };
   $("#bn").onchange = e => savePriv({ bank_name: e.target.value.trim().slice(0, 40) });
   $("#am").onchange = e => savePriv({ acct_name: e.target.value.trim().slice(0, 60) });
@@ -1443,7 +1448,7 @@ function wireStaff() {
   if ($("#nsfdone")) $("#nsfdone").onclick = () => { newStaff = null; renderSettings(); };
   if (!$("#sfa")) return;
   $("#sfa").onclick = async () => {
-    const name = $("#sfn").value.trim(), phone = digits($("#sfp").value), pin = digits($("#sfk").value);
+    const name = tidy($("#sfn").value), phone = digits($("#sfp").value), pin = digits($("#sfk").value);
     const err = !name ? "Type the staff member's name." : !/^0\d{10}$/.test(phone) ? "The phone number must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
     if (err) { toast(err); return; }
     $("#sfa").disabled = true; $("#sfa").textContent = "Adding…";
@@ -1515,9 +1520,9 @@ function shopsHtml() {
        <a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/234${newShop.phone.slice(1)}?text=${encodeURIComponent(newShop.msg)}">Send on WhatsApp</a>
        <div class="row"><button class="btn btn-ghost" id="nscopy">Copy</button><button class="btn btn-ghost" id="nsagain">Add another shop</button></div>`) : "";
   const form = newShop ? "" : card("Add a shop", "Creates the shop with the standard price list. The owner can change prices, add branches and staff in their own Settings.",
-      `<label for="as-n">Shop name</label><input id="as-n" placeholder="e.g. Saheed Dry Cleaners" autocomplete="off">
+      `<label for="as-n">Shop name</label><input id="as-n" placeholder="e.g. Saheed Dry Cleaners" autocomplete="off" maxlength="${NAME_MAX}"><p class="hint">Up to ${NAME_MAX} letters. It shows at the top of their app and on every bill, so shorter reads better ("&amp;" instead of "and", no "services").</p>
        <label for="as-b">Branches</label><input id="as-b" placeholder="Main branch" autocomplete="off"><p class="hint">Separate with commas, e.g. Main branch, Awule point, Oke-Ijebu point.</p>
-       <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" placeholder="e.g. Saheed" autocomplete="off"></div>
+       <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" placeholder="e.g. Saheed" autocomplete="off" maxlength="40"></div>
        <div><label for="as-op">Owner's phone</label><input id="as-op" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
        <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${genPinAttrs()}></div></div>
        <div class="sgrid">${agentMode() ? "" : `<div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>`}
@@ -1547,9 +1552,9 @@ function wireShops() {
   if ($("#as-no")) moneyInput($("#as-no"), () => { });
   if (!$("#as-go")) return;
   $("#as-go").onclick = async () => {
-    const shopName = $("#as-n").value.trim(), owner = $("#as-on").value.trim(), phone = digits($("#as-op").value), pin = digits($("#as-pin").value);
+    const shopName = tidy($("#as-n").value), owner = tidy($("#as-on").value), phone = digits($("#as-op").value), pin = digits($("#as-pin").value);
     const branches = $("#as-b").value.split(",").map(x => x.trim()).filter(Boolean);
-    const err = !shopName ? "Type the shop name." : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
+    const err = !shopName ? "Type the shop name." : shopName.length > NAME_MAX ? `Shop name is too long. Keep it to ${NAME_MAX} letters.` : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
     if (err) { toast(err); return; }
     $("#as-go").disabled = true; $("#as-go").textContent = "Creating…";
     const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t") ? $("#as-t").value || null : null, start_no: num($("#as-no").value) || 1, founding: $("#as-f") ? $("#as-f").checked : true, referred_by: $("#as-r").value || null,
