@@ -277,6 +277,10 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
   #login{max-width:none;width:100%;padding-left:max(16px,calc((100% - 408px) / 2));padding-right:max(16px,calc((100% - 408px) / 2))}
   #app{max-width:none;width:100%;margin:0;padding-left:max(16px,env(safe-area-inset-left,0px),calc((100% - 408px) / 2));padding-right:max(16px,env(safe-area-inset-right,0px),calc((100% - 408px) / 2));padding-bottom:28px}
   nav.tabs{position:relative;left:auto;right:auto;bottom:auto;flex:none;transform:none!important}
+  /* Shop name and buttons stay put at the top while the page scrolls under them */
+  #app{padding-top:0;scroll-padding-top:120px}
+  #app .topbar{position:static}
+  #app>header{position:sticky;top:0;z-index:4;background:var(--bg);padding-top:max(20px,env(safe-area-inset-top,0px));box-shadow:0 0 0 100vmax var(--bg);clip-path:inset(0 -100vmax)}
 }
 .dteam{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
 .dteam:first-of-type{border-top:0}
@@ -360,3 +364,8 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .tplayer b{display:block;margin-top:8px;font-size:16px}
 .tframe{width:100%;max-width:360px;margin:0 auto;aspect-ratio:9/16;max-height:72vh;border-radius:14px;overflow:hidden;background:#000}
 .tframe iframe{width:100%;height:100%;border:0;display:block}
+
+/* Videos button in the header: labelled so people notice it */
+#helpbtn{width:auto;padding:0 12px 0 9px;gap:6px;display:inline-flex;align-items:center;background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font:inherit;font-weight:700;font-size:15px}
+#helpbtn[hidden]{display:none}
+#helpbtn svg{width:20px;height:20px}

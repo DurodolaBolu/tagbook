@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261110071845";</script>
+<script>window.TB_BUILD="20261110073005";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -438,6 +438,10 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
   #login{max-width:none;width:100%;padding-left:max(16px,calc((100% - 408px) / 2));padding-right:max(16px,calc((100% - 408px) / 2))}
   #app{max-width:none;width:100%;margin:0;padding-left:max(16px,env(safe-area-inset-left,0px),calc((100% - 408px) / 2));padding-right:max(16px,env(safe-area-inset-right,0px),calc((100% - 408px) / 2));padding-bottom:28px}
   nav.tabs{position:relative;left:auto;right:auto;bottom:auto;flex:none;transform:none!important}
+  /* Shop name and buttons stay put at the top while the page scrolls under them */
+  #app{padding-top:0;scroll-padding-top:120px}
+  #app .topbar{position:static}
+  #app>header{position:sticky;top:0;z-index:4;background:var(--bg);padding-top:max(20px,env(safe-area-inset-top,0px));box-shadow:0 0 0 100vmax var(--bg);clip-path:inset(0 -100vmax)}
 }
 .dteam{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
 .dteam:first-of-type{border-top:0}
@@ -521,6 +525,11 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .tplayer b{display:block;margin-top:8px;font-size:16px}
 .tframe{width:100%;max-width:360px;margin:0 auto;aspect-ratio:9/16;max-height:72vh;border-radius:14px;overflow:hidden;background:#000}
 .tframe iframe{width:100%;height:100%;border:0;display:block}
+
+/* Videos button in the header: labelled so people notice it */
+#helpbtn{width:auto;padding:0 12px 0 9px;gap:6px;display:inline-flex;align-items:center;background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font:inherit;font-weight:700;font-size:15px}
+#helpbtn[hidden]{display:none}
+#helpbtn svg{width:20px;height:20px}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -529,14 +538,14 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <div class="app" id="app" hidden>
   <header>
     <div class="brand"><span id="shopname"></span><small>Tagbook</small></div>
-    <div class="hdr-r"><button id="helpbtn" class="gear" type="button" aria-label="How-to videos" title="How-to videos" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor"/></svg></button><button id="themebtn" class="gear" type="button"></button><button id="gear" class="gear" aria-label="Settings" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></div>
+    <div class="hdr-r"><button id="helpbtn" class="gear" type="button" aria-label="How-to videos" title="How-to videos" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>Videos</button><button id="themebtn" class="gear" type="button"></button><button id="gear" class="gear" aria-label="Settings" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></div>
   </header>
   <section id="view"></section>
 </div>
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261110071845"></script>
+<script src="/app.js?v=20261110073005"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
