@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261110073005";</script>
+<script>window.TB_BUILD="20261110073450";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -521,10 +521,15 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .ttxt b{display:block;font-size:16px;line-height:1.3}
 .ttxt span{font-size:13px;color:var(--muted)}
 .tcard .x{border:0;background:none;color:var(--field);font:inherit;font-size:14px;padding:6px;cursor:pointer;white-space:nowrap}
-.tplayer{margin:8px 0 6px}
-.tplayer b{display:block;margin-top:8px;font-size:16px}
-.tframe{width:100%;max-width:360px;margin:0 auto;aspect-ratio:9/16;max-height:72vh;border-radius:14px;overflow:hidden;background:#000}
+/* Video plays full screen over the app */
+.tplayer{position:fixed;inset:0;z-index:60;background:#000;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.tptop{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;color:#fff}
+.tptop b{flex:1;font-size:16px;line-height:1.3}
+.tclose{width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;font-size:20px;cursor:pointer;flex:none}
+.tframe{flex:1;min-height:0;width:100%}
 .tframe iframe{width:100%;height:100%;border:0;display:block}
+.tyt{color:#cfd8d5;text-align:center;font-size:14px;padding:10px;text-decoration:underline}
+body.tplaying nav.tabs{visibility:hidden}
 
 /* Videos button in the header: labelled so people notice it */
 #helpbtn{width:auto;padding:0 12px 0 9px;gap:6px;display:inline-flex;align-items:center;background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font:inherit;font-weight:700;font-size:15px}
@@ -545,7 +550,7 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261110073005"></script>
+<script src="/app.js?v=20261110073450"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

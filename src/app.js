@@ -611,6 +611,7 @@ function render() {
   const g = $("#gear"); g.hidden = false; g.onclick = () => go("shop"); g.setAttribute("aria-current", tab === "prices" ? "page" : "false");
   $("#tabs").innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" ${k === "new" ? 'class="new"' : ""} ${tab === k ? 'aria-current="page"' : ""}>${l}</button>`).join("");
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => go(TAB_HASH[b.dataset.tab]));
+  if (tab !== "help") document.body.classList.remove("tplaying");
   if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else if (tab === "admin") renderAdmin(); else if (tab === "agent") renderAgent(); else if (tab === "help") renderHelp(); else renderSettings();
   if (openNo) openOrder(openNo); else $("#sheet").hidden = true;
   document.body.classList.toggle("has-sheet", !!openNo);
@@ -662,7 +663,7 @@ function renderHelp() {
   const who = t => t.audience === "owner" ? "For owners" : t.audience === "staff" ? "For staff" : "For everyone";
   view.innerHTML = backBtn("Orders") + `
     <h2 class="vtitle">How-to videos</h2><p class="hint" style="margin-top:0">Short videos showing how to use Tagbook. Tap one to watch.</p>
-    ${play ? `<section class="tplayer"><div class="tframe"><iframe src="https://www.youtube.com/embed/${play.youtube_id}?autoplay=1&rel=0&playsinline=1&origin=${encodeURIComponent(location.origin)}" title="${esc(play.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><b>${esc(play.title)}</b><a class="linkbtn" href="https://youtu.be/${play.youtube_id}" target="_blank" rel="noopener">Not playing? Watch it on YouTube</a></section>` : ""}
+    ${play ? `<section class="tplayer" role="dialog" aria-label="${esc(play.title)}"><div class="tptop"><b>${esc(play.title)}</b><button class="tclose" id="tclose" aria-label="Close video">✕</button></div><div class="tframe"><iframe src="https://www.youtube.com/embed/${play.youtube_id}?autoplay=1&rel=0&playsinline=1&origin=${encodeURIComponent(location.origin)}" title="${esc(play.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><a class="tyt" href="https://youtu.be/${play.youtube_id}" target="_blank" rel="noopener">Not playing? Watch it on YouTube</a></section>` : ""}
     ${TUT_SEC.map(([k, h, sub]) => { const l = list.filter(t => t.section === k); return l.length ? `<h3 class="stitle tsec">${h}</h3>${sub ? `<p class="hint" style="margin-top:-4px">${sub}</p>` : ""}<div class="tlist">${l.map(t => `
       <div class="tcard ${play && play.id === t.id ? "on" : ""}"><button class="tbtn" data-tplay="${t.youtube_id}"><span class="tthumb"><img src="https://i.ytimg.com/vi/${t.youtube_id}/mqdefault.jpg" alt="" loading="lazy" onerror="this.remove()"><i>▶</i></span><span class="ttxt"><b>${esc(t.title)}</b><span>${who(t)}</span></span></button>
       ${isAdmin ? `<button class="x" data-tdel="${t.id}" aria-label="Remove video">${tutDel === t.id ? "Remove?" : "✕"}</button>` : ""}</div>`).join("")}</div>` : ""; }).join("") || `<p class="hint">No videos yet.</p>`}
@@ -674,7 +675,9 @@ function renderHelp() {
       <label for="tv-k">Show on setup step (optional)</label><select id="tv-k"><option value="">None</option><option value="install">Install</option><option value="prices">Price list</option><option value="bank">Bank details</option><option value="staff">Add staff</option><option value="push">Notifications</option><option value="order">First order</option></select>
       <button class="btn btn-primary" id="tv-go">Add video</button>`) : ""}`;
   wireBack(view);
-  view.querySelectorAll("[data-tplay]").forEach(b => b.onclick = () => { go("help-" + b.dataset.tplay); setTimeout(() => { const p = view.querySelector(".tplayer"); if (p) p.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); });
+  document.body.classList.toggle("tplaying", !!play);
+  const tc = $("#tclose"); if (tc) tc.onclick = () => go("help");
+  view.querySelectorAll("[data-tplay]").forEach(b => b.onclick = () => go("help-" + b.dataset.tplay));
   view.querySelectorAll("[data-tdel]").forEach(b => b.onclick = async () => {
     if (tutDel !== b.dataset.tdel) { tutDel = b.dataset.tdel; return renderHelp(); }
     const { error } = await sb.from("tutorials").delete().eq("id", b.dataset.tdel); tutDel = null;
