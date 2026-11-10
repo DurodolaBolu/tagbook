@@ -780,10 +780,11 @@ function renderOrders() {
   const owing = orders.reduce((s, o) => s + ((o.status === "told" || o.status === "picked") ? (own() ? owed(o) : 0) : 0), 0);
   const inShop = orders.filter(o => o.status !== "picked");
   const fl = own()
-    ? [["all", "All"], ["new", "Send list"], ["ready", "Ready, not told"], ["owed", "Owing"], ["picked", "Picked up"]]
+    ? [["all", "All"], ["new", "Send list"], ["work", "In progress"], ["ready", "Ready, not told"], ["owed", "Owing"], ["picked", "Picked up"]]
     : [["all", "All"], ["work", "In progress"], ["ready", "Ready"], ["picked", "Picked up"]];
   const inF = (o, f) => {
-    if (f === "work" && !(o.status === "new" || o.status === "listed")) return false;
+    // Owner: "In progress" = list sent, being washed (new ones sit under "Send list"). Staff: everything not yet ready.
+    if (f === "work" && !(own() ? o.status === "listed" : (o.status === "new" || o.status === "listed"))) return false;
     if (f === "new" && o.status !== "new") return false;
     if (f === "ready" && !(own() ? o.status === "ready" : (o.status === "ready" || o.status === "told"))) return false;
     if (f === "owed" && !((o.status === "told" || o.status === "picked") && owed(o))) return false;
