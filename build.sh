@@ -36,7 +36,7 @@ $(cat src/extra.css)
 <div class="app" id="app" hidden>
   <header>
     <div class="brand"><span id="shopname"></span><small>Tagbook</small></div>
-    <div class="hdr-r"><button id="themebtn" class="gear" type="button"></button>$GEAR</div>
+    <div class="hdr-r"><button id="helpbtn" class="gear" type="button" aria-label="How-to videos" title="How-to videos" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor"/></svg></button><button id="themebtn" class="gear" type="button"></button>$GEAR</div>
   </header>
   <section id="view"></section>
 </div>

@@ -579,7 +579,7 @@ function renderAdmin() {
   };
 }
 /* ---------- Navigation ---------- */
-const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports", admin: "admin", agent: "setup" };
+const TAB_HASH = { orders: "orders", new: "log", prices: "shop", reports: "reports", admin: "admin", agent: "setup", help: "help" };
 function go(h) { if (location.hash.slice(1) === h) route(); else location.hash = h; }
 function route() {
   if (!me) return;
@@ -587,6 +587,7 @@ function route() {
   const m = h.match(/^order-(\d+)$/);
   if (m && orders.some(o => o.no === +m[1])) { tab = "orders"; openNo = +m[1]; }
   else if (h === "plan") { openNo = null; tab = "prices"; setTab = own() ? "plan" : "account"; }
+  else if (h === "help" || h.startsWith("help-")) { openNo = null; tab = "help"; helpPlay = h.startsWith("help-") ? h.slice(5) : null; }
   else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : (h === "admin" && isAdmin) ? "admin" : (h === "setup" && isAgent) ? "agent" : "orders"; }
   render();
 }
@@ -606,10 +607,11 @@ function render() {
   const th = $("#themebtn"), dark = theme() === "dark";
   th.innerHTML = dark ? SUN : MOON; th.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode"); th.title = th.getAttribute("aria-label");
   th.onclick = () => { try { localStorage.setItem("tb-theme", dark ? "light" : "dark"); } catch (_) { } render(); };
+  const hb = $("#helpbtn"); if (hb) { hb.hidden = false; hb.onclick = () => go("help"); hb.setAttribute("aria-current", tab === "help" ? "page" : "false"); }
   const g = $("#gear"); g.hidden = false; g.onclick = () => go("shop"); g.setAttribute("aria-current", tab === "prices" ? "page" : "false");
   $("#tabs").innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" ${k === "new" ? 'class="new"' : ""} ${tab === k ? 'aria-current="page"' : ""}>${l}</button>`).join("");
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => go(TAB_HASH[b.dataset.tab]));
-  if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else if (tab === "admin") renderAdmin(); else if (tab === "agent") renderAgent(); else renderSettings();
+  if (tab === "orders") renderOrders(); else if (tab === "new") renderNew(); else if (tab === "reports") renderReports(); else if (tab === "admin") renderAdmin(); else if (tab === "agent") renderAgent(); else if (tab === "help") renderHelp(); else renderSettings();
   if (openNo) openOrder(openNo); else $("#sheet").hidden = true;
   document.body.classList.toggle("has-sheet", !!openNo);
 }
@@ -643,6 +645,54 @@ function showInstall() {
   if (go_) go_.onclick = async () => { const e = installEvt; installEvt = null; bar.hidden = true; e.prompt(); try { const c = await e.userChoice; if (c.outcome !== "accepted") localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } };
   document.getElementById("instx").onclick = () => { try { localStorage.setItem("tb-install-later", Date.now()); } catch (_) { } bar.hidden = true; };
 }
+/* ---------- How-to videos (YouTube) ---------- */
+let tuts = null, tutsBusy = false, helpPlay = null, tutDel = null;
+async function loadTuts(force) {
+  if ((tuts && !force) || tutsBusy) return tuts;
+  tutsBusy = true;
+  try { const { data } = await sb.from("tutorials").select("*").order("sort").order("created_at"); tuts = data || []; } catch (_) { tuts = tuts || []; }
+  tutsBusy = false; return tuts;
+}
+const myTuts = () => (tuts || []).filter(t => t.audience === "all" || (own() ? t.audience === "owner" : t.audience === "staff") || isAdmin);
+const ytId = v => { const m = String(v || "").trim().match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([A-Za-z0-9_-]{11})/) || String(v || "").trim().match(/^([A-Za-z0-9_-]{11})$/); return m ? m[1] : null; };
+const TUT_SEC = [["start", "Getting started", "Watch these once when you begin."], ["daily", "Every day", "The jobs you do with every customer."], ["more", "More", ""]];
+function renderHelp() {
+  if (!tuts) { view.innerHTML = backBtn("Orders") + `<p class="hint">Loading videos…</p>`; wireBack(view); loadTuts().then(() => { if (tab === "help") renderHelp(); }); return; }
+  const list = myTuts(), play = helpPlay && list.find(t => t.youtube_id === helpPlay);
+  const who = t => t.audience === "owner" ? "For owners" : t.audience === "staff" ? "For staff" : "For everyone";
+  view.innerHTML = backBtn("Orders") + `
+    <h2 class="vtitle">How-to videos</h2><p class="hint" style="margin-top:0">Short videos showing how to use Tagbook. Tap one to watch.</p>
+    ${play ? `<section class="tplayer"><div class="tframe"><iframe src="https://www.youtube-nocookie.com/embed/${play.youtube_id}?autoplay=1&rel=0&playsinline=1&modestbranding=1" title="${esc(play.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div><b>${esc(play.title)}</b></section>` : ""}
+    ${TUT_SEC.map(([k, h, sub]) => { const l = list.filter(t => t.section === k); return l.length ? `<h3 class="stitle tsec">${h}</h3>${sub ? `<p class="hint" style="margin-top:-4px">${sub}</p>` : ""}<div class="tlist">${l.map(t => `
+      <div class="tcard ${play && play.id === t.id ? "on" : ""}"><button class="tbtn" data-tplay="${t.youtube_id}"><span class="tthumb"><img src="https://i.ytimg.com/vi/${t.youtube_id}/mqdefault.jpg" alt="" loading="lazy" onerror="this.remove()"><i>▶</i></span><span class="ttxt"><b>${esc(t.title)}</b><span>${who(t)}</span></span></button>
+      ${isAdmin ? `<button class="x" data-tdel="${t.id}" aria-label="Remove video">${tutDel === t.id ? "Remove?" : "✕"}</button>` : ""}</div>`).join("")}</div>` : ""; }).join("") || `<p class="hint">No videos yet.</p>`}
+    ${isAdmin ? card("Add a video", "Paste a YouTube link. Only you see this form.", `
+      <label for="tv-l">YouTube link</label><input id="tv-l" placeholder="https://youtu.be/..." autocomplete="off">
+      <label for="tv-t">Title</label><input id="tv-t" placeholder="e.g. How to record a payment" maxlength="120">
+      <div class="sgrid"><div><label for="tv-s">Section</label><select id="tv-s"><option value="daily">Every day</option><option value="start">Getting started</option><option value="more">More</option></select></div>
+      <div><label for="tv-a">Who it's for</label><select id="tv-a"><option value="all">Everyone</option><option value="owner">Owners</option><option value="staff">Staff</option></select></div></div>
+      <label for="tv-k">Show on setup step (optional)</label><select id="tv-k"><option value="">None</option><option value="install">Install</option><option value="prices">Price list</option><option value="bank">Bank details</option><option value="staff">Add staff</option><option value="push">Notifications</option><option value="order">First order</option></select>
+      <button class="btn btn-primary" id="tv-go">Add video</button>`) : ""}`;
+  wireBack(view);
+  view.querySelectorAll("[data-tplay]").forEach(b => b.onclick = () => { go("help-" + b.dataset.tplay); setTimeout(() => { const p = view.querySelector(".tplayer"); if (p) p.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); });
+  view.querySelectorAll("[data-tdel]").forEach(b => b.onclick = async () => {
+    if (tutDel !== b.dataset.tdel) { tutDel = b.dataset.tdel; return renderHelp(); }
+    const { error } = await sb.from("tutorials").delete().eq("id", b.dataset.tdel); tutDel = null;
+    if (error) toast("Not removed. Please try again."); else { toast("Video removed"); await loadTuts(true); } renderHelp();
+  });
+  const add = $("#tv-go"); if (add) add.onclick = async () => {
+    const id = ytId($("#tv-l").value), title = $("#tv-t").value.trim();
+    if (!id) return toast("That doesn't look like a YouTube link.");
+    if (title.length < 3) return toast("Type a title for the video.");
+    const sec = $("#tv-s").value, sort = 10 + Math.max(0, ...(tuts || []).filter(t => t.section === sec).map(t => t.sort));
+    add.disabled = true;
+    const { error } = await sb.from("tutorials").insert({ youtube_id: id, title, section: sec, audience: $("#tv-a").value, step_key: $("#tv-k").value || null, sort });
+    add.disabled = false;
+    if (error) return toast("Not saved. Please try again.");
+    toast("Video added"); await loadTuts(true); renderHelp();
+  };
+}
+
 /* ---------- Referral: share message + quiet line on Orders ---------- */
 const refShareLink = () => "https://wa.me/?text=" + encodeURIComponent(
   `We now use Tagbook in our laundry to record customers' clothes, send bills on WhatsApp and see who still owes. It has made things easier for us.\n\nThe first month is free. Message them here and tell them ${shop.name} sent you:\nhttps://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hi, ${shop.name} referred me to Tagbook`)}`);
@@ -678,15 +728,17 @@ function setupSteps() {
     { k: "order", t: "Log your first customer's clothes", d: "Try it with the next customer who walks in.", go: "Log", done: orders.length > 0 },
   ];
 }
+const tutFor = k => { const t = (tuts || []).find(t => t.step_key === k && (t.audience !== "staff")); return t ? t.youtube_id : null; };
 function setupCard() {
   if (!own() || !priv || setupState().complete || setupLater()) return "";
+  if (!tuts && !tutsBusy) loadTuts().then(() => { if (tab === "orders" && !openNo) renderOrders(); });
   const steps = setupSteps(), n = steps.filter(x => x.done).length;
   if (n === steps.length) { markSetup("complete"); return `<section class="scard sdone"><span class="sbig">${TICK}</span><div><b>Your shop is ready</b><span>Every customer's clothes, bill and payment, now in one place.</span></div></section>`; }
   const next = steps.findIndex(x => !x.done);
   return `<section class="scard setup"><div class="cl-top"><h3>Get your shop ready</h3><span class="count">${n} of ${steps.length} done</span></div>
     <div class="segs">${steps.map(x => `<i class="${x.done ? "on" : ""}"></i>`).join("")}</div>
     <ul class="ssteps">${steps.map((x, i) => `<li class="sstep ${x.done ? "done" : ""} ${i === next ? "next" : ""}">
-      <span class="tick">${TICK}</span><span class="txt"><b>${x.t}</b>${x.done ? "" : `<span>${x.d}${x.alone ? ` <button class="linkbtn" data-salone>I work alone</button>` : ""}</span>`}</span>
+      <span class="tick">${TICK}</span><span class="txt"><b>${x.t}</b>${x.done ? "" : `<span>${x.d}${x.alone ? ` <button class="linkbtn" data-salone>I work alone</button>` : ""}${tutFor(x.k) ? ` <button class="linkbtn" data-watch="${tutFor(x.k)}">Watch how</button>` : ""}</span>`}</span>
       ${x.done ? "" : `<button class="go" data-sgo="${x.k}">${x.go}</button>`}</li>
       ${x.k === "install" && !x.done && instOpen ? `<li class="sinst">${installSteps()}</li>` : ""}`).join("")}</ul>
     <button class="linkbtn" id="slater">Hide for now</button></section>`;
@@ -702,6 +754,7 @@ function wireSetup() {
     if (k === "push") { if (!pushSupported()) { toast(isIOS ? "Install Tagbook first (the step above), then open it from your Home Screen." : "This browser can't show notifications."); return; } await enablePush(); return renderOrders(); }
     if (k === "order") return go("log");
   });
+  view.querySelectorAll("[data-watch]").forEach(b => b.onclick = () => go("help-" + b.dataset.watch));
   const a = view.querySelector("[data-salone]"); if (a) a.onclick = async () => { await markSetup("alone"); renderOrders(); };
   const l = $("#slater"); if (l) l.onclick = () => { try { localStorage.setItem("tb-setup-later", Date.now()); } catch (_) { } renderOrders(); };
 }
@@ -1280,7 +1333,7 @@ let resetFor = null, setTab = "business", priceOpen = null, priceQ = "", addOpen
 const wide = window.matchMedia("(min-width: 900px)");
 wide.addEventListener("change", () => { if (me && tab === "prices") renderSettings(); });
 const SET_TABS = [["business", "Business"], ["plan", "Plan & billing"], ["prices", "Price list"], ["staff", "Staff"], ["branches", "Branches"], ["account", "My account"]];
-const card = (title, sub, body) => `<section class="scard"><h3 class="stitle">${title}</h3>${sub ? `<p class="ssub">${sub}</p>` : ""}${body}</section>`;
+const card = (title, sub, body) => `<section class="scard"><h3 class="stitle">${title}</h3>${sub ? `<p class="hint" style="margin-top:-4px">${sub}</p>` : ""}${body}</section>`;
 const shortSvc = { wi: "Wash & iron", wo: "Wash", io: "Iron", wsi: "Starch" };
 function renderSettings() {
   if (!own()) setTab = "account";

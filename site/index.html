@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261110010159";</script>
+<script>window.TB_BUILD="20261110071845";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -504,6 +504,23 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .refl p b{color:var(--fg);font-weight:600}
 .refl .share{border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent-deep);font-weight:700;font-size:14px;border-radius:10px;padding:6px 12px;text-decoration:none;white-space:nowrap}
 .refl .x{border:0;background:none;color:var(--field);font-size:18px;line-height:1;cursor:pointer;padding:4px}
+/* How-to videos */
+.vtitle{font-size:22px;margin:4px 0 2px}
+.tsec{margin-top:18px}
+.tlist{display:grid;gap:10px;margin-bottom:6px}
+.tcard{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:14px;padding:8px}
+.tcard.on{box-shadow:inset 0 0 0 2px var(--accent)}
+.tbtn{flex:1;display:flex;gap:12px;align-items:center;background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;min-width:0}
+.tthumb{position:relative;width:120px;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--wait-soft);flex:none}
+.tthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.tthumb i{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;color:#fff;font-size:18px;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.ttxt b{display:block;font-size:16px;line-height:1.3}
+.ttxt span{font-size:13px;color:var(--muted)}
+.tcard .x{border:0;background:none;color:var(--field);font:inherit;font-size:14px;padding:6px;cursor:pointer;white-space:nowrap}
+.tplayer{margin:8px 0 6px}
+.tplayer b{display:block;margin-top:8px;font-size:16px}
+.tframe{width:100%;max-width:360px;margin:0 auto;aspect-ratio:9/16;max-height:72vh;border-radius:14px;overflow:hidden;background:#000}
+.tframe iframe{width:100%;height:100%;border:0;display:block}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -512,14 +529,14 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 <div class="app" id="app" hidden>
   <header>
     <div class="brand"><span id="shopname"></span><small>Tagbook</small></div>
-    <div class="hdr-r"><button id="themebtn" class="gear" type="button"></button><button id="gear" class="gear" aria-label="Settings" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></div>
+    <div class="hdr-r"><button id="helpbtn" class="gear" type="button" aria-label="How-to videos" title="How-to videos" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor"/></svg></button><button id="themebtn" class="gear" type="button"></button><button id="gear" class="gear" aria-label="Settings" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></div>
   </header>
   <section id="view"></section>
 </div>
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261110010159"></script>
+<script src="/app.js?v=20261110071845"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
