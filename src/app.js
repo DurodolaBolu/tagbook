@@ -636,7 +636,7 @@ function showInstall() {
   const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
   if (isStandalone || installLater() || (!installEvt && !ios) || (typeof me !== "undefined" && me)) { bar.hidden = true; return; }
-  bar.innerHTML = `<img src="/icon-192.png" alt=""><div><b>Install Tagbook</b><span>${installEvt ? "Opens like an app, straight from your home screen." : "Tap the Share button <svg viewBox='0 0 24 24' width='15' height='15' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg> below, then <b>Add to Home Screen</b>."}</span></div>
+  bar.innerHTML = `<img src="/icon-192.png" alt=""><div><b>Install Tagbook</b><span>${installEvt ? "Opens like an app, straight from your home screen." : "Tap the Share button <svg viewBox='0 0 24 24' width='15' height='15' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg> (or tap <b>⋯</b> first, then Share), then <b>Add to Home Screen</b>."}</span></div>
     ${installEvt ? `<button id="instgo">Install</button>` : ""}<button id="instx" aria-label="Not now">×</button>`;
   bar.hidden = false;
   const go_ = document.getElementById("instgo");
@@ -718,7 +718,7 @@ function installCard() {
 function installSteps() {
   const share = `<svg viewBox='0 0 24 24' width='16' height='16' aria-label='Share'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7'/></svg>`;
   return isIOS
-    ? `<ol class="isteps"><li>Tap the Share button ${share} ${/CriOS/.test(navigator.userAgent) ? "at the top right" : "at the bottom of the screen"}.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Then open Tagbook from your Home Screen.</li></ol>`
+    ? `<ol class="isteps"><li>Tap the Share button ${share} ${/CriOS/.test(navigator.userAgent) ? "at the top right" : "at the bottom of the screen"}. Don't see it? Tap <b>⋯</b> at the bottom right first, then <b>Share</b>.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Then open Tagbook from your Home Screen.</li></ol>`
     : `<ol class="isteps"><li>Tap the menu <b>⋮</b> at the top right of your browser.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li><li>Then open Tagbook from your Home Screen.</li></ol>`;
 }
 function wireInstallCard() {
@@ -1341,7 +1341,7 @@ async function drawPushBox() {
     on: `<p class="pushon">On for this phone</p><button class="btn btn-ghost" id="pushoff">Turn off on this phone</button>`,
     off: `<button class="btn btn-primary" id="pushgo">Turn on notifications</button>`,
     blocked: `<p class="hint">Notifications are blocked for Tagbook on this phone. Allow them in your phone's settings (Site settings → Notifications), then come back here.</p>`,
-    "ios-install": `<p class="hint">On iPhone: tap Share, then “Add to Home Screen”. Open Tagbook from the Home Screen and turn notifications on here.</p>`,
+    "ios-install": `<p class="hint">On iPhone: tap Share (or ⋯ then Share), then “Add to Home Screen”. Open Tagbook from the Home Screen and turn notifications on here.</p>`,
     unsupported: `<p class="hint">This browser can't show notifications. Use Chrome on your phone.</p>`,
   }[st];
   if (!$("#pushbox")) return;
