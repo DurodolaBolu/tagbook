@@ -281,7 +281,9 @@ ${i}${t.m.paid?`
 
 Payment received: ${T(t.m.paid)}`:""}
 
-We will let you know when your clothes are ready, and send your bill with it.`}let a=je().length>1&&Zr(t.branch)?`
+We will let you know when your clothes are ready, and send your bill with it.
+
+_Sent with Tagbook_`}let a=je().length>1&&Zr(t.branch)?`
 Collect at: ${Zr(t.branch)}`:"";return e==="ready"?`Hello ${n}, your clothes are ready at ${Xt()}.${a}
 
 INVOICE INV-${t.no}
@@ -295,9 +297,12 @@ ${Nu(t)}
 Total: ${T(t.m.total)}${t.m.paid?`
 Paid: ${T(t.m.paid)}`:""}${V(t)?`
 Amount to pay: ${T(V(t))}${to()}`:`
-Fully paid. Thank you.`}`:`Hello ${n}, a reminder from ${Xt()}: invoice INV-${t.no} (clothes dropped ${ge(t.at)}) has ${T(V(t))} still to pay.${to()}
+Fully paid. Thank you.`}
 
-Thank you.`}var Lu=t=>v(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g,"$1<i>$2</i>").replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g,"$1<b>$2</b>"),Du=(t,e)=>{let s=Ws(t.cid).phone;return(s?"https://wa.me/234"+s.slice(1):"https://wa.me/")+"?text="+encodeURIComponent(e)},Uu={list:"list of clothes",ready:"clothes ready, with invoice",owe:"payment reminder"};function Jr(t,e,s){return`<p class="wa-label">WhatsApp to customer: ${Uu[e]}</p>
+_Sent with Tagbook_`:`Hello ${n}, a reminder from ${Xt()}: invoice INV-${t.no} (clothes dropped ${ge(t.at)}) has ${T(V(t))} still to pay.${to()}
+
+Thank you.
+_Sent with Tagbook_`}var Lu=t=>v(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g,"$1<i>$2</i>").replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g,"$1<b>$2</b>"),Du=(t,e)=>{let s=Ws(t.cid).phone;return(s?"https://wa.me/234"+s.slice(1):"https://wa.me/")+"?text="+encodeURIComponent(e)},Uu={list:"list of clothes",ready:"clothes ready, with invoice",owe:"payment reminder"};function Jr(t,e,s){return`<p class="wa-label">WhatsApp to customer: ${Uu[e]}</p>
     <div class="wa" id="wamsg-${e}">${Lu(ua(t,e))}</div>
     <a class="btn btn-primary" href="${Du(t,ua(t,e))}" target="_blank" rel="noopener">Open in WhatsApp</a>
     <div class="row"><button class="btn btn-ghost" data-copy="${e}">Copy</button>${s?`<button class="btn btn-ghost" data-done="${e}">I've sent it</button>`:""}</div>
