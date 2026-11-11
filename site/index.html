@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261110210720";</script>
+<script>window.TB_BUILD="20261111054146";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -441,7 +441,11 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
   /* Shop name and buttons stay put at the top while the page scrolls under them */
   #app{padding-top:0;scroll-padding-top:120px}
   #app .topbar{position:static}
-  #app>header{position:sticky;top:0;z-index:4;background:var(--bg);padding-top:max(20px,env(safe-area-inset-top,0px));box-shadow:0 0 0 100vmax var(--bg);clip-path:inset(0 -100vmax)}
+  /* The side strips are painted by a pseudo-element, not a huge box-shadow: iPhones on iOS 16 don't clip
+     that shadow and it covered the whole screen. #app clips sideways so the strips never cause sideways scroll. */
+  #app{overflow-x:hidden}
+  #app>header{position:sticky;top:0;z-index:4;background:var(--bg);padding-top:max(20px,env(safe-area-inset-top,0px))}
+  #app>header::before{content:"";position:absolute;top:0;bottom:0;left:-100vw;right:-100vw;background:var(--bg);z-index:-1}
 }
 .dteam{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
 .dteam:first-of-type{border-top:0}
@@ -550,7 +554,7 @@ body.tplaying nav.tabs{visibility:hidden}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261110210720"></script>
+<script src="/app.js?v=20261111054146"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
