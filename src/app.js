@@ -938,7 +938,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
+function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", specialPrice: 0, paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -1030,6 +1030,8 @@ function renderNew() {
     <div class="picker">${pickable.map(p => `<button data-add="${p.id}">${esc(p.name)}${p.custom ? "<small>Wedding gown, curtain</small>" : ""}</button>`).join("")}</div>
     ${d.askSpecial ? `<div class="check" style="margin-top:8px"><label for="sp" style="margin-top:0">What is the special item?</label>
       <input id="sp" placeholder="e.g. Wedding gown" value="${esc(d.specialName)}" autocomplete="off">
+      ${own() ? `<label for="spp">Price for ${SERVICES[d.svc].toLowerCase()} (₦)</label><input id="spp" ${moneyAttrs} placeholder="e.g. 5000" value="${d.specialPrice || ""}">
+      <p class="hint">With a price, it's also added to your price list, so next time just tap it. Leave it empty to set the price on the bill.</p>` : ""}
       <div class="row"><button class="btn btn-ghost" id="spc">Cancel</button><button class="btn btn-primary" id="spa" ${d.specialName.trim() ? "" : "disabled"}>Add item</button></div></div>` : ""}
     <div class="items">${d.items.map((it, i) => `
       <div class="item"><span>${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>
@@ -1080,11 +1082,33 @@ function renderNew() {
   view.querySelectorAll("[data-svc]").forEach(b => b.onclick = () => { d.svc = b.dataset.svc; renderNew(); });
   view.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
     const id = b.dataset.add;
-    if ((item(id) || {}).custom) { d.askSpecial = id; d.specialName = ""; renderNew(); $("#sp").focus(); return; }
+    if ((item(id) || {}).custom) { d.askSpecial = id; d.specialName = ""; d.specialPrice = 0; renderNew(); $("#sp").focus(); return; }
     const f = d.items.find(i => i.id === id && i.svc === d.svc && !i.label); f ? f.qty++ : d.items.push({ id, svc: d.svc, qty: 1 }); renderNew();
   });
   if ($("#spc")) $("#spc").onclick = () => { d.askSpecial = false; renderNew(); };
-  if ($("#spa")) $("#spa").onclick = () => { d.items.push({ id: d.askSpecial, svc: d.svc, qty: 1, label: d.specialName.trim().slice(0, 40) }); d.askSpecial = false; renderNew(); };
+  const spp = $("#spp"); if (spp) spp.oninput = e => { const c = digits(e.target.value); d.specialPrice = num(c); if (e.target.value !== c) e.target.value = c; };
+  if ($("#spa")) $("#spa").onclick = async () => {
+    const name = tidy(d.specialName).slice(0, 40), price = own() ? d.specialPrice : 0;
+    if (!price) { d.items.push({ id: d.askSpecial, svc: d.svc, qty: 1, label: name }); d.askSpecial = false; renderNew(); return; }
+    // Owner gave a price: it becomes a normal item on the price list, so next time it's one tap.
+    const btn = $("#spa"); btn.disabled = true; btn.textContent = "Adding…";
+    let it = PRICES.find(x => !x.custom && x.name.toLowerCase() === name.toLowerCase());
+    if (it) {
+      const pr = { ...(it.p || {}), [d.svc]: price }, svcs = [...new Set([...(it.services || []), d.svc])];
+      const ok = await put("items", { id: it.id }, { services: svcs, hidden: false }) && await put("item_prices", { item_id: it.id }, { prices: pr });
+      if (!ok) { btn.disabled = false; btn.textContent = "Add item"; return; }
+    } else {
+      const sort = Math.max(0, ...PRICES.filter(x => !x.custom).map(x => x.sort)) + 1;
+      const { data, error } = await sb.from("items").insert({ shop_id: shop.id, name, services: [d.svc], sort }).select("id").single();
+      if (error) { toast(failMsg(error)); btn.disabled = false; btn.textContent = "Add item"; return; }
+      const r2 = await sb.from("item_prices").insert({ item_id: data.id, shop_id: shop.id, prices: { [d.svc]: price } });
+      if (r2.error) { toast(failMsg(r2.error)); btn.disabled = false; btn.textContent = "Add item"; return; }
+      it = { id: data.id };
+    }
+    try { await load(); } catch (_) { }
+    d.items.push({ id: it.id, svc: d.svc, qty: 1 }); d.askSpecial = false; d.specialPrice = 0;
+    toast(`${name} added to your price list at ${naira(price)}`); renderNew();
+  };
   view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => { d.items[+b.dataset.inc].qty++; renderNew(); });
   view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => { const i = +b.dataset.dec; d.items[i].qty--; if (!d.items[i].qty) d.items.splice(i, 1); renderNew(); });
   $("#clr").onclick = () => { reset(); renderNew(); };

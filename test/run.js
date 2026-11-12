@@ -208,6 +208,14 @@ async function handle(route) {
   await page.screenshot({ path: path.join(out, "11d-owner-order2-bill.png") });
   console.log("auto-billed order shows:", (await page.textContent("#bill")).trim());
   await T("#sheet [data-back]");
+  // owner logs a special item with a price: it lands on the price list
+  {
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(500);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(400); await T("[data-pick]"); await page.waitForTimeout(200);
+    const sp = db.items.find(x => x.custom); await T(`[data-add="${sp.id}"]`); await page.fill("#sp", "Curtain big"); await page.fill("#spp", "4500"); await shot("29-special-price"); await T("#spa"); await page.waitForTimeout(500);
+    const ni = db.items.find(x => x.name === "Curtain big"); const np = ni && db.item_prices.find(x => x.item_id === ni.id);
+    console.log("special item added to price list:", !!ni, np && JSON.stringify(np.prices), "| on order as normal item:", await page.isVisible(`[data-add="${ni && ni.id}"]`));
+  }
   // owner edits clothes, edits customer, cancels and restores an order
   {
     const o = db.orders.find(x => x.status !== "picked") || db.orders[0]; console.log("edit test order:", o.no, o.status); await page.goto("http://localhost:8787/#order-" + o.no); await page.waitForTimeout(500);
