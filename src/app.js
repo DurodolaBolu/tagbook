@@ -977,7 +977,7 @@ function customerBlock() {
     const clash = d.hasMark === "yes" && d.mark && markTaken(d.mark);
     b += `<label for="nm">Customer name</label><input id="nm" placeholder="e.g. Bola Ogun" value="${esc(d.name)}" autocomplete="off">
       <label>How do you greet them in messages?</label>${greetChips(d.greet, "data-gr")}
-      <p class="hint" style="margin-top:4px">${d.greet ? `Messages will start "${hello({ greet: d.greet })},"` : `Messages will start "Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},"`}</p>
+      <p class="gprev">Messages will start: <b>${d.greet ? `${hello({ greet: d.greet })},` : `Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},`}</b></p>
       <label>Does this customer already have a mark on their clothes?</label>
       <div class="chips" style="margin:0"><button class="chip" data-hm="yes" aria-pressed="${d.hasMark === "yes"}">Yes, use it</button><button class="chip" data-hm="no" aria-pressed="${d.hasMark === "no"}">No, give one</button></div>
       ${d.hasMark === "yes" ? `<label for="mk">Their mark</label><input id="mk" placeholder="e.g. BL" value="${esc(d.mark)}" autocomplete="off">
