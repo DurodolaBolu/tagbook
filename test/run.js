@@ -67,7 +67,7 @@ async function handle(route) {
     m.paid = nw; m.payments.push({ amt: added, at: Date.now(), method: body.p_method, by: me.name }); o.settled = !!m.billed_at && m.paid >= m.total; global.lastPay = { by: me.role, added, method: body.p_method };
     return send(200, me.role === "owner" ? { added, paid: nw, total: m.total, billed: !!m.billed_at } : { added, settled: o.settled });
   }
-  if (p === "/rest/v1/rpc/owner_set_greet") { db.customers.find(c => c.id === body.p_customer).greet = body.p_greet; return send(200, { ok: true, greet: body.p_greet }); }
+  if (p === "/rest/v1/rpc/owner_set_greet") { const cc = db.customers.find(c => c.id === body.p_customer); cc.greet = body.p_greet; cc.greet_asked = true; return send(200, { ok: true, greet: body.p_greet }); }
   if (p === "/rest/v1/rpc/owner_cancel_order") { const o = db.orders.find(x => x.id === body.p_order); if (body.p_cancel && o.status === "picked") return send(400, { message: "PICKED_UP" }); o.cancelled_at = body.p_cancel ? new Date().toISOString() : null; o.cancelled_by = body.p_cancel ? "Bolu" : null; return send(200, { ok: true }); }
   if (p === "/rest/v1/rpc/owner_edit_customer") { const taken = db.customer_phones.find(x => x.phone === body.p_phone && x.customer_id !== body.p_customer); if (taken) return send(400, { message: "PHONE_TAKEN:" + db.customers.find(c => c.id === taken.customer_id).name });
     db.customers.find(c => c.id === body.p_customer).name = body.p_name; const ph = db.customer_phones.find(x => x.customer_id === body.p_customer); ph.phone = body.p_phone; return send(200, { ok: true, name: body.p_name, phone: body.p_phone }); }
@@ -81,7 +81,7 @@ async function handle(route) {
     if (x.customer_id) c = db.customers.find(cc => cc.id === x.customer_id);
     else if (ph) c = db.customers.find(cc => cc.id === ph.customer_id);
     else { const clash = db.customers.find(cc => cc.mark === x.mark); if (clash) return send(400, { message: "MARK_TAKEN:" + clash.name, code: "P0001" });
-      c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, greet: x.greet || null, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
+      c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, greet: (current === ownerId && x.greet) || null, greet_asked: current === ownerId && "greet" in x, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
     const no = db.shops[0].next_no++; const id = uid();
     db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, express: x.express, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
     let auto = !x.express && !x.pickup, unit = [], total = 0;
@@ -146,7 +146,7 @@ async function handle(route) {
   console.log("push banner for staff:", await page.isVisible("#pushon"));
   await T("#tabs button.new"); await shot("02b-log-empty"); await T("#cnew");
   await page.fill("#ph", "08011112222"); await page.waitForTimeout(400);
-  await page.fill("#nm", "Ade Bello"); await T('[data-gr="boss"]'); await page.evaluate(() => document.querySelector(".gchips").scrollIntoView({ block: "center" })); await shot("02c-greet"); await T('[data-hm="no"]');
+  await page.fill("#nm", "Ade Bello"); console.log("staff sees greeting question (expect false):", await page.isVisible(".gchips")); await T('[data-hm="no"]');
   await T('[data-add="it0"]'); await T('[data-add="it0"]'); await T('[data-svc="wo"]'); await T('[data-add="it1"]');
   await T('[data-add="it3"]'); await page.fill("#sp", "Wedding gown"); await T("#spa");
   await page.selectOption("#br", "b2");
@@ -179,13 +179,16 @@ async function handle(route) {
   await page.reload(); await page.waitForTimeout(10500); console.log("no internet shows:", (await page.textContent("#view")).slice(0, 60), "| login shown:", await page.isVisible("#lf"));
   await ctx.unroute(SB + "/**"); await ctx.route(SB + "/**", handle);
   await page.click("#retry"); await page.waitForTimeout(10000); console.log("after retry logged in:", await page.isVisible("#tabs button"));
-  await T(".order"); await shot("08-owner-order");
+  await T(".order"); await page.evaluate(() => { const g = document.querySelector(".gask"); if (g) g.scrollIntoView({ block: "center" }); }); await shot("08-owner-order");
   await T('[data-done="list"]').catch(() => {});
   console.log("status after list sent attempt:", db.orders[0].status);
   await page.fill('[data-cp="2"]', "6000"); await page.fill("#dl", "1500"); await T("#ex"); await T("#bill"); await page.waitForTimeout(400);
   const mm = db.order_money[0]; console.log("bill:", JSON.stringify({ total: mm.total, unit: mm.unit, exp: mm.express_amt, billed: db.orders[0].billed }));
   await shot("09-owner-billed");
   // message
+  console.log("owner asked to pick greeting before sending:", await page.isVisible(".gask"), "| send hidden:", !(await page.isVisible("#wamsg-ready")));
+  await page.evaluate(() => document.querySelector(".gask").scrollIntoView({ block: "center" })); await shot("08b-ask-greeting");
+  await T('#sheet [data-og="boss"]'); await page.waitForTimeout(300); console.log("greet saved:", db.customers[0].greet, db.customers[0].greet_asked);
   const waText = await page.textContent("#sheet");
   console.log("ready msg has invoice:", waText.includes("INVOICE INV-1"), "greets Boss:", waText.includes("Hello Boss,"), "no name line:", !waText.includes("Customer: Ade"), "has bank:", waText.includes("0123456789"));
   await T('[data-done="ready"]'); console.log("status:", db.orders[0].status);

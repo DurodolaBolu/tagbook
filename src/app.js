@@ -63,7 +63,7 @@ async function load() {
     sb.from("shops").select("id,name,created_at,is_test").single(),
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
-    fetchAll("customers", "id,name,mark,greet"),
+    fetchAll("customers", "id,name,mark,greet,greet_asked"),
     fetchAll("orders", "id,no,customer_id,branch_id,items,express,pickup,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
   ]);
   if (base[0].error) throw base[0].error;
@@ -976,8 +976,8 @@ function customerBlock() {
   else if (d.phone.length === 11 && d.found === null) {
     const clash = d.hasMark === "yes" && d.mark && markTaken(d.mark);
     b += `<label for="nm">Customer name</label><input id="nm" placeholder="e.g. Bola Ogun" value="${esc(d.name)}" autocomplete="off">
-      <label>How do you greet them in messages?</label>${greetChips(d.greet, "data-gr")}
-      <p class="gprev">Messages will start: <b>${d.greet ? `${hello({ greet: d.greet })},` : `Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},`}</b></p>
+      ${own() ? `<label>How do you greet them in messages?</label>${greetChips(d.greet, "data-gr")}
+      <p class="gprev">Messages will start: <b>${d.greet ? `${hello({ greet: d.greet })},` : `Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},`}</b></p>` : ""}
       <label>Does this customer already have a mark on their clothes?</label>
       <div class="chips" style="margin:0"><button class="chip" data-hm="yes" aria-pressed="${d.hasMark === "yes"}">Yes, use it</button><button class="chip" data-hm="no" aria-pressed="${d.hasMark === "no"}">No, give one</button></div>
       ${d.hasMark === "yes" ? `<label for="mk">Their mark</label><input id="mk" placeholder="e.g. BL" value="${esc(d.mark)}" autocomplete="off">
@@ -1081,7 +1081,7 @@ function renderNew() {
     if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
     const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
     const base = { branch_id: d.branch, items: d.items.map(i => ({ ...i })), express: d.express, pickup: d.pickup, paid: d.paid || 0, method: d.method };
-    const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark, greet: d.greet || null };
+    const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark, ...(own() ? { greet: d.greet || null } : {}) };
     d.saving = true; renderNew();
     const { data, error } = await sb.rpc("log_order", { p });
     d.saving = false;
@@ -1123,6 +1123,10 @@ const waFmt = t => esc(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<i>$2</i>").r
 const wa = (o, t) => { const p = cust(o.cid).phone; return (p ? "https://wa.me/234" + p.slice(1) : "https://wa.me/") + "?text=" + encodeURIComponent(t); };
 const MSG_NAMES = { list: "list of clothes", ready: "clothes ready, with invoice", owe: "payment reminder" };
 function waBlock(o, type, markable) {
+  const c = cust(o.cid);
+  // Staff don't decide how a customer is greeted, so the owner answers once before the first message goes out.
+  if (own() && c.id && !c.greet_asked) return `<div class="gask"><p class="wa-label" style="margin-top:0;color:var(--fg);font-size:15px">Before you send: how do you greet ${esc(c.name)} in messages?</p>
+    ${greetChips("-", "data-og")}<p class="hint">Asked once per customer. You can change it later under More, Edit customer.</p></div>`;
   return `<p class="wa-label">WhatsApp to customer: ${MSG_NAMES[type]}</p>
     <div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div>
     <a class="btn btn-primary" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>
@@ -1260,9 +1264,9 @@ function fixView(o) {
     if (!/^0\d{10}$/.test(phone)) { toast("The phone number must be 11 digits and start with 0."); return; }
     cs.disabled = true; cs.textContent = "Saving…";
     const { data, error } = await sb.rpc("owner_edit_customer", { p_customer: o.cid, p_name: name, p_phone: phone });
-    if (!error && (fxGreet || "") !== (c.greet || "")) { const g = await sb.rpc("owner_set_greet", { p_customer: o.cid, p_greet: fxGreet || null }); if (g.error) { toast(failMsg(g.error)); cs.disabled = false; cs.textContent = "Save"; return; } }
+    if (!error && ((fxGreet || "") !== (c.greet || "") || !c.greet_asked)) { const g = await sb.rpc("owner_set_greet", { p_customer: o.cid, p_greet: fxGreet || null }); if (g.error) { toast(failMsg(g.error)); cs.disabled = false; cs.textContent = "Save"; return; } }
     if (error) { const t = /PHONE_TAKEN:(.*)/.exec(error.message || ""); toast(t ? `That number already belongs to ${t[1]}.` : failMsg(error)); cs.disabled = false; cs.textContent = "Save"; return; }
-    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.name = data.name; cc.phone = data.phone; cc.greet = fxGreet || null; }
+    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.name = data.name; cc.phone = data.phone; if ((fxGreet || "") !== (c.greet || "") || !c.greet_asked) { cc.greet = fxGreet || null; cc.greet_asked = true; } }
     oMode = null; toast("Customer updated"); openOrder(o.no); if (tab === "orders") renderOrders();
   };
   const cx = $("#fxcancel"); if (cx) cx.onclick = async () => {
@@ -1347,6 +1351,13 @@ function openOrder(no) {
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
   wireBack(sh); wireFix(sh, o);
+  sh.querySelectorAll("[data-og]").forEach(b => b.onclick = async () => {
+    sh.querySelectorAll("[data-og]").forEach(x => x.disabled = true);
+    const { error } = await sb.rpc("owner_set_greet", { p_customer: o.cid, p_greet: b.dataset.og || null });
+    if (error) { toast(failMsg(error)); sh.querySelectorAll("[data-og]").forEach(x => x.disabled = false); return; }
+    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.greet = b.dataset.og || null; cc.greet_asked = true; }
+    openOrder(o.no);
+  });
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
   sh.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
