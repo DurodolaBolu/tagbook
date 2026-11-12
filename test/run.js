@@ -188,9 +188,9 @@ async function handle(route) {
   // message
   console.log("owner asked to pick greeting before sending:", await page.isVisible(".gask"), "| send hidden:", !(await page.isVisible("#wamsg-ready")));
   await page.evaluate(() => document.querySelector(".gask").scrollIntoView({ block: "center" })); await shot("08b-ask-greeting");
-  await T('#sheet [data-og="boss"]'); await page.waitForTimeout(300); console.log("greet saved:", db.customers[0].greet, db.customers[0].greet_asked);
+  await T('#sheet [data-og="__other"]'); await page.fill("#data-og-txt", "Alhaji"); await T("#og-save"); await page.waitForTimeout(300); console.log("greet saved:", db.customers[0].greet, db.customers[0].greet_asked);
   const waText = await page.textContent("#sheet");
-  console.log("ready msg has invoice:", waText.includes("INVOICE INV-1"), "greets Boss:", waText.includes("Hello Boss,"), "no name line:", !waText.includes("Customer: Ade"), "has bank:", waText.includes("0123456789"));
+  console.log("ready msg has invoice:", waText.includes("INVOICE INV-1"), "greets Alhaji:", waText.includes("Hello Alhaji,"), "no name line:", !waText.includes("Customer: Ade"), "has bank:", waText.includes("0123456789"));
   await T('[data-done="ready"]'); console.log("status:", db.orders[0].status);
   await page.fill("#pay", "5000"); await T("#pp"); await page.waitForTimeout(300);
   console.log("money after part pay:", db.order_money[0].paid, "settled:", db.orders[0].settled);

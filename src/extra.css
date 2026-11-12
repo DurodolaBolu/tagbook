@@ -406,3 +406,4 @@ body.tplaying nav.tabs{visibility:hidden}
 .gprev{margin:10px 0 0;display:inline-block;background:var(--accent-soft);color:var(--accent-deep);border-radius:10px;padding:7px 12px;font-size:14px}
 .gprev b{font-weight:700}
 .gask{background:var(--card);border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;margin:16px 0 8px}
+.gtxt{margin-top:8px}

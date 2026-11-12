@@ -37,9 +37,17 @@ const branchName = id => (BRANCHES.find(b => b.id === id) || {}).name || "";
 const liveBranches = () => BRANCHES.filter(b => b.active);
 const cust = id => customers.find(c => c.id === id) || { name: "Customer", mark: "?", phone: "" };
 // Many shops save customers as "Lexus 350" or "Tailor", so messages can greet them as Sir, Ma, Boss and so on.
-const GREETS = [["", "Their name"], ["sir", "Sir"], ["ma", "Ma"], ["boss", "Boss"], ["chairman", "Chairman"], ["prof", "Prof"], ["doctor", "Doctor"], ["aunty", "Aunty"], ["uncle", "Uncle"]];
-const hello = c => c.greet ? `Hello ${c.greet === "sir" || c.greet === "ma" ? c.greet : c.greet[0].toUpperCase() + c.greet.slice(1)}` : `Hello ${c.name.split(" ")[0]}`;
-const greetChips = (cur, attr) => `<div class="chips gchips" role="group" aria-label="How do you greet them in messages?">${GREETS.map(([k, v]) => `<button type="button" class="chip" ${attr}="${k}" aria-pressed="${(cur || "") === k}">${v}</button>`).join("")}</div>`;
+const GREETS = [["", "Their name"], ["sir", "Sir"], ["ma", "Ma"], ["chief", "Chief"], ["boss", "Boss"], ["chairman", "Chairman"], ["prof", "Prof"], ["doctor", "Doctor"], ["aunty", "Aunty"], ["uncle", "Uncle"]];
+const isPreset = g => GREETS.some(([k]) => k === (g || ""));
+const greetWord = g => g === "sir" || g === "ma" ? g : isPreset(g) ? g[0].toUpperCase() + g.slice(1) : g;
+const hello = c => c.greet ? `Hello ${greetWord(c.greet)}` : `Hello ${c.name.split(" ")[0]}`;
+// cur: the chosen greeting ("" = their name, "-" = nothing chosen yet). other: the "Other" box is open.
+const greetChips = (cur, attr, other) => {
+  const custom = other || (cur && cur !== "-" && !isPreset(cur));
+  return `<div class="chips gchips" role="group" aria-label="How do you greet them in messages?">${GREETS.map(([k, v]) => `<button type="button" class="chip" ${attr}="${k}" aria-pressed="${!custom && (cur || "") === k}">${v}</button>`).join("")}<button type="button" class="chip" ${attr}="__other" aria-pressed="${!!custom}">Other</button></div>
+    ${custom ? `<input id="${attr}-txt" class="gtxt" maxlength="20" placeholder="Type it, e.g. Alhaji, Pastor, Engineer" value="${esc(cur && cur !== "-" && !isPreset(cur) ? cur : "")}" autocomplete="off">` : ""}`;
+};
+const cleanGreet = v => tidy(v).replace(/[^A-Za-z .'-]/g, "").slice(0, 20);
 const BANKS = ["Access Bank", "ALAT by Wema", "Carbon", "Citibank", "Ecobank", "FairMoney", "Fidelity Bank", "First Bank", "FCMB", "Globus Bank", "GTBank", "Jaiz Bank", "Keystone Bank", "Kuda", "Lotus Bank", "Moniepoint", "Opay", "Optimus Bank", "Paga", "Palmpay", "Parallex Bank", "Polaris Bank", "Premium Trust Bank", "Providus Bank", "Signature Bank", "Stanbic IBTC", "Standard Chartered", "Sterling Bank", "SunTrust Bank", "Taj Bank", "Titan Trust Bank", "UBA", "Union Bank", "Unity Bank", "VFD Microfinance Bank", "Wema Bank", "Zenith Bank"];
 const bankList = id => `<datalist id="${id}">${BANKS.map(b => `<option value="${b}"></option>`).join("")}</datalist>`;
 const item = id => PRICES.find(x => x.id === id);
@@ -915,7 +923,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
+function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -976,8 +984,8 @@ function customerBlock() {
   else if (d.phone.length === 11 && d.found === null) {
     const clash = d.hasMark === "yes" && d.mark && markTaken(d.mark);
     b += `<label for="nm">Customer name</label><input id="nm" placeholder="e.g. Bola Ogun" value="${esc(d.name)}" autocomplete="off">
-      ${own() ? `<label>How do you greet them in messages?</label>${greetChips(d.greet, "data-gr")}
-      <p class="gprev">Messages will start: <b>${d.greet ? `${hello({ greet: d.greet })},` : `Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},`}</b></p>` : ""}
+      ${own() ? `<label>How do you greet them in messages?</label>${greetChips(d.greet, "data-gr", d.greetOther)}
+      <p class="gprev" id="gprev">Messages will start: <b>${d.greet ? `${hello({ greet: d.greet })},` : d.greetOther ? "Hello …," : `Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},`}</b></p>` : ""}
       <label>Does this customer already have a mark on their clothes?</label>
       <div class="chips" style="margin:0"><button class="chip" data-hm="yes" aria-pressed="${d.hasMark === "yes"}">Yes, use it</button><button class="chip" data-hm="no" aria-pressed="${d.hasMark === "no"}">No, give one</button></div>
       ${d.hasMark === "yes" ? `<label for="mk">Their mark</label><input id="mk" placeholder="e.g. BL" value="${esc(d.mark)}" autocomplete="off">
@@ -1044,7 +1052,8 @@ function renderNew() {
   if ($("#cuse")) $("#cuse").onclick = () => { const f = d.found; d.cust = { id: f.id, name: f.name, mark: f.mark }; d.newMode = false; d.phone = ""; d.found = undefined; renderNew(); };
   keep("#ph", v => { const nv = digits(v).slice(0, 11); if (nv !== d.phone) { d.phone = nv; d.found = undefined; if (nv.length === 11) lookup(nv); } });
   keep("#nm", v => d.name = v.replace(/[^a-z\s'-]/gi, ""));
-  view.querySelectorAll("[data-gr]").forEach(b => b.onclick = () => { d.greet = b.dataset.gr; renderNew(); });
+  view.querySelectorAll("[data-gr]").forEach(b => b.onclick = () => { const v = b.dataset.gr; d.greetOther = v === "__other"; d.greet = d.greetOther ? "" : v; renderNew(); if (d.greetOther) { const t = $("#data-gr-txt"); if (t) t.focus(); } });
+  const gt = $("#data-gr-txt"); if (gt) gt.oninput = e => { d.greet = cleanGreet(e.target.value); const pv = $("#gprev b"); if (pv) pv.textContent = d.greet ? `Hello ${d.greet},` : "Hello …,"; };
   keep("#mk", v => d.mark = v.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase());
   keep("#sp", v => d.specialName = v);
   const pd = $("#pd"); if (pd) pd.oninput = e => { const c = digits(e.target.value); const had = !!d.paid; d.paid = num(c); if (e.target.value !== c) e.target.value = c; if (had !== !!d.paid) { const p = e.target.selectionStart; renderNew(); const n = $("#pd"); n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } } };
@@ -1126,7 +1135,7 @@ function waBlock(o, type, markable) {
   const c = cust(o.cid);
   // Staff don't decide how a customer is greeted, so the owner answers once before the first message goes out.
   if (own() && c.id && !c.greet_asked) return `<div class="gask"><p class="wa-label" style="margin-top:0;color:var(--fg);font-size:15px">Before you send: how do you greet ${esc(c.name)} in messages?</p>
-    ${greetChips("-", "data-og")}<p class="hint">Asked once per customer. You can change it later under More, Edit customer.</p></div>`;
+    ${greetChips("-", "data-og", ogOther)}${ogOther ? `<button class="btn btn-primary" id="og-save" style="margin-top:8px">Save</button>` : ""}<p class="hint">Asked once per customer. You can change it later under More, Edit customer.</p></div>`;
   return `<p class="wa-label">WhatsApp to customer: ${MSG_NAMES[type]}</p>
     <div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div>
     <a class="btn btn-primary" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>
@@ -1144,14 +1153,14 @@ const payForm = (ph, full) => `${full ? `<button class="btn btn-primary" id="ppa
 const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
 
 /* ---------- Owner only: edit clothes, edit customer, cancel an order (kept on record) ---------- */
-let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false, fxGreet = "";
+let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false, fxGreet = "", fxOther = false, ogOther = false;
 const canFix = o => own() && !o.cancelled && o.status !== "picked";
 const orderTop = o => `<div class="topbar otop"><button class="back" data-back>← All orders</button>${canFix(o) ? `<button class="omore" id="omore" aria-expanded="${oMenu}" aria-haspopup="menu">More ⋯</button>` : ""}
   ${oMenu && canFix(o) ? `<div class="omenu" role="menu"><button role="menuitem" data-om="items">Edit clothes</button><button role="menuitem" data-om="cust">Edit customer</button><button role="menuitem" class="red" data-om="cancel">Cancel order</button></div>` : ""}</div>`;
 function wireFix(root, o) {
   const m = root.querySelector("#omore"); if (m) m.onclick = () => { oMenu = !oMenu; openOrder(o.no); };
   root.querySelectorAll("[data-om]").forEach(b => b.onclick = () => {
-    oMenu = false; oMode = b.dataset.om; fxAdd = false; fxGreet = cust(o.cid).greet || "";
+    oMenu = false; oMode = b.dataset.om; fxAdd = false; fxGreet = cust(o.cid).greet || ""; fxOther = false;
     if (oMode === "items") oDraft = o.items.map((it, i) => ({ ...it, from: i }));
     openOrder(o.no);
   });
@@ -1203,7 +1212,7 @@ function fixView(o) {
       <p class="hint" style="margin-top:0">This changes the name and phone on ${others > 1 ? `all ${others} of ${esc(first)}'s orders` : `${esc(first)}'s orders`}.</p>
       <label for="fxn">Name</label><input id="fxn" value="${esc(c.name)}" autocomplete="off" maxlength="60">
       <label for="fxp">Phone</label><input id="fxp" type="text" inputmode="tel" value="${esc(c.phone)}" autocomplete="off">
-      <label>How do you greet them in messages?</label>${greetChips(fxGreet, "data-fg")}
+      <label>How do you greet them in messages?</label>${greetChips(fxGreet, "data-fg", fxOther)}
       <p class="fxnote">Their mark stays <b>${esc(c.mark)}</b>, because it is already written inside their clothes.</p>
       <div class="row"><button class="btn btn-ghost" id="fxback2">Back</button><button class="btn btn-primary" id="fxcsave">Save</button></div>`;
   } else if (oMode === "cancel") {
@@ -1257,10 +1266,12 @@ function fixView(o) {
       openOrder(o.no); if (tab === "orders") renderOrders();
     };
   }
-  sh.querySelectorAll("[data-fg]").forEach(b => b.onclick = () => { const n = $("#fxn").value, ph = $("#fxp").value; fxGreet = b.dataset.fg; fixView(o); $("#fxn").value = n; $("#fxp").value = ph; });
+  sh.querySelectorAll("[data-fg]").forEach(b => b.onclick = () => { const n = $("#fxn").value, ph = $("#fxp").value; fxOther = b.dataset.fg === "__other"; fxGreet = fxOther ? "" : b.dataset.fg; fixView(o); $("#fxn").value = n; $("#fxp").value = ph; if (fxOther) $("#data-fg-txt").focus(); });
+  if ($("#data-fg-txt")) $("#data-fg-txt").oninput = e => { fxGreet = cleanGreet(e.target.value); };
   const cs = $("#fxcsave"); if (cs) cs.onclick = async () => {
     const name = tidy($("#fxn").value), phone = digits($("#fxp").value);
     if (!name) { toast("Type the customer's name"); return; }
+    if (fxOther && !fxGreet) { toast("Type how you greet them, or pick one"); return; }
     if (!/^0\d{10}$/.test(phone)) { toast("The phone number must be 11 digits and start with 0."); return; }
     cs.disabled = true; cs.textContent = "Saving…";
     const { data, error } = await sb.rpc("owner_edit_customer", { p_customer: o.cid, p_name: name, p_phone: phone });
@@ -1281,7 +1292,7 @@ function fixView(o) {
 /* ---------- Order detail ---------- */
 function openOrder(no) {
   const o = orders.find(x => x.no === no) || cancelledOrders.find(x => x.no === no); if (!o) { go("orders"); return; }
-  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; }
+  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; }
   if (o.cancelled || oMode) { fixView(o); return; }
   const c = cust(o.cid), k = calc(o), sh = $("#sheet");
   if (own() && !o.notified) { o.notified = true; put("orders", { id: o.id }, { notified: true }); }
@@ -1351,13 +1362,15 @@ function openOrder(no) {
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
   wireBack(sh); wireFix(sh, o);
-  sh.querySelectorAll("[data-og]").forEach(b => b.onclick = async () => {
-    sh.querySelectorAll("[data-og]").forEach(x => x.disabled = true);
-    const { error } = await sb.rpc("owner_set_greet", { p_customer: o.cid, p_greet: b.dataset.og || null });
-    if (error) { toast(failMsg(error)); sh.querySelectorAll("[data-og]").forEach(x => x.disabled = false); return; }
-    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.greet = b.dataset.og || null; cc.greet_asked = true; }
-    openOrder(o.no);
-  });
+  const setGreet = async g => {
+    sh.querySelectorAll("[data-og],#og-save").forEach(x => x.disabled = true);
+    const { data, error } = await sb.rpc("owner_set_greet", { p_customer: o.cid, p_greet: g || null });
+    if (error) { toast(failMsg(error)); sh.querySelectorAll("[data-og],#og-save").forEach(x => x.disabled = false); return; }
+    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.greet = (data && data.greet) || null; cc.greet_asked = true; }
+    ogOther = false; openOrder(o.no);
+  };
+  sh.querySelectorAll("[data-og]").forEach(b => b.onclick = () => { if (b.dataset.og === "__other") { ogOther = true; openOrder(o.no); const t = $("#data-og-txt"); if (t) t.focus(); return; } setGreet(b.dataset.og); });
+  const ogs = $("#og-save"); if (ogs) ogs.onclick = () => { const g = cleanGreet($("#data-og-txt").value); if (!g) { toast("Type how you greet them"); return; } setGreet(g); };
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
   sh.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
