@@ -36,6 +36,12 @@ const shopName = () => (shop && shop.name.trim()) || "Your laundry";
 const branchName = id => (BRANCHES.find(b => b.id === id) || {}).name || "";
 const liveBranches = () => BRANCHES.filter(b => b.active);
 const cust = id => customers.find(c => c.id === id) || { name: "Customer", mark: "?", phone: "" };
+// Many shops save customers as "Lexus 350" or "Tailor", so messages can greet them as Sir, Ma, Boss and so on.
+const GREETS = [["", "Their name"], ["sir", "Sir"], ["ma", "Ma"], ["boss", "Boss"], ["chairman", "Chairman"], ["prof", "Prof"], ["doctor", "Doctor"], ["aunty", "Aunty"], ["uncle", "Uncle"]];
+const hello = c => c.greet ? `Hello ${c.greet === "sir" || c.greet === "ma" ? c.greet : c.greet[0].toUpperCase() + c.greet.slice(1)}` : `Hello ${c.name.split(" ")[0]}`;
+const greetChips = (cur, attr) => `<div class="chips gchips" role="group" aria-label="How do you greet them in messages?">${GREETS.map(([k, v]) => `<button type="button" class="chip" ${attr}="${k}" aria-pressed="${(cur || "") === k}">${v}</button>`).join("")}</div>`;
+const BANKS = ["Access Bank", "ALAT by Wema", "Carbon", "Citibank", "Ecobank", "FairMoney", "Fidelity Bank", "First Bank", "FCMB", "Globus Bank", "GTBank", "Jaiz Bank", "Keystone Bank", "Kuda", "Lotus Bank", "Moniepoint", "Opay", "Optimus Bank", "Paga", "Palmpay", "Parallex Bank", "Polaris Bank", "Premium Trust Bank", "Providus Bank", "Signature Bank", "Stanbic IBTC", "Standard Chartered", "Sterling Bank", "SunTrust Bank", "Taj Bank", "Titan Trust Bank", "UBA", "Union Bank", "Unity Bank", "VFD Microfinance Bank", "Wema Bank", "Zenith Bank"];
+const bankList = id => `<datalist id="${id}">${BANKS.map(b => `<option value="${b}"></option>`).join("")}</datalist>`;
 const item = id => PRICES.find(x => x.id === id);
 const pname = it => it.label || (item(it.id) || {}).name || "Item";
 const emptyMoney = () => ({ unit: null, custom: {}, delivery: 0, discount: 0, total: 0, billed_at: null, paid: 0, payments: [], express_amt: 0 });
@@ -57,7 +63,7 @@ async function load() {
     sb.from("shops").select("id,name,created_at,is_test").single(),
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
-    fetchAll("customers", "id,name,mark"),
+    fetchAll("customers", "id,name,mark,greet"),
     fetchAll("orders", "id,no,customer_id,branch_id,items,express,pickup,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
   ]);
   if (base[0].error) throw base[0].error;
@@ -909,7 +915,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
+function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -970,6 +976,8 @@ function customerBlock() {
   else if (d.phone.length === 11 && d.found === null) {
     const clash = d.hasMark === "yes" && d.mark && markTaken(d.mark);
     b += `<label for="nm">Customer name</label><input id="nm" placeholder="e.g. Bola Ogun" value="${esc(d.name)}" autocomplete="off">
+      <label>How do you greet them in messages?</label>${greetChips(d.greet, "data-gr")}
+      <p class="hint" style="margin-top:4px">${d.greet ? `Messages will start "${hello({ greet: d.greet })},"` : `Messages will start "Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},"`}</p>
       <label>Does this customer already have a mark on their clothes?</label>
       <div class="chips" style="margin:0"><button class="chip" data-hm="yes" aria-pressed="${d.hasMark === "yes"}">Yes, use it</button><button class="chip" data-hm="no" aria-pressed="${d.hasMark === "no"}">No, give one</button></div>
       ${d.hasMark === "yes" ? `<label for="mk">Their mark</label><input id="mk" placeholder="e.g. BL" value="${esc(d.mark)}" autocomplete="off">
@@ -1036,6 +1044,7 @@ function renderNew() {
   if ($("#cuse")) $("#cuse").onclick = () => { const f = d.found; d.cust = { id: f.id, name: f.name, mark: f.mark }; d.newMode = false; d.phone = ""; d.found = undefined; renderNew(); };
   keep("#ph", v => { const nv = digits(v).slice(0, 11); if (nv !== d.phone) { d.phone = nv; d.found = undefined; if (nv.length === 11) lookup(nv); } });
   keep("#nm", v => d.name = v.replace(/[^a-z\s'-]/gi, ""));
+  view.querySelectorAll("[data-gr]").forEach(b => b.onclick = () => { d.greet = b.dataset.gr; renderNew(); });
   keep("#mk", v => d.mark = v.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase());
   keep("#sp", v => d.specialName = v);
   const pd = $("#pd"); if (pd) pd.oninput = e => { const c = digits(e.target.value); const had = !!d.paid; d.paid = num(c); if (e.target.value !== c) e.target.value = c; if (had !== !!d.paid) { const p = e.target.selectionStart; renderNew(); const n = $("#pd"); n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } } };
@@ -1072,7 +1081,7 @@ function renderNew() {
     if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
     const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
     const base = { branch_id: d.branch, items: d.items.map(i => ({ ...i })), express: d.express, pickup: d.pickup, paid: d.paid || 0, method: d.method };
-    const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark };
+    const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark, greet: d.greet || null };
     d.saving = true; renderNew();
     const { data, error } = await sb.rpc("log_order", { p });
     d.saving = false;
@@ -1101,14 +1110,14 @@ function billLines(o) {
     + (k.exp ? `\nExpress delivery: ${naira(k.exp)}` : "") + (o.m.delivery ? `\nPickup/delivery: ${naira(o.m.delivery)}` : "") + (o.m.discount ? `\nDiscount: -${naira(o.m.discount)}` : "");
 }
 function message(o, type) {
-  const c = cust(o.cid), k = calc(o), first = c.name.split(" ")[0];
+  const c = cust(o.cid), k = calc(o), hi = hello(c);
   if (type === "list") {
     const list = o.items.map(it => `${it.qty} x ${pname(it)} (${SERVICES[it.svc]})`).join("\n");
-    return `Hello ${first}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items\n\n${list}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
+    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items\n\n${list}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
-  if (type === "ready") return `Hello ${first}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.name} (Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
-  return `Hello ${first}, a reminder from ${shopName()}: invoice INV-${o.no} (clothes dropped ${fmtDay(o.at)}) has ${naira(owed(o))} still to pay.${payTo()}\n\nThank you.\n_Sent with Tagbook_`;
+  if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
+  return `${hi}, a reminder from ${shopName()}: invoice INV-${o.no} (clothes dropped ${fmtDay(o.at)}) has ${naira(owed(o))} still to pay.${payTo()}\n\nThank you.\n_Sent with Tagbook_`;
 }
 const waFmt = t => esc(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<i>$2</i>").replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g, "$1<b>$2</b>");
 const wa = (o, t) => { const p = cust(o.cid).phone; return (p ? "https://wa.me/234" + p.slice(1) : "https://wa.me/") + "?text=" + encodeURIComponent(t); };
@@ -1131,14 +1140,14 @@ const payForm = (ph, full) => `${full ? `<button class="btn btn-primary" id="ppa
 const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
 
 /* ---------- Owner only: edit clothes, edit customer, cancel an order (kept on record) ---------- */
-let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false;
+let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false, fxGreet = "";
 const canFix = o => own() && !o.cancelled && o.status !== "picked";
 const orderTop = o => `<div class="topbar otop"><button class="back" data-back>← All orders</button>${canFix(o) ? `<button class="omore" id="omore" aria-expanded="${oMenu}" aria-haspopup="menu">More ⋯</button>` : ""}
   ${oMenu && canFix(o) ? `<div class="omenu" role="menu"><button role="menuitem" data-om="items">Edit clothes</button><button role="menuitem" data-om="cust">Edit customer</button><button role="menuitem" class="red" data-om="cancel">Cancel order</button></div>` : ""}</div>`;
 function wireFix(root, o) {
   const m = root.querySelector("#omore"); if (m) m.onclick = () => { oMenu = !oMenu; openOrder(o.no); };
   root.querySelectorAll("[data-om]").forEach(b => b.onclick = () => {
-    oMenu = false; oMode = b.dataset.om; fxAdd = false;
+    oMenu = false; oMode = b.dataset.om; fxAdd = false; fxGreet = cust(o.cid).greet || "";
     if (oMode === "items") oDraft = o.items.map((it, i) => ({ ...it, from: i }));
     openOrder(o.no);
   });
@@ -1190,6 +1199,7 @@ function fixView(o) {
       <p class="hint" style="margin-top:0">This changes the name and phone on ${others > 1 ? `all ${others} of ${esc(first)}'s orders` : `${esc(first)}'s orders`}.</p>
       <label for="fxn">Name</label><input id="fxn" value="${esc(c.name)}" autocomplete="off" maxlength="60">
       <label for="fxp">Phone</label><input id="fxp" type="text" inputmode="tel" value="${esc(c.phone)}" autocomplete="off">
+      <label>How do you greet them in messages?</label>${greetChips(fxGreet, "data-fg")}
       <p class="fxnote">Their mark stays <b>${esc(c.mark)}</b>, because it is already written inside their clothes.</p>
       <div class="row"><button class="btn btn-ghost" id="fxback2">Back</button><button class="btn btn-primary" id="fxcsave">Save</button></div>`;
   } else if (oMode === "cancel") {
@@ -1243,14 +1253,16 @@ function fixView(o) {
       openOrder(o.no); if (tab === "orders") renderOrders();
     };
   }
+  sh.querySelectorAll("[data-fg]").forEach(b => b.onclick = () => { const n = $("#fxn").value, ph = $("#fxp").value; fxGreet = b.dataset.fg; fixView(o); $("#fxn").value = n; $("#fxp").value = ph; });
   const cs = $("#fxcsave"); if (cs) cs.onclick = async () => {
     const name = tidy($("#fxn").value), phone = digits($("#fxp").value);
     if (!name) { toast("Type the customer's name"); return; }
     if (!/^0\d{10}$/.test(phone)) { toast("The phone number must be 11 digits and start with 0."); return; }
     cs.disabled = true; cs.textContent = "Saving…";
     const { data, error } = await sb.rpc("owner_edit_customer", { p_customer: o.cid, p_name: name, p_phone: phone });
+    if (!error && (fxGreet || "") !== (c.greet || "")) { const g = await sb.rpc("owner_set_greet", { p_customer: o.cid, p_greet: fxGreet || null }); if (g.error) { toast(failMsg(g.error)); cs.disabled = false; cs.textContent = "Save"; return; } }
     if (error) { const t = /PHONE_TAKEN:(.*)/.exec(error.message || ""); toast(t ? `That number already belongs to ${t[1]}.` : failMsg(error)); cs.disabled = false; cs.textContent = "Save"; return; }
-    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.name = data.name; cc.phone = data.phone; }
+    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.name = data.name; cc.phone = data.phone; cc.greet = fxGreet || null; }
     oMode = null; toast("Customer updated"); openOrder(o.no); if (tab === "orders") renderOrders();
   };
   const cx = $("#fxcancel"); if (cx) cx.onclick = async () => {
@@ -1496,7 +1508,7 @@ function renderSettings() {
     card("Business name", "Shown at the top of the app and in every WhatsApp message.",
       `<input id="sn" maxlength="${NAME_MAX}" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off" aria-label="Business name">`)
     + card("Bank account for payments", "Added to every invoice and payment reminder, so customers know where to pay.",
-      `<label for="bn">Bank name</label><input id="bn" value="${esc(p.bank_name)}" placeholder="e.g. GTBank" autocomplete="off">
+      `<label for="bn">Bank name</label><input id="bn" list="banks-shop" value="${esc(p.bank_name)}" placeholder="Start typing, e.g. GTBank or Opay" autocomplete="off">${bankList("banks-shop")}
        <label for="an">Account number</label><input id="an" ${moneyAttrs} maxlength="10" value="${esc(p.acct_no)}" placeholder="10 digits">
        <p class="hint" id="anx">${p.acct_no.length === 10 ? "" : "Account number must be 10 digits."}</p>
        <label for="am">Account name</label><input id="am" value="${esc(p.acct_name)}" placeholder="Name on the account" autocomplete="off">`)
@@ -1628,7 +1640,7 @@ function bankHtml(e) {
     <div class="staff-row"><div><b>${esc(b.no)} · ${esc(b.bank)}</b><span>${esc(b.name)}</span></div><button class="btn btn-ghost" id="bk-edit" style="width:auto;margin:0;padding:9px 14px">Change</button></div>`;
   return `<h3 class="stitle" style="margin-top:14px">Where we pay you</h3>
     <p class="hint">${b ? "Bolu gets a message when you change this." : "Add the account we should send your money to."}</p>
-    <label for="bk-b">Bank</label><input id="bk-b" placeholder="e.g. Opay, GTBank, Moniepoint" autocomplete="off" value="${esc(b ? b.bank : "")}">
+    <label for="bk-b">Bank</label><input id="bk-b" list="banks-agent" placeholder="Start typing, e.g. Opay or GTBank" autocomplete="off" value="${esc(b ? b.bank : "")}">${bankList("banks-agent")}
     <label for="bk-n">Account number</label><input id="bk-n" type="text" inputmode="numeric" maxlength="10" placeholder="10 digits" autocomplete="off" value="${esc(b ? b.no : "")}">
     <label for="bk-a">Account name</label><input id="bk-a" placeholder="Name on the account" autocomplete="off" value="${esc(b ? b.name : "")}">
     <div class="row">${b ? `<button class="btn btn-ghost" id="bk-no">Cancel</button>` : ""}<button class="btn btn-primary" id="bk-go">Save bank details</button></div>`;
