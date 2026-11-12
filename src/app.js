@@ -51,6 +51,22 @@ const greetChips = (cur, attr, other) => {
   return `<div class="chips gchips" role="group" aria-label="How do you greet them in messages?">${opts.map(([k, v]) => `<button type="button" class="chip" ${attr}="${k}" aria-pressed="${!custom && (cur || "") === k}">${v}</button>`).join("")}<button type="button" class="chip" ${attr}="__other" aria-pressed="${!!custom}">Other</button></div>
     ${custom ? `<input id="${attr}-txt" class="gtxt" maxlength="20" placeholder="Type it, e.g. Alhaji, Pastor, Engineer" value="${esc(cur && cur !== "-" && !opts.some(([k]) => k === cur) ? cur : "")}" autocomplete="off">` : ""}`;
 };
+// Puts a special item (name + price for one service) on the shop's price list. Returns the item id, or null.
+async function toPriceList(name, svc, price) {
+  const it = PRICES.find(x => !x.custom && x.name.toLowerCase() === name.toLowerCase());
+  if (it) {
+    if ((it.p || {})[svc] && !it.hidden) return it.id; // already priced: keep the owner's list price
+    const pr = { ...(it.p || {}), [svc]: price }, svcs = [...new Set([...(it.services || []), svc])];
+    return await put("items", { id: it.id }, { services: svcs, hidden: false }) && await put("item_prices", { item_id: it.id }, { prices: pr }) ? it.id : null;
+  }
+  const sort = Math.max(0, ...PRICES.filter(x => !x.custom).map(x => x.sort)) + 1;
+  const { data, error } = await sb.from("items").insert({ shop_id: shop.id, name, services: [svc], sort }).select("id").single();
+  if (error) { toast(failMsg(error)); return null; }
+  const r2 = await sb.from("item_prices").insert({ item_id: data.id, shop_id: shop.id, prices: { [svc]: price } });
+  if (r2.error) { toast(failMsg(r2.error)); return null; }
+  PRICES.push({ id: data.id, name, custom: false, services: [svc], sort, hidden: false, p: { [svc]: price } });
+  return data.id;
+}
 // A clear "are you sure" step for actions that are hard to undo (no browser pop-ups).
 function askConfirm(title, text, yes) {
   return new Promise(res => {
@@ -1092,21 +1108,10 @@ function renderNew() {
     if (!price) { d.items.push({ id: d.askSpecial, svc: d.svc, qty: 1, label: name }); d.askSpecial = false; renderNew(); return; }
     // Owner gave a price: it becomes a normal item on the price list, so next time it's one tap.
     const btn = $("#spa"); btn.disabled = true; btn.textContent = "Adding…";
-    let it = PRICES.find(x => !x.custom && x.name.toLowerCase() === name.toLowerCase());
-    if (it) {
-      const pr = { ...(it.p || {}), [d.svc]: price }, svcs = [...new Set([...(it.services || []), d.svc])];
-      const ok = await put("items", { id: it.id }, { services: svcs, hidden: false }) && await put("item_prices", { item_id: it.id }, { prices: pr });
-      if (!ok) { btn.disabled = false; btn.textContent = "Add item"; return; }
-    } else {
-      const sort = Math.max(0, ...PRICES.filter(x => !x.custom).map(x => x.sort)) + 1;
-      const { data, error } = await sb.from("items").insert({ shop_id: shop.id, name, services: [d.svc], sort }).select("id").single();
-      if (error) { toast(failMsg(error)); btn.disabled = false; btn.textContent = "Add item"; return; }
-      const r2 = await sb.from("item_prices").insert({ item_id: data.id, shop_id: shop.id, prices: { [d.svc]: price } });
-      if (r2.error) { toast(failMsg(r2.error)); btn.disabled = false; btn.textContent = "Add item"; return; }
-      it = { id: data.id };
-    }
+    const id = await toPriceList(name, d.svc, price);
+    if (!id) { btn.disabled = false; btn.textContent = "Add item"; return; }
     try { await load(); } catch (_) { }
-    d.items.push({ id: it.id, svc: d.svc, qty: 1 }); d.askSpecial = false; d.specialPrice = 0;
+    d.items.push({ id, svc: d.svc, qty: 1 }); d.askSpecial = false; d.specialPrice = 0;
     toast(`${name} added to your price list at ${naira(price)}`); renderNew();
   };
   view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => { d.items[+b.dataset.inc].qty++; renderNew(); });
@@ -1440,7 +1445,16 @@ function openOrder(no) {
     const kk = calc(o);
     o.m.express_amt = kk.exp; o.m.total = kk.total; o.m.billed_at = o.m.billed_at || new Date().toISOString();
     bill.disabled = true;
-    if (await put("orders", { id: o.id }, { express: o.express }) && await saveMoney(o)) toast("Bill saved");
+    if (await put("orders", { id: o.id }, { express: o.express }) && await saveMoney(o)) {
+      // Special items priced here go on the price list too, so next time staff just tap them.
+      const added = [];
+      for (const [i, it] of o.items.entries()) {
+        if (!(item(it.id) || {}).custom || !it.label || !+o.m.custom[i]) continue;
+        const known = PRICES.find(x => !x.custom && x.name.toLowerCase() === it.label.toLowerCase() && (x.p || {})[it.svc] && !x.hidden);
+        if (!known && await toPriceList(tidy(it.label).slice(0, 40), it.svc, +o.m.custom[i])) added.push(it.label);
+      }
+      toast(added.length ? `Bill saved. Added ${added.join(", ")} to your price list.` : "Bill saved");
+    }
     again();
   };
   sh.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { payMethod = b.dataset.pm; sh.querySelectorAll("[data-pm]").forEach(x => x.setAttribute("aria-pressed", x.dataset.pm === payMethod)); });

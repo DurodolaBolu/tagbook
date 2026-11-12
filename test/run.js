@@ -183,6 +183,7 @@ async function handle(route) {
   await T('[data-done="list"]').catch(() => {});
   console.log("status after list sent attempt:", db.orders[0].status);
   await page.fill('[data-cp="2"]', "6000"); await page.fill("#dl", "1500"); await T("#ex"); await T("#bill"); await page.waitForTimeout(400);
+  { const wg = db.items.find(x => x.name === "Wedding gown"); console.log("bill special item added to price list:", !!wg, wg && JSON.stringify(db.item_prices.find(x => x.item_id === wg.id).prices)); }
   const mm = db.order_money[0]; console.log("bill:", JSON.stringify({ total: mm.total, unit: mm.unit, exp: mm.express_amt, billed: db.orders[0].billed }));
   await shot("09-owner-billed");
   // message
