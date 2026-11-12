@@ -429,9 +429,13 @@ Open this link on your phone: tagbook.ordiventa.com
 Phone: ${s}
 PIN: ${n}
 
+Tip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.
+
 This short video shows how to put Tagbook on your phone so it opens like an app: https://youtu.be/${o}
 
-Once you log in, a short checklist will guide you through the rest. If you get stuck, just message us here.
+Once you log in, a short checklist will guide you through the rest.
+
+If you get stuck, just message us here.
 
 Welcome, and thank you for starting with us.`},is=null,_a()})}function dd(){let t=xt.filter(o=>!o.custom&&!o.hidden),e=rr.trim().toLowerCase(),s=e?t.filter(o=>o.name.toLowerCase().includes(e)):t,n=(o,l)=>`<input data-pp="${o.id}" data-k="${l}" ${ke} value="${o.p[l]!=null?o.p[l]:""}" placeholder="\u2014" aria-label="${v(o.name)}, ${he[l]}">`,r=o=>`<div class="pedit">
       <label for="pn-${o.id}">Item name</label><input id="pn-${o.id}" data-pn="${o.id}" value="${v(o.name)}" autocomplete="off">
