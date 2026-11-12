@@ -1700,7 +1700,8 @@ function wireShops() {
     const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t") ? $("#as-t").value || null : null, start_no: num($("#as-no").value) || 1, founding: $("#as-f") ? $("#as-f").checked : true, referred_by: $("#as-r").value || null,
       ...(agentMode() ? (v => v === "ordiventa" || v === "self" ? { claim_kind: v } : { claim_kind: "team", claim_for: v })($("#as-cf").value) : { brought_by: $("#as-ab").value || null, setup_by: $("#as-as").value || null }) });
     if (!r.ok) { toast(r.msg); $("#as-go").disabled = false; $("#as-go").textContent = "Create shop"; return; }
-    newShop = { phone, msg: `Hello ${owner.split(" ")[0]}, ${shopName} is now on Tagbook.\n\nOpen tagbook.ordiventa.com and log in with:\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.\n\nWelcome, and thank you for starting with us.` };
+    const installVid = ((tuts || []).find(t => t.step_key === "install") || {}).youtube_id || "chuV8thnvrE";
+    newShop = { phone, msg: `Your Tagbook is ready, ${owner.split(" ")[0]}.\n\nOpen this link on your phone: tagbook.ordiventa.com\nPhone: ${phone}\nPIN: ${pin}\n\nThis short video shows how to put Tagbook on your phone so it opens like an app: https://youtu.be/${installVid}\n\nOnce you log in, a short checklist will guide you through the rest. If you get stuck, just message us here.\n\nWelcome, and thank you for starting with us.` };
     shopRows = null; rerenderShops();
   };
 }
