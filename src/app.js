@@ -42,11 +42,26 @@ const isPreset = g => GREETS.some(([k]) => k === (g || ""));
 const greetWord = g => g === "sir" || g === "ma" ? g : isPreset(g) ? g[0].toUpperCase() + g.slice(1) : g;
 const hello = c => c.greet ? `Hello ${greetWord(c.greet)}` : `Hello ${c.name.split(" ")[0]}`;
 // cur: the chosen greeting ("" = their name, "-" = nothing chosen yet). other: the "Other" box is open.
+// Greetings this shop typed before under "Other" show up as choices too, so nobody types them twice.
+const greetOpts = () => { const seen = new Set(GREETS.map(([k]) => k.toLowerCase())), extra = [];
+  customers.forEach(c => { const g = c.greet; if (g && !seen.has(g.toLowerCase())) { seen.add(g.toLowerCase()); extra.push([g, g]); } });
+  return GREETS.concat(extra.sort((a, b) => a[1].localeCompare(b[1]))); };
 const greetChips = (cur, attr, other) => {
-  const custom = other || (cur && cur !== "-" && !isPreset(cur));
-  return `<div class="chips gchips" role="group" aria-label="How do you greet them in messages?">${GREETS.map(([k, v]) => `<button type="button" class="chip" ${attr}="${k}" aria-pressed="${!custom && (cur || "") === k}">${v}</button>`).join("")}<button type="button" class="chip" ${attr}="__other" aria-pressed="${!!custom}">Other</button></div>
-    ${custom ? `<input id="${attr}-txt" class="gtxt" maxlength="20" placeholder="Type it, e.g. Alhaji, Pastor, Engineer" value="${esc(cur && cur !== "-" && !isPreset(cur) ? cur : "")}" autocomplete="off">` : ""}`;
+  const opts = greetOpts(), custom = other || (cur && cur !== "-" && !opts.some(([k]) => k === cur));
+  return `<div class="chips gchips" role="group" aria-label="How do you greet them in messages?">${opts.map(([k, v]) => `<button type="button" class="chip" ${attr}="${k}" aria-pressed="${!custom && (cur || "") === k}">${v}</button>`).join("")}<button type="button" class="chip" ${attr}="__other" aria-pressed="${!!custom}">Other</button></div>
+    ${custom ? `<input id="${attr}-txt" class="gtxt" maxlength="20" placeholder="Type it, e.g. Alhaji, Pastor, Engineer" value="${esc(cur && cur !== "-" && !opts.some(([k]) => k === cur) ? cur : "")}" autocomplete="off">` : ""}`;
 };
+// A clear "are you sure" step for actions that are hard to undo (no browser pop-ups).
+function askConfirm(title, text, yes) {
+  return new Promise(res => {
+    const w = document.createElement("div"); w.className = "cfm"; w.setAttribute("role", "dialog"); w.setAttribute("aria-modal", "true");
+    w.innerHTML = `<div class="cfm-box"><h3>${esc(title)}</h3>${text ? `<p>${text}</p>` : ""}<div class="row"><button class="btn btn-ghost" data-c="0">Go back</button><button class="btn btn-primary" data-c="1">${esc(yes)}</button></div></div>`;
+    const done = v => { w.remove(); res(v); };
+    w.onclick = e => { if (e.target === w) done(false); };
+    w.querySelectorAll("[data-c]").forEach(b => b.onclick = () => done(b.dataset.c === "1"));
+    document.body.appendChild(w); w.querySelector('[data-c="1"]').focus();
+  });
+}
 const cleanGreet = v => tidy(v).replace(/[^A-Za-z .'-]/g, "").slice(0, 20);
 const BANKS = ["Access Bank", "ALAT by Wema", "Carbon", "Citibank", "Ecobank", "FairMoney", "Fidelity Bank", "First Bank", "FCMB", "Globus Bank", "GTBank", "Jaiz Bank", "Keystone Bank", "Kuda", "Lotus Bank", "Moniepoint", "Opay", "Optimus Bank", "Paga", "Palmpay", "Parallex Bank", "Polaris Bank", "Premium Trust Bank", "Providus Bank", "Signature Bank", "Stanbic IBTC", "Standard Chartered", "Sterling Bank", "SunTrust Bank", "Taj Bank", "Titan Trust Bank", "UBA", "Union Bank", "Unity Bank", "VFD Microfinance Bank", "Wema Bank", "Zenith Bank"];
 const bankList = id => `<datalist id="${id}">${BANKS.map(b => `<option value="${b}"></option>`).join("")}</datalist>`;
@@ -1416,12 +1431,17 @@ function openOrder(no) {
     else toast(data.settled ? "Recorded. The customer has now paid in full. The owner has been told." : `Recorded ${naira(v)}. The owner has been told.`);
     render();
   };
-  const pp = $("#pp"); if (pp) pp.onclick = () => { const v = num($("#pay").value); if (!v) { toast("Type the amount received"); return; } doPay(pp, v); };
-  const pa = $("#ppall"); if (pa) pa.onclick = () => doPay(pa, 100000000);
+  const who = esc(cust(o.cid).name);
+  const pp = $("#pp"); if (pp) pp.onclick = async () => { const v = num($("#pay").value); if (!v) { toast("Type the amount received"); return; }
+    if (await askConfirm(`Record ${naira(v)}?`, `Payment from ${who}, order #${o.no}.`, "Yes, record it")) doPay(pp, v); };
+  const pa = $("#ppall"); if (pa) pa.onclick = async () => {
+    if (await askConfirm("Mark as paid in full?", `${o.billed && owed(o) ? `${naira(owed(o))} from ${who}` : `Full payment from ${who}`}, order #${o.no}.`, "Yes, paid in full")) doPay(pa, 100000000); };
   const w = $("#washed"); if (w) w.onclick = () => { o.checking = true; again(); put("orders", { id: o.id }, { checking: true }); };
   sh.querySelectorAll("[data-ck]").forEach(b => b.onchange = () => { o.checked = { ...o.checked, [b.dataset.ck]: b.checked }; again(); put("orders", { id: o.id }, { checked: o.checked }); });
   const rd = $("#rd"); if (rd) rd.onclick = () => setStatus("ready", own() ? "Marked ready. Send the ready message." : "Marked ready. The owner has been told.");
-  const pk = $("#pick"); if (pk) pk.onclick = () => setStatus("picked", owed(o) ? "Picked up. Not fully paid yet." : "Picked up");
+  const pk = $("#pick"); if (pk) pk.onclick = async () => {
+    if (!await askConfirm(`Has ${cust(o.cid).name} picked up their clothes?`, `Order #${o.no}. After this, the bill can't be changed.${owed(o) ? ` They still owe ${naira(owed(o))}.` : ""}`, "Yes, picked up")) return;
+    setStatus("picked", owed(o) ? "Picked up. Not fully paid yet." : "Picked up"); };
 }
 
 /* ---------- Reports (owner) ---------- */

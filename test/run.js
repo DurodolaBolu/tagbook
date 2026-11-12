@@ -160,7 +160,7 @@ async function handle(route) {
   // secretary opens it, washed, check, ready
   await T(".order"); await shot("05-sec-order");
   console.log("sec order sheet has ₦:", (await page.textContent("#sheet")).includes("₦"));
-  await page.fill("#pay", "500"); await T("#pp"); await page.waitForTimeout(400);
+  await page.fill("#pay", "500"); await T("#pp"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(400);
   await page.evaluate(() => { const s = document.querySelector("#sheet"); s.scrollTop = 300; }); await page.waitForTimeout(150); await page.screenshot({ path: path.join(out, "05b-staff-pay.png") });
   console.log("staff payment:", JSON.stringify(global.lastPay), "| staff sheet shows amounts:", /₦\s?\d/.test(await page.textContent("#sheet")));
   await T("#washed"); const n = (await page.$$("[data-ck]")).length; for (let i = 0; i < n; i++) { await page.check(`[data-ck="${i}"]`); await page.waitForTimeout(150); }
@@ -192,11 +192,11 @@ async function handle(route) {
   const waText = await page.textContent("#sheet");
   console.log("ready msg has invoice:", waText.includes("INVOICE INV-1"), "greets Alhaji:", waText.includes("Hello Alhaji,"), "no name line:", !waText.includes("Customer: Ade"), "has bank:", waText.includes("0123456789"));
   await T('[data-done="ready"]'); console.log("status:", db.orders[0].status);
-  await page.fill("#pay", "5000"); await T("#pp"); await page.waitForTimeout(300);
+  await page.fill("#pay", "5000"); await T("#pp"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(300);
   console.log("money after part pay:", db.order_money[0].paid, "settled:", db.orders[0].settled);
   await page.$eval("#ppall", e => e.scrollIntoView({ block: "center" })); await page.screenshot({ path: path.join(out, "09b-pay-form.png") });
-  console.log("pay-all label:", await page.textContent("#ppall")); await T("#ppall"); await page.waitForTimeout(400); console.log("after pay-all:", db.order_money[0].paid, "of", db.order_money[0].total, "settled:", db.orders[0].settled);
-  await T("#pick"); console.log("status:", db.orders[0].status); await shot("10-owner-picked");
+  console.log("pay-all label:", await page.textContent("#ppall")); await T("#ppall"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(400); console.log("after pay-all:", db.order_money[0].paid, "of", db.order_money[0].total, "settled:", db.orders[0].settled);
+  await T("#pick"); await shot("10a-confirm-picked"); await T('.cfm [data-c="0"]'); console.log("go back keeps status:", db.orders[0].status); await T("#pick"); await T('.cfm [data-c="1"]'); console.log("status:", db.orders[0].status); await shot("10-owner-picked");
   await T("#sheet [data-back]");
   // owner logs a returning customer with early payment
   await T("#tabs button.new"); await shot("11a-log-recent"); await page.fill("#cq", "ade"); await page.waitForTimeout(300); await shot("11b-log-search");

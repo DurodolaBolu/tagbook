@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261112213214";</script>
+<script>window.TB_BUILD="20261112213733";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -568,6 +568,13 @@ body.tplaying nav.tabs{visibility:hidden}
 .gprev b{font-weight:700}
 .gask{background:var(--card);border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;margin:16px 0 8px}
 .gtxt{margin-top:8px}
+/* Are-you-sure step */
+.cfm{position:fixed;inset:0;z-index:80;background:rgba(3,25,30,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 0 env(safe-area-inset-bottom,0px)}
+.cfm-box{background:var(--card);color:var(--fg);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 16px 22px}
+.cfm-box h3{margin:0 0 6px;font-size:19px}
+.cfm-box p{margin:0 0 14px;color:var(--muted);font-size:15px}
+.cfm-box .row .btn{flex:1}
+@media (min-width:900px){.cfm{align-items:center}.cfm-box{border-radius:20px}}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -583,7 +590,7 @@ body.tplaying nav.tabs{visibility:hidden}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261112213214"></script>
+<script src="/app.js?v=20261112213733"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
