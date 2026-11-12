@@ -67,6 +67,9 @@ async function handle(route) {
     m.paid = nw; m.payments.push({ amt: added, at: Date.now(), method: body.p_method, by: me.name }); o.settled = !!m.billed_at && m.paid >= m.total; global.lastPay = { by: me.role, added, method: body.p_method };
     return send(200, me.role === "owner" ? { added, paid: nw, total: m.total, billed: !!m.billed_at } : { added, settled: o.settled });
   }
+  if (p === "/rest/v1/rpc/owner_cancel_order") { const o = db.orders.find(x => x.id === body.p_order); if (body.p_cancel && o.status === "picked") return send(400, { message: "PICKED_UP" }); o.cancelled_at = body.p_cancel ? new Date().toISOString() : null; o.cancelled_by = body.p_cancel ? "Bolu" : null; return send(200, { ok: true }); }
+  if (p === "/rest/v1/rpc/owner_edit_customer") { const taken = db.customer_phones.find(x => x.phone === body.p_phone && x.customer_id !== body.p_customer); if (taken) return send(400, { message: "PHONE_TAKEN:" + db.customers.find(c => c.id === taken.customer_id).name });
+    db.customers.find(c => c.id === body.p_customer).name = body.p_name; const ph = db.customer_phones.find(x => x.customer_id === body.p_customer); ph.phone = body.p_phone; return send(200, { ok: true, name: body.p_name, phone: body.p_phone }); }
   if (p === "/rest/v1/rpc/find_customer") {
     const ph = db.customer_phones.find(x => x.phone === body.p_phone); const c = ph && db.customers.find(x => x.id === ph.customer_id);
     return send(200, c ? [{ id: c.id, name: c.name, mark: c.mark }] : []);
@@ -201,6 +204,23 @@ async function handle(route) {
   await page.screenshot({ path: path.join(out, "11d-owner-order2-bill.png") });
   console.log("auto-billed order shows:", (await page.textContent("#bill")).trim());
   await T("#sheet [data-back]");
+  // owner edits clothes, edits customer, cancels and restores an order
+  {
+    const o = db.orders.find(x => x.status !== "picked") || db.orders[0]; console.log("edit test order:", o.no, o.status); await page.goto("http://localhost:8787/#order-" + o.no); await page.waitForTimeout(500);
+    await T("#omore"); await shot("30a-more-menu"); await T('[data-om="items"]');
+    const before = JSON.stringify(o.items); await T('[data-qp="0"]'); await T("#fxaddopen"); await T("#fxaddgo"); await shot("30b-edit-clothes");
+    console.log("edit preview:", (await page.textContent("#sheet")).match(/New total₦[\d,]+/)?.[0]);
+    await T("#fxsave"); await page.waitForTimeout(400);
+    const m = db.order_money.find(x => x.order_id === o.id);
+    console.log("items saved:", before, "->", JSON.stringify(o.items), "| total now", m.total, "billed", !!m.billed_at);
+    await T("#omore"); await T('[data-om="cust"]'); await page.fill("#fxn", db.customers.find(c => c.id === o.customer_id).name + " Jr"); await T("#fxcsave"); await page.waitForTimeout(300);
+    console.log("customer renamed:", db.customers.find(c => c.id === o.customer_id).name);
+    await T("#omore"); await T('[data-om="cancel"]'); await shot("30c-cancel"); await T("#fxcancel"); await page.waitForTimeout(500);
+    console.log("cancelled in db:", !!o.cancelled_at, "| hash", await page.evaluate(() => location.hash), "| cancelled chip:", !!(await page.$('[data-f="cx"]')));
+    await T('[data-f="cx"]'); await shot("30d-cancelled-list"); console.log("cancelled list rows:", (await page.$$(".order")).length);
+    await T(".order"); await page.waitForTimeout(300); await shot("30e-cancelled-order"); await T("#fxrestore"); await page.waitForTimeout(400);
+    console.log("restored:", !o.cancelled_at); await T("#sheet [data-back]");
+  }
   // reports
   await T('#tabs button[data-tab="reports"]'); await shot("12-reports");
   console.log("reports received:", await page.textContent(".rhero b"));

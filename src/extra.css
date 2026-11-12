@@ -378,3 +378,23 @@ body.tplaying nav.tabs{visibility:hidden}
 #helpbtn{width:auto;padding:0 12px 0 9px;gap:6px;display:inline-flex;align-items:center;background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font:inherit;font-weight:700;font-size:15px}
 #helpbtn[hidden]{display:none}
 #helpbtn svg{width:20px;height:20px}
+/* Owner: edit / cancel an order */
+.otop{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative}
+.omore{border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-weight:600;font-size:15px;border-radius:10px;height:38px;padding:0 12px;cursor:pointer}
+.omenu{position:absolute;right:0;top:calc(100% + 4px);z-index:5;background:var(--card);border-radius:14px;box-shadow:0 10px 30px rgba(3,25,30,.18);min-width:220px;overflow:hidden;border:1px solid var(--line)}
+.omenu button{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:none;padding:13px 16px;font:inherit;font-size:16px;color:var(--fg);cursor:pointer}
+.omenu button:first-child{border-top:0}
+.omenu .red,.fxnote.warn{color:var(--owes)}
+.fxlist{background:var(--card);border-radius:14px;padding:4px 14px}
+.fxit{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.fxit:first-child{border-top:0}
+.fxit>div:first-child{flex:1;min-width:0}
+.fxit b{display:block;font-weight:600}
+.fxit span{display:block;font-size:14px;color:var(--muted)}
+.qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
+.qty button{border:0;background:var(--bg);color:var(--fg);width:40px;height:40px;font-size:20px;cursor:pointer}
+.qty b{min-width:34px;text-align:center}
+.fxaddbtn{display:block;width:100%;margin-top:10px;border:1.5px dashed var(--field);background:none;border-radius:12px;padding:11px;color:var(--accent-deep);font:inherit;font-weight:600;cursor:pointer}
+.fxadd{margin-top:10px}
+.fxnote{background:var(--card);border-radius:12px;padding:10px 12px;font-size:15px;margin:12px 0}
+.btn-danger{background:var(--owes);color:var(--card);border:0}

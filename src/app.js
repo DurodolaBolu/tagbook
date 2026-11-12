@@ -27,7 +27,7 @@ const busy = () => { const a = document.activeElement; return !!(a && /INPUT|TEX
 
 /* ---------- State, loaded from the database ---------- */
 let me = null, role = "sec", shop = null, priv = null, isAdmin = false, isAgent = false;
-let BRANCHES = [], PRICES = [], customers = [], orders = [], staffList = [];
+let BRANCHES = [], PRICES = [], customers = [], orders = [], cancelledOrders = [], staffList = [];
 let tab = "orders", filter = "all", query = "", openNo = null, page = 0;
 const PER_PAGE = 20;
 const own = () => role === "own";
@@ -58,7 +58,7 @@ async function load() {
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
     fetchAll("customers", "id,name,mark"),
-    fetchAll("orders", "id,no,customer_id,branch_id,items,express,pickup,status,checking,checked,notified,billed,settled,list_sent,created_at", "no"),
+    fetchAll("orders", "id,no,customer_id,branch_id,items,express,pickup,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
   ]);
   if (base[0].error) throw base[0].error;
   shop = base[0].data; BRANCHES = base[1]; customers = base[3];
@@ -80,11 +80,14 @@ async function load() {
   }
   PRICES = base[2].map(i => ({ ...i, p: prices[i.id] || {} }));
   customers.forEach(c => c.phone = phones[c.id] || "");
-  orders = base[4].map(o => ({
+  const all = base[4].map(o => ({
     id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, items: o.items || [], express: o.express, pickup: o.pickup,
     status: o.status, checking: o.checking, checked: o.checked || {}, notified: o.notified, billed: o.billed, settled: o.settled, list_sent: o.list_sent,
     at: Date.parse(o.created_at), m: { ...emptyMoney(), ...(money[o.id] || {}) }, again: {},
+    cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "",
   }));
+  // Cancelled orders stay on record but are left out of every list, total and report.
+  orders = all.filter(o => !o.cancelled); cancelledOrders = all.filter(o => o.cancelled);
 }
 
 /* ---------- Saving: change the screen first, then the database; on failure reload what is really saved ---------- */
@@ -586,7 +589,7 @@ function route() {
   if (!me) return;
   const h = location.hash.slice(1);
   const m = h.match(/^order-(\d+)$/);
-  if (m && orders.some(o => o.no === +m[1])) { tab = "orders"; openNo = +m[1]; }
+  if (m && (orders.some(o => o.no === +m[1]) || cancelledOrders.some(o => o.no === +m[1]))) { tab = "orders"; openNo = +m[1]; }
   else if (h === "plan") { openNo = null; tab = "prices"; setTab = own() ? "plan" : "account"; }
   else if (h === "help" || h.startsWith("help-")) { openNo = null; tab = "help"; helpPlay = h.startsWith("help-") ? h.slice(5) : null; }
   else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : (h === "admin" && isAdmin) ? "admin" : (h === "setup" && isAgent) ? "agent" : "orders"; }
@@ -622,6 +625,7 @@ function pills(o) {
   const m = own()
     ? { new: ["Send list", "p-new"], listed: ["In progress", "p-billed"], ready: ["Ready, not told", "p-new"], told: ["Customer told", "p-ready"], picked: ["Picked up", "p-collected"] }
     : { new: ["In progress", "p-billed"], listed: ["In progress", "p-billed"], ready: ["Ready", "p-ready"], told: ["Ready", "p-ready"], picked: ["Picked up", "p-collected"] };
+  if (o.cancelled) return `<span class="pill p-collected">Cancelled</span>`;
   let h = `<span class="pill ${m[o.status][1]}">${m[o.status][0]}</span>`;
   if (own() && !o.billed && o.status !== "new") h += `<span class="pill p-new">No bill yet</span>`;
   if (own() && o.m.paid && (o.status === "new" || o.status === "listed")) h += `<span class="pill p-ready">Paid ${naira(o.m.paid)}</span>`;
@@ -837,7 +841,7 @@ function renderOrders() {
   const owing = orders.reduce((s, o) => s + ((o.status === "told" || o.status === "picked") ? (own() ? owed(o) : 0) : 0), 0);
   const inShop = orders.filter(o => o.status !== "picked");
   const fl = own()
-    ? [["all", "All"], ["new", "Send list"], ["work", "In progress"], ["ready", "Ready, not told"], ["owed", "Owing"], ["picked", "Picked up"]]
+    ? [["all", "All"], ["new", "Send list"], ["work", "In progress"], ["ready", "Ready, not told"], ["owed", "Owing"], ["picked", "Picked up"], ...(cancelledOrders.length || filter === "cx" ? [["cx", "Cancelled"]] : [])]
     : [["all", "All"], ["work", "In progress"], ["ready", "Ready"], ["picked", "Picked up"]];
   const inF = (o, f) => {
     // Owner: "In progress" = list sent, being washed (new ones sit under "Send list"). Staff: everything not yet ready.
@@ -848,7 +852,7 @@ function renderOrders() {
     if (f === "picked" && o.status !== "picked") return false;
     return true;
   };
-  const list = orders.filter(o => {
+  const list = (filter === "cx" ? cancelledOrders : orders).filter(o => {
     if (!inF(o, filter)) return false;
     if (query) {
       const c = cust(o.cid), q = query.toLowerCase().replace(/\s/g, "");
@@ -873,7 +877,7 @@ function renderOrders() {
       <div class="stat"><b>${inShop.length}</b><span>Orders in the shop</span></div>
       <div class="stat"><b>${inShop.reduce((s, o) => s + calc(o).count, 0)}</b><span>Clothes in the shop</span></div></div>`}
     <input class="search" id="q" placeholder="${own() ? "Search phone, name or mark (BO)" : "Search name or mark (BO)"}" value="${esc(query)}" aria-label="Search">
-    <div class="chips">${fl.map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filter === k}">${l}<span class="cnt">${orders.filter(o => inF(o, k)).length}</span></button>`).join("")}</div>
+    <div class="chips">${fl.map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filter === k}">${l}<span class="cnt">${k === "cx" ? cancelledOrders.length : orders.filter(o => inF(o, k)).length}</span></button>`).join("")}</div>
     <div class="list">${shown.length ? shown.map(o => {
       const c = cust(o.cid), k = calc(o); return `
       <button class="order" data-no="${o.no}">
@@ -1126,9 +1130,143 @@ const methodChips = (cur, attr) => `<div class="chips" style="margin:8px 0 0" ro
 const payForm = (ph, full) => `${full ? `<button class="btn btn-primary" id="ppall">${full === true ? "Paid in full" : `Paid in full · ${naira(full)}`}</button><p class="hint" style="margin:6px 0 2px">Paid only part? Type the amount below.</p>` : ""}<label for="pay">Amount received (₦)</label><input id="pay" ${moneyAttrs} placeholder="${ph}"><button class="btn ${full ? "btn-ghost" : "btn-primary"}" id="pp">Record payment</button>`;
 const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
 
+/* ---------- Owner only: edit clothes, edit customer, cancel an order (kept on record) ---------- */
+let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false;
+const canFix = o => own() && !o.cancelled && o.status !== "picked";
+const orderTop = o => `<div class="topbar otop"><button class="back" data-back>← All orders</button>${canFix(o) ? `<button class="omore" id="omore" aria-expanded="${oMenu}" aria-haspopup="menu">More ⋯</button>` : ""}
+  ${oMenu && canFix(o) ? `<div class="omenu" role="menu"><button role="menuitem" data-om="items">Edit clothes</button><button role="menuitem" data-om="cust">Edit customer</button><button role="menuitem" class="red" data-om="cancel">Cancel order</button></div>` : ""}</div>`;
+function wireFix(root, o) {
+  const m = root.querySelector("#omore"); if (m) m.onclick = () => { oMenu = !oMenu; openOrder(o.no); };
+  root.querySelectorAll("[data-om]").forEach(b => b.onclick = () => {
+    oMenu = false; oMode = b.dataset.om; fxAdd = false;
+    if (oMode === "items") oDraft = o.items.map((it, i) => ({ ...it, from: i }));
+    openOrder(o.no);
+  });
+}
+// Turn the edited list back into items + the prices already agreed (kept for clothes that stayed).
+function draftToOrder(o, d) {
+  const kept = d.filter(x => x.qty > 0), unit = [], custom = {}; let missing = null;
+  kept.forEach((x, i) => {
+    const p = item(x.id) || {};
+    if (p.custom) { const v = x.from != null ? +o.m.custom[x.from] || 0 : 0; if (v) custom[i] = v; else missing = missing || x; unit.push(null); }
+    else unit.push(x.from != null && o.m.unit && o.m.unit[x.from] != null ? o.m.unit[x.from] : ((p.p || {})[x.svc] || 0));
+  });
+  return { items: kept.map(({ from, ...it }) => it), unit, custom, missing };
+}
+const draftPrice = (o, x) => { const p = item(x.id) || {}; if (p.custom) return x.from != null ? +o.m.custom[x.from] || 0 : 0; return x.from != null && o.m.unit && o.m.unit[x.from] != null ? o.m.unit[x.from] : ((p.p || {})[x.svc] || 0); };
+function fixView(o) {
+  const c = cust(o.cid), sh = $("#sheet"), first = c.name.split(" ")[0];
+  const head = t => `<div class="topbar"><button class="back" id="fxback">← ${o.cancelled ? "All orders" : "Back to order"}</button></div><h2 class="ptitle" style="margin:8px 0 10px">${t}</h2>`;
+  let body = "";
+  if (o.cancelled) {
+    body = `${head(`Order #${o.no}`)}
+      <div class="dhead"><div class="mark">${esc(c.mark)}</div><div><b>${esc(c.name)}</b><span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}dropped ${fmtDay(o.at)}</span></div></div>
+      <div class="lines">${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it))}</span><span>${own() ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div>`).join("")}</div>
+      <p class="fxnote">Cancelled${o.cancelled_by ? ` by ${esc(o.cancelled_by)}` : ""} on ${fmtDay(o.cancelled)}. It is not counted in your orders or totals.${o.m.paid ? ` The ${naira(o.m.paid)} paid on it still shows in your money received.` : ""}</p>
+      ${own() ? `<button class="btn btn-primary" id="fxrestore">Bring this order back</button>` : ""}`;
+  } else if (oMode === "items") {
+    const d = oDraft, n = draftToOrder(o, d);
+    const tmp = { ...o, items: n.items, m: { ...o.m, unit: o.billed ? n.unit : null, custom: n.custom, express_amt: expManual() ? o.m.express_amt : 0 }, billed: false };
+    const now = calc(o).total, next = n.items.length ? calc(tmp).total : 0;
+    const changed = JSON.stringify(n.items) !== JSON.stringify(o.items);
+    const pick = PRICES.filter(p => !p.hidden), addIt = item(fxAdd && fxAdd.id) || pick[0] || {};
+    const svcs = (addIt.services && addIt.services.length ? addIt.services : Object.keys(SERVICES));
+    body = `${head(`Edit clothes · #${o.no}`)}
+      <div class="fxlist">${d.map((x, i) => x.qty ? `<div class="fxit"><div><b>${esc(pname(x))}</b><span>${SERVICES[x.svc] || ""} · ${(item(x.id) || {}).custom ? "price set on the bill" : naira(draftPrice(o, x)) + " each"}</span></div>
+        <div class="qty"><button data-qm="${i}" aria-label="One less">−</button><b>${x.qty}</b><button data-qp="${i}" aria-label="One more">+</button></div></div>` : "").join("") || `<p class="hint">No clothes left. Add at least one, or cancel the order instead.</p>`}</div>
+      ${fxAdd ? `<div class="check fxadd"><label for="fxi" style="margin-top:0">Item</label><select id="fxi">${pick.map(p => `<option value="${p.id}" ${p.id === addIt.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+          ${addIt.custom ? `<label for="fxl">What is it?</label><input id="fxl" placeholder="e.g. Wedding gown" value="${esc(fxAdd.label || "")}" autocomplete="off">` : ""}
+          <label for="fxs">Service</label><select id="fxs">${svcs.map(k => `<option value="${k}" ${k === fxAdd.svc ? "selected" : ""}>${SERVICES[k]}</option>`).join("")}</select>
+          <div class="row"><button class="btn btn-ghost" id="fxaddx">Close</button><button class="btn btn-primary" id="fxaddgo">Add</button></div></div>`
+        : `<button class="fxaddbtn" id="fxaddopen">+ Add another item</button>`}
+      <div class="lines" style="margin-top:12px"><div><span>${n.items.reduce((s2, it) => s2 + it.qty, 0)} items</span><span></span></div><div><b>${changed ? "New total" : "Total"}</b><b>${naira(next)}</b></div></div>
+      ${changed && now !== next ? `<p class="hint">Was ${naira(now)}.${o.m.paid > next ? ` The customer has already paid ${naira(o.m.paid)}, more than the new total.` : ""}</p>` : ""}
+      ${n.missing ? `<p class="hint">Set the price for ${esc(pname(n.missing))} on the bill after saving.</p>` : ""}
+      ${changed && (o.list_sent || o.status === "told") ? `<p class="fxnote">You already sent ${esc(first)} the ${o.status === "told" ? "bill" : "list of clothes"}. After saving, Tagbook will show the updated one so you can send it again.</p>` : ""}
+      <div class="row"><button class="btn btn-ghost" id="fxundo" ${changed ? "" : "disabled"}>Undo changes</button><button class="btn btn-primary" id="fxsave" ${changed && n.items.length ? "" : "disabled"}>Save</button></div>`;
+  } else if (oMode === "cust") {
+    const others = orders.filter(x => x.cid === o.cid).length;
+    body = `${head("Edit customer")}
+      <p class="hint" style="margin-top:0">This changes the name and phone on ${others > 1 ? `all ${others} of ${esc(first)}'s orders` : `${esc(first)}'s orders`}.</p>
+      <label for="fxn">Name</label><input id="fxn" value="${esc(c.name)}" autocomplete="off" maxlength="60">
+      <label for="fxp">Phone</label><input id="fxp" type="text" inputmode="tel" value="${esc(c.phone)}" autocomplete="off">
+      <p class="fxnote">Their mark stays <b>${esc(c.mark)}</b>, because it is already written inside their clothes.</p>
+      <div class="row"><button class="btn btn-ghost" id="fxback2">Back</button><button class="btn btn-primary" id="fxcsave">Save</button></div>`;
+  } else if (oMode === "cancel") {
+    body = `${head(`Cancel order #${o.no}?`)}
+      <p class="hint" style="margin-top:0">It leaves your order lists and totals. You can still find it under "Cancelled" and bring it back.</p>
+      ${o.m.paid ? `<p class="fxnote warn">${naira(o.m.paid)} was already paid on this order. That payment stays on record. Refund the customer yourself if needed.</p>` : ""}
+      <div class="row"><button class="btn btn-ghost" id="fxback2">Keep it</button><button class="btn btn-danger" id="fxcancel">Cancel order</button></div>`;
+  }
+  sh.innerHTML = `<div class="app">${body}</div>`; sh.hidden = false; sh.scrollTop = 0;
+  const back = () => { if (o.cancelled) { go("orders"); return; } oMode = null; fxAdd = false; openOrder(o.no); };
+  sh.querySelectorAll("#fxback,#fxback2").forEach(b => b.onclick = back);
+  const rs = $("#fxrestore"); if (rs) rs.onclick = async () => {
+    rs.disabled = true; const { error } = await sb.rpc("owner_cancel_order", { p_order: o.id, p_cancel: false });
+    if (error) { toast(failMsg(error)); rs.disabled = false; return; }
+    o.cancelled = 0; o.cancelled_by = ""; cancelledOrders = cancelledOrders.filter(x => x !== o); orders.push(o); orders.sort((a, b) => a.no - b.no);
+    if (filter === "cx" && !cancelledOrders.length) filter = "all";
+    toast(`Order #${o.no} is back`); oFor = null; openOrder(o.no); if (tab === "orders") renderOrders();
+  };
+  if (oMode === "items" && !o.cancelled) {
+    sh.querySelectorAll("[data-qm]").forEach(b => b.onclick = () => { const x = oDraft[+b.dataset.qm]; x.qty = Math.max(0, x.qty - 1); fixView(o); });
+    sh.querySelectorAll("[data-qp]").forEach(b => b.onclick = () => { oDraft[+b.dataset.qp].qty++; fixView(o); });
+    const op = $("#fxaddopen"); if (op) op.onclick = () => { const p0 = PRICES.find(p => !p.hidden) || {}; fxAdd = { id: p0.id, svc: (p0.services || ["wi"])[0], label: "" }; fixView(o); };
+    if ($("#fxi")) $("#fxi").onchange = e => { const p = item(e.target.value) || {}; fxAdd = { id: p.id, svc: (p.services || ["wi"]).includes(fxAdd.svc) ? fxAdd.svc : (p.services || ["wi"])[0], label: "" }; fixView(o); };
+    if ($("#fxs")) $("#fxs").onchange = e => { fxAdd.svc = e.target.value; };
+    if ($("#fxl")) $("#fxl").oninput = e => { fxAdd.label = e.target.value; };
+    if ($("#fxaddx")) $("#fxaddx").onclick = () => { fxAdd = false; fixView(o); };
+    if ($("#fxaddgo")) $("#fxaddgo").onclick = () => {
+      const p = item(fxAdd.id) || {}, label = tidy(fxAdd.label || "").slice(0, 40);
+      if (p.custom && !label) { toast("Type what the special item is"); return; }
+      const same = !p.custom && oDraft.find(x => x.id === fxAdd.id && x.svc === fxAdd.svc);
+      if (same) same.qty++; else oDraft.push({ id: fxAdd.id, svc: fxAdd.svc, qty: 1, ...(p.custom ? { label } : {}) });
+      fxAdd = false; fixView(o);
+    };
+    if ($("#fxundo")) $("#fxundo").onclick = () => { oDraft = o.items.map((it, i) => ({ ...it, from: i })); fxAdd = false; fixView(o); };
+    const sv = $("#fxsave"); if (sv) sv.onclick = async () => {
+      const n = draftToOrder(o, oDraft); if (!n.items.length) return;
+      sv.disabled = true; sv.textContent = "Saving…";
+      const wasBilled = o.billed;
+      o.items = n.items; o.checked = {}; o.checking = false; o.m.custom = n.custom;
+      if (wasBilled) {
+        o.m.unit = n.unit;
+        if (n.missing) o.m.billed_at = null;
+        else { if (!expManual()) o.m.express_amt = 0; const kk = calc({ ...o, billed: false }); o.m.express_amt = kk.exp; o.m.total = kk.total; }
+      }
+      const ok = await put("orders", { id: o.id }, { items: o.items, checked: {}, checking: false }) && await saveMoney(o);
+      if (!ok) return;
+      if (o.list_sent && o.status !== "told") o.again.list = true;
+      if (o.status === "told" && o.billed) o.again.ready = true;
+      oMode = null; oDraft = null; fxAdd = false;
+      toast(n.missing ? `Clothes updated. Set the price for ${pname(n.missing)} and save the bill.` : o.again.list || o.again.ready ? "Clothes updated. Send the customer the updated message below." : "Clothes updated");
+      openOrder(o.no); if (tab === "orders") renderOrders();
+    };
+  }
+  const cs = $("#fxcsave"); if (cs) cs.onclick = async () => {
+    const name = tidy($("#fxn").value), phone = digits($("#fxp").value);
+    if (!name) { toast("Type the customer's name"); return; }
+    if (!/^0\d{10}$/.test(phone)) { toast("The phone number must be 11 digits and start with 0."); return; }
+    cs.disabled = true; cs.textContent = "Saving…";
+    const { data, error } = await sb.rpc("owner_edit_customer", { p_customer: o.cid, p_name: name, p_phone: phone });
+    if (error) { const t = /PHONE_TAKEN:(.*)/.exec(error.message || ""); toast(t ? `That number already belongs to ${t[1]}.` : failMsg(error)); cs.disabled = false; cs.textContent = "Save"; return; }
+    const cc = customers.find(x => x.id === o.cid); if (cc) { cc.name = data.name; cc.phone = data.phone; }
+    oMode = null; toast("Customer updated"); openOrder(o.no); if (tab === "orders") renderOrders();
+  };
+  const cx = $("#fxcancel"); if (cx) cx.onclick = async () => {
+    cx.disabled = true; cx.textContent = "Cancelling…";
+    const { error } = await sb.rpc("owner_cancel_order", { p_order: o.id, p_cancel: true });
+    if (error) { toast(/PICKED_UP/.test(error.message || "") ? "This order was already picked up." : failMsg(error)); cx.disabled = false; cx.textContent = "Cancel order"; return; }
+    o.cancelled = Date.now(); o.cancelled_by = (me && me.name) || ""; orders = orders.filter(x => x !== o); cancelledOrders.push(o);
+    oMode = null; oFor = null; toast(`Order #${o.no} cancelled. You can find it under "Cancelled".`); go("orders");
+  };
+}
+
 /* ---------- Order detail ---------- */
 function openOrder(no) {
-  const o = orders.find(x => x.no === no); if (!o) { go("orders"); return; }
+  const o = orders.find(x => x.no === no) || cancelledOrders.find(x => x.no === no); if (!o) { go("orders"); return; }
+  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; }
+  if (o.cancelled || oMode) { fixView(o); return; }
   const c = cust(o.cid), k = calc(o), sh = $("#sheet");
   if (own() && !o.notified) { o.notified = true; put("orders", { id: o.id }, { notified: true }); }
   const idx = STEPS.findIndex(s => s[0] === o.status);
@@ -1188,7 +1326,7 @@ function openOrder(no) {
 
   const y = sh.hidden ? 0 : sh.scrollTop;
   sh.innerHTML = `<div class="app">
-    ${backBtn("All orders")}
+    ${orderTop(o)}
     <div class="dhead"><div class="mark">${esc(c.mark)}</div><div><b>${esc(c.name)}</b>
       <span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${o.express ? " · express delivery" : ""}</span></div></div>
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
@@ -1196,7 +1334,7 @@ function openOrder(no) {
     ${html}
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
-  wireBack(sh);
+  wireBack(sh); wireFix(sh, o);
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
   sh.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
@@ -1259,6 +1397,8 @@ function liveByDay() {
     if (o.billed && o.m.billed_at) add(Date.parse(o.m.billed_at), "billed", o.m.total);
     (o.m.payments || []).forEach(p => add(p.at, "received", p.amt));
   });
+  // Money really came in on cancelled orders too, so it stays in "received".
+  cancelledOrders.forEach(o => (o.m.payments || []).forEach(p => add(p.at, "received", p.amt)));
   return m;
 }
 let rep = { type: "week", k: 0, sel: null };
