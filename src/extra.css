@@ -435,3 +435,9 @@ body.tplaying nav.tabs{visibility:hidden}
   #receipt .rbig{font-size:1.2em;margin:1mm 0}
   #receipt .rc{text-align:center;margin-top:1mm}
 }
+#supfab{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(78px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:6;text-decoration:none}
+#supfab[hidden]{display:none}
+#supfab:active{transform:scale(.94)}
+@media (min-width:480px) and (max-width:899px){#supfab{right:calc(50% - 204px)}}
+@media (min-width:900px){#supfab{right:28px;bottom:28px;width:58px;height:58px}}
+body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}

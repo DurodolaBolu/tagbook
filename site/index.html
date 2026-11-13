@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261113121147";</script>
+<script>window.TB_BUILD="20261113172210";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -596,6 +596,12 @@ body.tplaying nav.tabs{visibility:hidden}
   #receipt .rbig{font-size:1.2em;margin:1mm 0}
   #receipt .rc{text-align:center;margin-top:1mm}
 }
+#supfab{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(78px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:6;text-decoration:none}
+#supfab[hidden]{display:none}
+#supfab:active{transform:scale(.94)}
+@media (min-width:480px) and (max-width:899px){#supfab{right:calc(50% - 204px)}}
+@media (min-width:900px){#supfab{right:28px;bottom:28px;width:58px;height:58px}}
+body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -611,7 +617,7 @@ body.tplaying nav.tabs{visibility:hidden}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261113121147"></script>
+<script src="/app.js?v=20261113172210"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
