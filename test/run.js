@@ -198,6 +198,13 @@ async function handle(route) {
   await page.fill("#pay", "5000"); await T("#pp"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(300);
   console.log("money after part pay:", db.order_money[0].paid, "settled:", db.orders[0].settled);
   await page.$eval("#ppall", e => e.scrollIntoView({ block: "center" })); await page.screenshot({ path: path.join(out, "09b-pay-form.png") });
+  await page.evaluate(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
+  console.log("print button:", await page.textContent("#prt")); await T("#prt"); await page.waitForTimeout(200);
+  console.log("print called:", await page.evaluate(() => window.__printed), "| receipt has total:", (await page.textContent("#receipt")).includes("TOTAL"));
+  await page.emulateMedia({ media: "print" }); await page.evaluate(() => document.body.classList.add("printing"));
+  await page.locator("#receipt").screenshot({ path: path.join(out, "30-receipt-80.png") });
+  await page.evaluate(() => { document.querySelector("#receipt").className = "p58"; }); await page.locator("#receipt").screenshot({ path: path.join(out, "31-receipt-58.png") });
+  await page.evaluate(() => document.body.classList.remove("printing")); await page.emulateMedia({ media: "screen" });
   console.log("pay-all label:", await page.textContent("#ppall")); await T("#ppall"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(400); console.log("after pay-all:", db.order_money[0].paid, "of", db.order_money[0].total, "settled:", db.orders[0].settled);
   await T("#pick"); await shot("10a-confirm-picked"); await T('.cfm [data-c="0"]'); console.log("go back keeps status:", db.orders[0].status); await T("#pick"); await T('.cfm [data-c="1"]'); console.log("status:", db.orders[0].status); await shot("10-owner-picked");
   await T("#sheet [data-back]");

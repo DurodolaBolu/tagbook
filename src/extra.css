@@ -415,3 +415,23 @@ body.tplaying nav.tabs{visibility:hidden}
 .cfm-box .row .btn{flex:1}
 @media (min-width:900px){.cfm{align-items:center}.cfm-box{border-radius:20px}}
 .pli.ro{cursor:default}
+.prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+.prow .btn{flex:1;min-width:180px;margin:0}
+#receipt{display:none}
+@media print{
+  body.printing>*:not(#receipt){display:none!important}
+  body.printing{background:#fff!important;margin:0;padding:0}
+  body.printing #receipt{display:block;color:#000;background:#fff;font:12px/1.35 "IBM Plex Sans",Arial,sans-serif;padding:3mm 3mm 6mm}
+  #receipt.p80{width:72mm}
+  #receipt.p58{width:48mm;font-size:10.5px}
+  #receipt .rhead{text-align:center}
+  #receipt .rhead b{display:block;font-size:1.35em;line-height:1.2}
+  #receipt .rhead span{display:block}
+  #receipt .rsep{border-top:1px dashed #000;margin:2mm 0}
+  #receipt .rr{display:flex;justify-content:space-between;gap:2mm}
+  #receipt .rr span:last-child{text-align:right;white-space:nowrap}
+  #receipt .ri{margin-bottom:1mm}
+  #receipt .ri small{display:block;font-size:.85em}
+  #receipt .rbig{font-size:1.2em;margin:1mm 0}
+  #receipt .rc{text-align:center;margin-top:1mm}
+}

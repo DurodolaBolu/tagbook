@@ -1198,6 +1198,39 @@ const METHODS = [["cash", "Cash"], ["transfer", "Transfer"], ["pos", "POS"]];
 let payMethod = null;
 const methodChips = (cur, attr) => `<div class="chips" style="margin:8px 0 0" role="group" aria-label="How did they pay?">${METHODS.map(([k, l]) => `<button class="chip" data-${attr}="${k}" aria-pressed="${cur === k}">${l}</button>`).join("")}</div>`;
 const payForm = (ph, full) => `${full ? `<button class="btn btn-primary" id="ppall">${full === true ? "Paid in full" : `Paid in full · ${naira(full)}`}</button><p class="hint" style="margin:6px 0 2px">Paid only part? Type the amount below.</p>` : ""}<label for="pay">Amount received (₦)</label><input id="pay" ${moneyAttrs} placeholder="${ph}"><button class="btn ${full ? "btn-ghost" : "btn-primary"}" id="pp">Record payment</button>`;
+/* ---------- Printed receipt (supermarket-style receipt printers, 80mm or 58mm) ---------- */
+let paper = (() => { try { return localStorage.getItem("tb-paper") === "58" ? "58" : "80"; } catch (_) { return "80"; } })();
+function receiptHtml(o) {
+  const c = cust(o.cid), k = calc(o), priced = own() && o.billed;
+  const row = (l, r, cls) => `<div class="rr${cls ? " " + cls : ""}"><span>${l}</span><span>${r}</span></div>`;
+  const total = o.m.total || k.total, due = owed(o);
+  const bank = priced && due && hasBank() ? (() => { const b = sPriv(); return `<div class="rsep"></div><div class="rc">Pay by transfer to<br><b>${esc(b.bank_name.trim())}</b><br><b>${esc(b.acct_no)}</b><br>${esc(b.acct_name.trim())}</div>`; })() : "";
+  return `<div class="rhead"><b>${esc(shop.name)}</b>${liveBranches().length > 1 ? `<span>${esc(branchName(o.branch))}</span>` : ""}</div>
+    <div class="rsep"></div>
+    ${row("Receipt no.", "#" + o.no)}${row("Customer", esc(c.name))}${row("Tag mark", esc(c.mark))}${row("Dropped", fmtDay(o.at))}${row("Printed", fmtDay(Date.now()))}
+    <div class="rsep"></div>
+    ${o.items.map((it, i) => `<div class="ri"><div class="rr"><span>${it.qty} × ${esc(pname(it))}</span><span>${priced ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div><small>${SERVICES[it.svc]}</small></div>`).join("")}
+    <div class="rsep"></div>
+    ${priced ? `${k.exp ? row("Express delivery", naira(k.exp)) : ""}${o.m.delivery ? row("Pickup / delivery", naira(o.m.delivery)) : ""}${o.m.discount ? row("Discount", "-" + naira(o.m.discount)) : ""}
+      ${row("<b>TOTAL</b>", `<b>${naira(total)}</b>`, "rbig")}${row("Paid", naira(o.m.paid))}${row(due ? "<b>Balance</b>" : "Balance", due ? `<b>${naira(due)}</b>` : "Fully paid")}`
+      : row("<b>Clothes</b>", `<b>${k.count}</b>`, "rbig") + `<div class="rc">${own() ? "Bill to follow when your clothes are ready." : "Keep this slip for pickup."}</div>`}
+    ${bank}
+    <div class="rsep"></div><div class="rc">Thank you for your patronage.</div>`;
+}
+function printReceipt(o) {
+  let r = document.getElementById("receipt");
+  if (!r) { r = document.createElement("div"); r.id = "receipt"; document.body.appendChild(r); }
+  r.className = "p" + paper; r.innerHTML = receiptHtml(o);
+  let st = document.getElementById("receipt-page");
+  if (!st) { st = document.createElement("style"); st.id = "receipt-page"; document.head.appendChild(st); }
+  st.textContent = `@page{size:${paper}mm auto;margin:0}`;
+  document.body.classList.add("printing");
+  const done = () => { document.body.classList.remove("printing"); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  setTimeout(() => { window.print(); setTimeout(done, 1500); }, 50);
+}
+const printBlock = o => `<div class="prow"><button class="btn btn-ghost" id="prt">${own() && o.billed ? "Print receipt" : "Print drop-off slip"}</button>
+  <div class="aseg" aria-label="Receipt paper width"><button data-paper="80" aria-pressed="${paper === "80"}">80mm</button><button data-paper="58" aria-pressed="${paper === "58"}">58mm</button></div></div>`;
 const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
 
 /* ---------- Owner only: edit clothes, edit customer, cancel an order (kept on record) ---------- */
@@ -1399,6 +1432,7 @@ function openOrder(no) {
   if (o.status === "ready" || o.status === "told") html += `<button class="btn btn-ghost" id="pick" style="margin-top:16px">Clothes picked up</button>
     <p class="hint">Mark this when the customer takes the clothes${own() ? ". Payment is recorded separately, because some customers pay later." : ". Payment is recorded by the owner."}</p>`;
 
+  html += printBlock(o);
   const y = sh.hidden ? 0 : sh.scrollTop;
   sh.innerHTML = `<div class="app">
     ${orderTop(o)}
@@ -1410,6 +1444,8 @@ function openOrder(no) {
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
   wireBack(sh); wireFix(sh, o);
+  if ($("#prt")) $("#prt").onclick = () => printReceipt(o);
+  sh.querySelectorAll("[data-paper]").forEach(b => b.onclick = () => { paper = b.dataset.paper; try { localStorage.setItem("tb-paper", paper); } catch (_) { } sh.querySelectorAll("[data-paper]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.paper === paper))); });
   const setGreet = async g => {
     sh.querySelectorAll("[data-og],#og-save").forEach(x => x.disabled = true);
     const { data, error } = await sb.rpc("owner_set_greet", { p_customer: o.cid, p_greet: g || null });
