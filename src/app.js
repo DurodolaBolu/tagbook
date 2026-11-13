@@ -278,13 +278,15 @@ function leadMsg(l, kind) {
 }
 /* Message for a live shop that hasn't started, or has gone quiet */
 function nudgeMsg(r) {
-  const first = String(r.owner_name || "").trim().split(/\s+/)[0];
+  // Skip initials like "O A Matthew" -> "Matthew"
+  const first = String(r.owner_name || "").trim().split(/\s+/).find(w => w.replace(/[^a-z]/gi, "").length >= 3) || "";
   const hi = `${greet()}${first ? " " + first : ""}. This is Bolu from Tagbook.`;
   const cl = daysLeft(coveredUntil(r));
   if (cl !== null && cl < 0) return `${hi}\n\nYour Tagbook plan ended on ${longDay(coveredUntil(r))}.${cl >= -2 ? " You can still log clothes for a short while, but it will pause soon." : " New orders are paused for now, but all your records are safe."}\n\nYou can pay in the app under Settings, Plan & billing. The 6 months plan gives you 1 month free.\n\nIf you'd rather pay us directly, just reply here.\n\nBolu, Tagbook team`;
-  if (!r.orders) return `${hi}\n\nWe noticed no clothes have gone into Tagbook yet. Is anything stopping you, or is something not clear?\n\nIf you like, we can come by and log the first few customers with you. Each one takes less than a minute.\n\nBolu, Tagbook team`;
+  const vid = ((tuts || []).find(t => t.step_key === "order") || {}).youtube_id || "SiUDE8sCSQ4";
+  if (!r.orders) return `${hi}\n\nWe noticed no clothes have gone into Tagbook yet. Is anything stopping you, or is something not clear?\n\nThis short video shows how to log your first customer's clothes. It takes less than a minute: https://youtu.be/${vid}\n\nIf you'd like us to walk you through it, just reply and we'll give you a quick call.\n\nBolu, Tagbook team`;
   const days = Math.floor((Date.now() - Date.parse(r.last_order)) / 864e5);
-  return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it.\n\nBolu, Tagbook team`;
+  return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it. We can also give you a quick call to help.\n\nBolu, Tagbook team`;
 }
 /* ---------- Plan & billing ---------- */
 let plan = null, planPick = "m6", planBusy = false;
