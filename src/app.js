@@ -99,7 +99,7 @@ async function fetchAll(table, cols, orderBy) {
 
 async function load() {
   const base = await Promise.all([
-    sb.from("shops").select("id,name,created_at,is_test").single(),
+    sb.from("shops").select("id,name,created_at,is_test,staff_prices").single(),
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
     fetchAll("customers", "id,name,mark,greet,greet_asked"),
@@ -122,6 +122,8 @@ async function load() {
     ip.forEach(r => prices[r.item_id] = r.prices);
     ph.forEach(r => phones[r.customer_id] = r.phone);
     om.forEach(r => money[r.order_id] = r);
+  } else if (shop.staff_prices) {
+    (await fetchAll("item_prices", "item_id,prices")).forEach(r => prices[r.item_id] = r.prices);
   }
   PRICES = base[2].map(i => ({ ...i, p: prices[i.id] || {} }));
   customers.forEach(c => c.phone = phones[c.id] || "");
@@ -185,7 +187,7 @@ let channel = null;
 function subscribe() {
   if (channel) sb.removeChannel(channel);
   channel = sb.channel("shop-" + shop.id);
-  const tables = ["orders", "customers", "items", "branches", "shops"].concat(own() ? ["order_money", "customer_phones", "item_prices", "shop_private"] : []);
+  const tables = ["orders", "customers", "items", "branches", "shops"].concat(own() ? ["order_money", "customer_phones", "item_prices", "shop_private"] : shop.staff_prices ? ["item_prices"] : []);
   tables.forEach(t => channel.on("postgres_changes", { event: "*", schema: "public", table: t, filter: t === "shops" ? `id=eq.${shop.id}` : `shop_id=eq.${shop.id}` }, refresh));
   channel.subscribe();
 }
@@ -1585,7 +1587,7 @@ function renderSettings() {
   const tabsList = isAdmin ? SET_TABS.concat([["shops", "Tagbook shops"]]) : SET_TABS;
   const nav = own() ? `<nav class="stabs" aria-label="Settings sections">${tabsList.map(([k, l]) => `<button data-st="${k}" aria-current="${setTab === k ? "page" : "false"}">${l}</button>`).join("")}</nav>` : "";
   let body = "";
-  if (setTab === "account") body = (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
+  if (setTab === "account") body = (!own() && shop.staff_prices ? staffPriceHtml() : "") + (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
       `<label for="np">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}><button class="btn btn-ghost" id="npb">Save new PIN</button>`)
     + card("Log out", "", `<button class="btn btn-ghost" id="out" style="margin-top:0">Log out</button>`);
   if (setTab === "business") { const p = sPriv(); body =
@@ -1603,7 +1605,7 @@ function renderSettings() {
   if (setTab === "branches") body = card("Branches", "Where customers drop clothes. With one branch, the app doesn't ask.",
       `${liveBranches().map(b => `<div class="row srow"><input data-bn="${b.id}" value="${esc(b.name)}" autocomplete="off" aria-label="Branch name">${liveBranches().length > 1 ? `<button class="mini danger" data-brm="${b.id}">Remove</button>` : ""}</div>`).join("")}
        <div class="row srow"><input id="nb" placeholder="New branch name" autocomplete="off" aria-label="New branch name"><button class="mini" id="nbb">Add</button></div>`);
-  if (setTab === "staff") body = card("Staff logins", "Staff log clothes and check them before bagging. They never see prices, money or customer numbers.",
+  if (setTab === "staff") body = card("Staff logins", `Staff log clothes and check them before bagging. They never see bills, payments or customer numbers${shop.staff_prices ? ", but they can see your price list to answer customers" : ""}.`,
       staffList.map(s => `<div class="staff-row"><div><b>${esc(s.name)}${s.user_id === me.user_id ? " (you)" : ""}</b><span>${s.role === "owner" ? "Owner" : "Staff"} · ${fmtPhone(s.phone)}</span></div>
         ${s.user_id === me.user_id ? "" : `<div class="acts"><button class="mini" data-rp="${s.user_id}">New PIN</button><button class="mini danger" data-srm="${s.user_id}">Remove</button></div>`}</div>
         ${resetFor === s.user_id ? `<div class="row srow"><input id="rpi" class="pin" ${pinAttrs} placeholder="6 digits" aria-label="New PIN for ${esc(s.name)}"><button class="mini" id="rpb">Save</button></div>` : ""}`).join(""))
@@ -1615,7 +1617,9 @@ function renderSettings() {
       `<div class="sgrid"><div><label for="sfn">Name</label><input id="sfn" placeholder="e.g. Grace" autocomplete="off"></div>
        <div><label for="sfp">Phone number</label><input id="sfp" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
        <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${genPinAttrs()}></div></div>
-       <button class="btn btn-primary" id="sfa">Add staff login</button>`));
+       <button class="btn btn-primary" id="sfa">Add staff login</button>`))
+    + card("Price list for staff", "Lets staff see your prices so they can answer customers who ask. They can't change prices or see any bill.",
+      `<div class="chips" style="margin:0"><button class="chip" data-sp="1" aria-pressed="${!!shop.staff_prices}">Staff can see prices</button><button class="chip" data-sp="0" aria-pressed="${!shop.staff_prices}">Hide prices from staff</button></div>`);
   if (setTab === "prices") body = priceListHtml();
   if (setTab === "plan" && own()) body = planHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
@@ -1648,6 +1652,7 @@ async function drawPushBox() {
 }
 function wireAccount() {
   drawPushBox();
+  const spq = $("#spq"); if (spq) spq.oninput = e => { priceQ = e.target.value; const p = e.target.selectionStart; renderSettings(); const n = $("#spq"); n.focus(); n.setSelectionRange(p, p); };
   $("#npb").onclick = async () => {
     const pin = digits($("#np").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; }
     $("#npb").disabled = true;
@@ -1677,6 +1682,7 @@ function wireBranches() {
 }
 let newStaff = null;
 function wireStaff() {
+  view.querySelectorAll("[data-sp]").forEach(b => b.onclick = async () => { const v = b.dataset.sp === "1"; if (v === !!shop.staff_prices) return; shop.staff_prices = v; renderSettings(); savedToast(await put("shops", { id: shop.id }, { staff_prices: v })); });
   view.querySelectorAll("[data-rp]").forEach(b => b.onclick = () => { resetFor = resetFor === b.dataset.rp ? null : b.dataset.rp; renderSettings(); const i = $("#rpi"); if (i) i.focus(); });
   if ($("#rpb")) $("#rpb").onclick = async () => { const pin = digits($("#rpi").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; } $("#rpb").disabled = true; const r = await callAdmin({ action: "reset_pin", user_id: resetFor, pin }); toast(r.ok ? "New PIN saved. Tell them in person." : r.msg); if (r.ok) { resetFor = null; renderSettings(); } else $("#rpb").disabled = false; };
   view.querySelectorAll("[data-srm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again"; return; } b.disabled = true; const r = await callAdmin({ action: "remove_staff", user_id: b.dataset.srm }); toast(r.ok ? "Staff login removed" : r.msg); if (r.ok) { await load(); renderSettings(); } });
@@ -1803,6 +1809,17 @@ function wireShops() {
 }
 
 /* Price list: a table on a laptop, a short list on a phone where you tap an item to change it */
+// Read-only price list for staff, so they can answer "how much?" at the counter.
+function staffPriceHtml() {
+  const all = PRICES.filter(x => !x.custom && !x.hidden && Object.keys(x.p || {}).some(k => x.p[k] != null));
+  if (!all.length) return "";
+  const q = priceQ.trim().toLowerCase();
+  const list = q ? all.filter(x => x.name.toLowerCase().includes(q)) : all;
+  const line = x => Object.keys(SERVICES).filter(k => x.p[k] != null).map(k => `${shortSvc[k]} ${naira(x.p[k])}`).join(" · ");
+  return card("Price list", "To answer customers. Only the owner can change prices.",
+    `${all.length > 8 ? `<input class="search" id="spq" placeholder="Search items" value="${esc(priceQ)}" aria-label="Search items" style="margin:4px 0 10px">` : ""}
+     <div class="plist">${list.length ? list.map(x => `<div class="pli ro"><b>${esc(x.name)}</b><span>${line(x)}</span></div>`).join("") : `<p class="hint">No item matches “${esc(priceQ)}”.</p>`}</div>`);
+}
 function priceListHtml() {
   const all = PRICES.filter(x => !x.custom && !x.hidden);
   const q = priceQ.trim().toLowerCase();

@@ -8,7 +8,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
 const db = {
-  shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1 }],
+  shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
           { user_id: secId, shop_id: shopId, role: "secretary", name: "Grace", phone: "08000000091", active: true, created_at: "2026-11-02" }],
@@ -19,7 +19,8 @@ const P = [["Shirt", { wi: 800, wo: 500, io: 300, wsi: 1000 }], ["Trouser", { wi
 P.forEach(([n, p], i) => { const id = "it" + i; db.items.push({ id, shop_id: shopId, name: n, custom: !p, services: p ? Object.keys(p) : ["wi", "wo", "io", "wsi"], sort: i, hidden: false }); if (p) db.item_prices.push({ item_id: id, shop_id: shopId, prices: p }); });
 let current = null; // logged-in user id
 const ownerOnly = new Set(["shop_private", "item_prices", "customer_phones", "order_money"]);
-const rowsFor = t => { const me = db.staff.find(s => s.user_id === current); if (ownerOnly.has(t) && me.role !== "owner") return []; return db[t]; };
+const staffMay = t => t === "item_prices" && db.shops[0].staff_prices;
+const rowsFor = t => { const me = db.staff.find(s => s.user_id === current); if (ownerOnly.has(t) && me.role !== "owner" && !staffMay(t)) return []; return db[t]; };
 function filterRows(rows, params) {
   for (const [k, v] of params) { if (["select", "order", "limit", "offset", "on_conflict", "columns"].includes(k)) continue;
     const [op, ...rest] = v.split("."); const val = rest.join(".");
@@ -167,7 +168,8 @@ async function handle(route) {
   await T("#rd"); console.log("status after sec ready:", db.orders[0].status);
   await T("#sheet [data-back]");
   // log out
-  await T("#gear"); await shot("06-sec-settings"); await T("#out"); await T("#out"); await page.waitForTimeout(500);
+  await T("#gear"); await shot("06-sec-settings");
+  console.log("staff sees price list (expect true):", await page.isVisible(".pli.ro"), "| shirt price shown:", (await page.textContent("#view")).includes("₦800"), "| no edit inputs:", !(await page.isVisible("[data-pp]"))); await T("#out"); await T("#out"); await page.waitForTimeout(500);
 
   // OWNER
   await login("08120756325"); await shot("07-owner-orders");
@@ -257,6 +259,9 @@ async function handle(route) {
   await shot("13-owner-settings");
   // dark mode
   await T("#themebtn"); await T("[data-back]"); await shot("14-dark"); await T("#themebtn");
+  // owner hides prices from staff
+  await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T('[data-st="staff"]'); await shot("13b-staff-prices-toggle");
+  await T('[data-sp="0"]'); await page.waitForTimeout(300); console.log("staff_prices saved off:", db.shops[0].staff_prices === false);
   // staff types a regular customer's full number: picked automatically; unknown number opens New customer
   await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T('[data-st="account"]'); await T("#out"); await T("#out"); await page.waitForTimeout(500);
   await login("08000000091"); await T("#tabs button.new");
@@ -264,6 +269,7 @@ async function handle(route) {
   console.log("staff sees phone anywhere:", (await page.textContent("#view")).includes("0801"));
   await T("#cchange"); await page.fill("#cq", "08099998888"); await page.waitForTimeout(600); console.log("unknown number opens new:", await page.isVisible("#nm"), await page.inputValue("#ph"));
   await shot("15-staff-newfromsearch");
+  await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(400); console.log("staff price list hidden after owner turns off (expect false):", await page.isVisible(".pli.ro"));
   await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T("#out"); await T("#out"); await page.waitForTimeout(500); await login("08120756325");
   // laptop
   await page.setViewportSize({ width: 1440, height: 900 });

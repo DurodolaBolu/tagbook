@@ -414,3 +414,4 @@ body.tplaying nav.tabs{visibility:hidden}
 .cfm-box p{margin:0 0 14px;color:var(--muted);font-size:15px}
 .cfm-box .row .btn{flex:1}
 @media (min-width:900px){.cfm{align-items:center}.cfm-box{border-radius:20px}}
+.pli.ro{cursor:default}
