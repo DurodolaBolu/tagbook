@@ -270,13 +270,27 @@ async function loadLeads() {
 }
 const ONDO_NEAR = ["Ondo town", "Owo", "Ore", "Ikare-Akoko", "Akungba", "Ile-Oluji", "Okitipupa", "Idanre"];
 function greet() { const h = (new Date().getUTCHours() + 1) % 24; return h < 12 ? "Good morning" : h < 16 ? "Good afternoon" : "Good evening"; }
+// Outreach messages rotate between versions so WhatsApp doesn't see the same text sent again and again.
+// Each lead keeps its version for this page visit, so "Message on WhatsApp" and "Copy" always match.
+const LEAD_FIRST = [
+  (g, n, near, visit) => `${g}. This is Bolu from Tagbook. We found ${n} on Google Maps.${near}\n\nWe've built a simple app that helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp and see who still owes.\n\nCan we send you a 2 minute video of how it works?${visit}\n\nBolu, Tagbook team`,
+  (g, n, near, visit) => `${g}. Is this the owner of ${n}?\n\nMy name is Bolu, from Tagbook.${near} We help laundry shops keep track of customers' clothes and payments from their phone.\n\nWould you like to see a short video of how it works?${visit}`,
+  (g, n, near, visit) => `${g}. Bolu here, from Tagbook.${near} We came across ${n} on Google.\n\nWe have an app made for laundry and dry cleaning shops. It records each customer's clothes, sends their bill on WhatsApp and shows you who hasn't paid.\n\nShould we send you a quick video?${visit}\n\nBolu, Tagbook team`,
+  (g, n, near, visit) => `${g}. This is Bolu from Tagbook.${near}\n\nHow do you keep track of your customers' clothes at ${n} right now? A book, tags, or memory?\n\nWe made a simple app that does it for you and also sends the bill on WhatsApp. Can we show you a 2 minute video?${visit}`,
+  (g, n, near, visit) => `${g}. We saw ${n} on Google Maps and wanted to reach out. This is Bolu from Tagbook.${near}\n\nTagbook is an app for laundry shops: log customers' clothes, send bills on WhatsApp, see who owes. The first month is free.\n\nCan we send you a short video?${visit}\n\nBolu, Tagbook team`,
+];
+const LEAD_FOLLOW = [
+  g => `${g}. Just checking if you saw our message about Tagbook, the app that records your customers' clothes and payments. We're happy to send a 2 minute video if you'd like to see it.\n\nBolu, Tagbook team`,
+  g => `${g}. Following up on our message about Tagbook for your shop. Would a short video of how it works be helpful?`,
+  g => `${g}. Just checking in. Did you get a chance to see our message? We'd be happy to show you how Tagbook works for laundry shops.\n\nBolu, Tagbook team`,
+];
+const leadPick = {}; let leadTurn = Math.floor(Math.random() * 15);
 function leadMsg(l, kind) {
-  if (kind === "follow") return `${greet()}. Just checking if you saw our message about Tagbook, the app that records your customers' clothes and payments. We're happy to send a 2 minute video if you'd like to see it.\n\nBolu, Tagbook team`;
-  const what = "We built a simple app that helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp, and see who still owes. Shops started using it this week.";
-  if (ONDO_NEAR.includes(l.city)) return `${greet()}. This is Bolu from Tagbook, we're based in Akure, not far from you. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works?\n\nBolu, Tagbook team`;
-  return l.city === "Akure"
-    ? `${greet()}. This is Bolu from Tagbook, we're based here in Akure. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works? Since we're in Akure, we can also come by to set it up for you.\n\nBolu, Tagbook team`
-    : `${greet()}. This is Bolu from Tagbook. We found ${l.name} on Google Maps.\n\n${what}\n\nCan we send you a 2 minute video of how it works?\n\nBolu, Tagbook team`;
+  const list = kind === "follow" ? LEAD_FOLLOW : LEAD_FIRST, key = l.id + ":" + kind;
+  if (leadPick[key] == null) leadPick[key] = leadTurn++ % list.length; // next version in turn, so neighbours never match
+  if (kind === "follow") return list[leadPick[key]](greet());
+  const akure = l.city === "Akure", near = akure ? " We're based here in Akure." : ONDO_NEAR.includes(l.city) ? " We're in Akure, not far from you." : "";
+  return list[leadPick[key]](greet(), l.name, near, akure ? "\n\nSince we're in Akure, we can also come by and set it up for you." : "");
 }
 /* Message for a live shop that hasn't started, or has gone quiet */
 function nudgeMsg(r) {
