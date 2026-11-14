@@ -475,7 +475,10 @@ const waLink = (phone, text) => {
 function renderLeads() {
   if (olead === null) { loadLeads(); view.innerHTML = `${adminSeg()}<p class="hint">Loading leads…</p>`; wireAdminSeg(); return; }
   const today = lagosDay(Date.now());
-  const sentToday = olog.filter(x => x.kind !== "called" && lagosDay(x.sent_at) === today).length; // after-call messages are warm, so they don't count toward the cold limit
+  // Cold messages today, one per shop. A shop you also spoke to on the phone today is warm, so it doesn't count,
+  // even if the plain message button was tapped for it first. Tapping the same button twice counts once.
+  const todays = olog.filter(x => lagosDay(x.sent_at) === today), warm = new Set(todays.filter(x => x.kind === "called").map(x => x.lead_id));
+  const sentToday = new Set(todays.filter(x => x.kind !== "called" && !warm.has(x.lead_id)).map(x => x.lead_id)).size;
   const lastSent = id => olog.filter(x => x.lead_id === id).reduce((m, x) => Math.max(m, Date.parse(x.sent_at)), 0);
   const cityOrder = ["Akure"].concat(ONDO_NEAR, ["Ado Ekiti", "Osogbo", "Ile-Ife", "Ibadan", "Ilorin", "Abeokuta", "Lagos", "Benin City", "Abuja", "Port Harcourt"]);
   const cities = [...new Set(olead.map(l => l.city))].sort((a, b) => (cityOrder.indexOf(a) + 1 || 99) - (cityOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
