@@ -1,0 +1,5 @@
+#!/bin/bash
+# Runs the Tagbook pre-deploy checks before any push. Pushing to main deploys the live site,
+# so a failed check stops the push. Turned on by ./deploy.sh (git config core.hooksPath .githooks).
+cd "$(git rev-parse --show-toplevel)" || exit 1
+exec scripts/predeploy.sh

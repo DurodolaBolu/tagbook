@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "./build.sh",
+    "check": "scripts/predeploy.sh",
+    "test": "node test/run.js",
+    "deploy": "./deploy.sh",
+    "postdeploy:check": "scripts/postdeploy.sh"
   },
   "keywords": [],
   "author": "",

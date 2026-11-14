@@ -12,18 +12,21 @@
   function busy(){var a=document.activeElement;return a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName);}
   function onHome(){var sh=$q("#sheet");return (!sh||sh.hidden)&&(location.hash===""||location.hash==="#orders");}
   function showBar(){if(shown)return;shown=true;var b=document.createElement("button");b.id="tb-upd";b.textContent="New version ready. Tap to update.";b.onclick=function(){location.reload();};document.body.appendChild(b);}
+  var lastCheck=0;
   function check(){
     if(!BUILD||document.visibilityState!=="visible")return;
+    if(Date.now()-lastCheck<60000)return; lastCheck=Date.now(); // at most once a minute
     fetch("/version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){
       if(!j||!j.v||j.v===BUILD)return;
       if(onHome()&&!busy())location.reload(); else showBar();
     }).catch(function(){});
     if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration)navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update();}).catch(function(){});
   }
-  setInterval(check,60000);
+  /* No timer: check when the app comes back into view or the person moves between screens. */
   document.addEventListener("visibilitychange",check);
   window.addEventListener("focus",check);
-  window.addEventListener("hashchange",function(){if(shown&&onHome()&&!busy())location.reload();});
+  window.addEventListener("hashchange",function(){if(shown&&onHome()&&!busy()){location.reload();return;}check();});
+  check();
 
   /* ---- pull down to refresh ---- */
   var ind=document.createElement("div");ind.id="tb-ptr";ind.textContent="Pull down to refresh";document.body.appendChild(ind);
