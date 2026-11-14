@@ -68,7 +68,7 @@ async function handle(route) {
     return send(200, { ok: true });
   }
   if (p === "/functions/v1/admin") {
-    if (body.action === "create_shop") { if (current !== ownerId) return send(403, { error: "NOT_ALLOWED" }); db.shops.push({ id: uid(), name: body.shop, created_at: new Date().toISOString(), trial_ends: body.trial_ends, referred_by: body.referred_by }); global.lastCreate = body; return send(200, { ok: true }); }
+    if (body.action === "create_shop") { global.lastCreate = body; if (current !== ownerId) return send(403, { error: "NOT_ALLOWED" }); db.shops.push({ id: uid(), name: body.shop, created_at: new Date().toISOString(), trial_ends: body.trial_ends, referred_by: body.referred_by }); global.lastCreate = body; return send(200, { ok: true }); }
     if (body.action === "add_staff") { if (db.staff.some(s => s.phone === body.phone)) return send(409, { error: "PHONE_IN_USE" }); db.staff.push({ user_id: uid(), shop_id: shopId, role: "secretary", name: body.name, phone: body.phone, active: true, created_at: new Date().toISOString() }); }
     return send(200, { ok: true });
   }
@@ -175,7 +175,7 @@ async function handle(route) {
     console.log("first visit shows the choice, Start a new shop opens sign-up:", !!(await page.$("#sform")));
     await page.goto("http://localhost:8787/?start=1"); await page.waitForSelector("#sform"); if (C) { await page.setViewportSize({ width: 390, height: 1100 }); await page.screenshot({ path: path.join(C, "signup-empty.png"), fullPage: true }); }
     await page.fill("#su-shop", "Ksolo247 Laundry"); await page.fill("#su-name", "Egwu Solomon"); await page.fill("#su-phone", "08120756325");
-    await page.fill("#su-area", "Oba Ile, Akure"); await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482916");
+    await page.selectOption("#su-state", "Ondo"); await page.fill("#su-area", "Oba Ile"); await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482916");
     await page.click("#sgo"); await page.waitForTimeout(300);
     console.log("signup pin mismatch caught:", /don't match/.test(await page.textContent(".lerr")));
     await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482915"); await page.waitForTimeout(4000);
@@ -185,7 +185,7 @@ async function handle(route) {
     const saved = db.orders; db.orders = [];
     await page.fill("#su-phone", "08144737794"); await page.click("#sgo");
     await page.waitForSelector(".scard.welcome", { timeout: 8000 }).catch(() => {});
-    console.log("signup lands on welcome card:", !!(await page.$(".scard.welcome")), "| honeypot empty:", global.signups.slice(-1)[0].website === "", "| area sent:", global.signups.slice(-1)[0].area);
+    console.log("signup lands on welcome card:", !!(await page.$(".scard.welcome")), "| honeypot empty:", global.signups.slice(-1)[0].website === "", "| area sent:", global.signups.slice(-1)[0].area, "| state sent:", global.signups.slice(-1)[0].state);
     if (C) { await page.screenshot({ path: path.join(C, "signup-welcome.png"), fullPage: true }); }
     db.orders = saved; db.staff = db.staff.filter(s => s.user_id !== "u-new");
     await page.evaluate(() => { try { sessionStorage.clear(); localStorage.clear(); } catch (_) { } });
@@ -423,7 +423,7 @@ async function handle(route) {
   await T("#gear"); await shot("13a-settings-business");
   await T('[data-st="account"]'); await page.waitForTimeout(400); console.log("account notifications box:", (await page.textContent("#pushbox")).trim().slice(0, 40)); await shot("13x-account");
   await T('[data-st="shops"]'); await page.waitForTimeout(300);
-  await page.fill("#as-n", "Saheed Dry Cleaners"); await page.fill("#as-b", "Main branch, Awule point, Oke-Ijebu point"); await page.fill("#as-on", "Saheed Bello"); await page.fill("#as-op", "08055556666"); await page.fill("#as-pin", "246810"); await page.selectOption("#as-r", { index: 1 });
+  await page.fill("#as-n", "Saheed Dry Cleaners"); await page.selectOption("#as-st", "Ondo"); await page.fill("#as-tw", "Akure"); await page.fill("#as-b", "Main branch, Awule point, Oke-Ijebu point"); await page.fill("#as-on", "Saheed Bello"); await page.fill("#as-op", "08055556666"); await page.fill("#as-pin", "246810"); await page.selectOption("#as-r", { index: 1 });
   await T("#as-go"); await page.waitForTimeout(500); console.log("create_shop sent:", JSON.stringify(global.lastCreate)); await shot("16-admin-created");
   console.log("shops listed:", (await page.textContent("#view")).includes("Saheed Dry Cleaners"), "| referral shown:", (await page.textContent("#view")).includes("Referred by BrightWash Test"), (await page.textContent("#view")).includes("Brought 1 shop"));
   await T('[data-st="business"]');
@@ -464,7 +464,7 @@ async function handle(route) {
   await page.click(".order"); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, "21-laptop-order.png") });
   await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(400); await T('[data-st="prices"]'); await shot("22-laptop-prices");
   await T('[data-st="shops"]'); await page.waitForTimeout(300);
-  await page.fill("#as-n", "Saheed Dry Cleaners"); await page.fill("#as-b", "Main branch, Awule point, Oke-Ijebu point"); await page.fill("#as-on", "Saheed Bello"); await page.fill("#as-op", "08055556666"); await page.fill("#as-pin", "246810"); await page.selectOption("#as-r", { index: 1 });
+  await page.fill("#as-n", "Saheed Dry Cleaners"); await page.selectOption("#as-st", "Ondo"); await page.fill("#as-tw", "Akure"); await page.fill("#as-b", "Main branch, Awule point, Oke-Ijebu point"); await page.fill("#as-on", "Saheed Bello"); await page.fill("#as-op", "08055556666"); await page.fill("#as-pin", "246810"); await page.selectOption("#as-r", { index: 1 });
   await T("#as-go"); await page.waitForTimeout(500); console.log("create_shop sent:", JSON.stringify(global.lastCreate)); await shot("16-admin-created");
   console.log("shops listed:", (await page.textContent("#view")).includes("Saheed Dry Cleaners"), "| referral shown:", (await page.textContent("#view")).includes("Referred by BrightWash Test"), (await page.textContent("#view")).includes("Brought 1 shop"));
   await T('[data-st="business"]'); await shot("23-laptop-business");

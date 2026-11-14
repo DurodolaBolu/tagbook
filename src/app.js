@@ -594,7 +594,8 @@ function renderAdmin() {
         <div><dt>Last opened</dt><dd>${ago(r.last_active)}</dd></div>
         <div><dt>Logins</dt><dd>${r.owners} owner, ${r.staff} staff</dd></div>
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
-        <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}${r.self_signup ? ` · signed up themselves${r.area ? " · " + esc(r.area) : ""}${r.confirmed ? "" : " · <b>not confirmed</b>"}` : ""}</dd></div>
+        <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}${r.self_signup ? ` · signed up themselves${r.confirmed ? "" : " · <b>not confirmed</b>"}` : ""}</dd></div>
+        <div><dt>Location</dt><dd>${esc([r.area, r.state].filter(Boolean).join(", ") || "not set")}</dd></div>
         <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}</dd></div>
         <div><dt>Agent</dt><dd>${esc(r.brought_by_name || "Ordiventa")} · helper: ${esc(r.setup_by_name || "none")}</dd></div>
         <div><dt>Paid</dt><dd>${r.paid_until ? `until ${longDay(r.paid_until)} · ${naira(r.paid_total)} so far` : r.paid_total ? naira(r.paid_total) + " so far" : "not yet"}${r.free_months ? ` · ${r.free_months} free month${r.free_months === 1 ? "" : "s"} earned` : ""}</dd></div>
@@ -662,8 +663,9 @@ function renderAdmin() {
       <div class="stat"><b>${naira(real.length * PRICE_MONTH)}</b><span>Monthly, once all pay</span></div>
     </div>
     ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
-    ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area ? " · " + esc(r.area) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
+    ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
+    ${(by => by.length ? `<section class="scard dstates"><h3 class="stitle">Shops by state</h3><p class="ssub">${by.map(([k, n]) => `<span class="dstate"><b>${n}</b> ${esc(k)}</span>`).join("")}</p></section>` : "")(Object.entries(real.reduce((m, r) => { const k = r.state || "Not set"; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]))}
     <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
     ${refHtml}
     ${agentHtml}
@@ -2269,6 +2271,8 @@ function shopsHtml() {
        <div class="row"><button class="btn btn-ghost" id="nscopy">Copy</button><button class="btn btn-ghost" id="nsagain">Add another shop</button></div>`) : "";
   const form = newShop ? "" : card("Add a shop", "Creates the shop with the standard price list. The owner can change prices, add branches and staff in their own Settings.",
       `<label for="as-n">Shop name</label><input id="as-n" placeholder="e.g. Saheed Dry Cleaners" autocomplete="off" maxlength="${NAME_MAX}"><p class="hint">Up to ${NAME_MAX} letters. It shows at the top of their app and on every bill, so shorter reads better ("&amp;" instead of "and", no "services").</p>
+       <div class="sgrid"><div><label for="as-st">State</label><select id="as-st">${stateOpts("")}</select></div>
+       <div><label for="as-tw">Town or area</label><input id="as-tw" maxlength="60" placeholder="e.g. Akure" autocomplete="off"></div></div>
        <label for="as-b">Branches</label><input id="as-b" placeholder="Main branch" autocomplete="off"><p class="hint">Separate with commas, e.g. Main branch, Awule point, Oke-Ijebu point.</p>
        <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" placeholder="e.g. Saheed" autocomplete="off" maxlength="40"></div>
        <div><label for="as-op">Owner's phone</label><input id="as-op" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
@@ -2302,10 +2306,11 @@ function wireShops() {
   $("#as-go").onclick = async () => {
     const shopName = tidy($("#as-n").value), owner = tidy($("#as-on").value), phone = digits($("#as-op").value), pin = digits($("#as-pin").value);
     const branches = $("#as-b").value.split(",").map(x => x.trim()).filter(Boolean);
-    const err = !shopName ? "Type the shop name." : shopName.length > NAME_MAX ? `Shop name is too long. Keep it to ${NAME_MAX} letters.` : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
+    const state = $("#as-st").value, town = tidy($("#as-tw").value);
+    const err = !shopName ? "Type the shop name." : shopName.length > NAME_MAX ? `Shop name is too long. Keep it to ${NAME_MAX} letters.` : !state ? "Choose the shop's state." : !town ? "Type the shop's town or area." : !owner ? "Type the owner's name." : !/^0\d{10}$/.test(phone) ? "The owner's phone must be 11 digits and start with 0." : pin.length !== 6 ? "The PIN must be 6 digits." : "";
     if (err) { toast(err); return; }
     $("#as-go").disabled = true; $("#as-go").textContent = "Creating…";
-    const r = await callAdmin({ action: "create_shop", shop: shopName, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t") ? $("#as-t").value || null : null, start_no: num($("#as-no").value) || 1, founding: $("#as-f") ? $("#as-f").checked : true, referred_by: $("#as-r").value || null,
+    const r = await callAdmin({ action: "create_shop", shop: shopName, state, area: town, branches, owner: { name: owner, phone, pin }, trial_ends: $("#as-t") ? $("#as-t").value || null : null, start_no: num($("#as-no").value) || 1, founding: $("#as-f") ? $("#as-f").checked : true, referred_by: $("#as-r").value || null,
       ...(agentMode() ? (v => v === "ordiventa" || v === "self" ? { claim_kind: v } : { claim_kind: "team", claim_for: v })($("#as-cf").value) : { brought_by: $("#as-ab").value || null, setup_by: $("#as-as").value || null }) });
     if (!r.ok) { toast(r.msg); $("#as-go").disabled = false; $("#as-go").textContent = "Create shop"; return; }
     const installVid = ((tuts || []).find(t => t.step_key === "install") || {}).youtube_id || "chuV8thnvrE";
@@ -2421,12 +2426,14 @@ function showLogin(msg) {
 // Optional Cloudflare bot check: paste the Turnstile site key here and add TURNSTILE_SECRET in Supabase.
 const TURNSTILE_SITE = "";
 let S = null; // sign-up form state
+const NG_STATES = ["Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT Abuja", "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"];
+const stateOpts = cur => `<option value="">Choose a state</option>${NG_STATES.map(x => `<option ${x === cur ? "selected" : ""}>${x}</option>`).join("")}`;
 const wantsSignup = () => /[?&]start\b/.test(location.search) || location.hash === "#start";
 function showSignup() {
   document.documentElement.dataset.tb = theme() === "dark" ? "dark" : "light";
   $("#app").hidden = true; $("#tabsnav").hidden = true;
   L = L || { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null };
-  S = { step: "form", shop: "", name: "", phone: "", area: "", pin: "", pin2: "", err: "", busy: false, t0: Date.now(), pinId: "", code: "", bot: "" };
+  S = { step: "form", shop: "", name: "", phone: "", area: "", state: "", pin: "", pin2: "", err: "", busy: false, t0: Date.now(), pinId: "", code: "", bot: "" };
   drawSignup();
 }
 const SIGN_ERR = {
@@ -2434,6 +2441,8 @@ const SIGN_ERR = {
   MISSING_NAME: "Type your shop name and your name.",
   NAME_TOO_LONG: `Shop name is too long. Keep it to ${NAME_MAX} letters.`,
   BAD_PIN: "Your PIN must be 6 digits.",
+  BAD_STATE: "Choose the state your shop is in.",
+  MISSING_TOWN: "Type the town or area your shop is in.",
   TOO_FAST: "Please check your details, then tap Start again.",
   BOT_CHECK: "Please complete the check above, then try again.",
   TOO_MANY: "Too many sign-ups from this phone today. Message us on WhatsApp and we'll set you up.",
@@ -2461,9 +2470,10 @@ function drawSignup() {
         <p class="lask">Set up your laundry on Tagbook in 1 minute. No payment now.</p>
         <form class="lform" id="sform" novalidate>
           ${f("su-shop", "Shop name", S.shop, `maxlength="${NAME_MAX}" autocomplete="organization" placeholder="e.g. Bright Wash Laundry"`)}
-          ${f("su-name", "Your name", S.name, `maxlength="40" autocomplete="name" placeholder="e.g. Mrs. Adaeze Okafor"`)}
+          ${f("su-name", "Your name", S.name, `maxlength="40" autocomplete="name" placeholder="e.g. Adaeze Okafor"`)}
           ${f("su-phone", "Your phone number", S.phone ? fmtPhone(S.phone) : "", `inputmode="tel" autocomplete="tel" maxlength="13" placeholder="11 digits, starting with 0"`, "You'll log in with this number.")}
-          ${f("su-area", "Town or area", S.area, `maxlength="60" placeholder="e.g. Oba Ile, Akure"`)}
+          <label for="su-state">State</label><select id="su-state">${stateOpts(S.state)}</select>
+          ${f("su-area", "Town or area", S.area, `maxlength="60" placeholder="e.g. Akure"`)}
           <div class="sgrid">
             <div>${f("su-pin", "Choose a 6-digit PIN", S.pin, `type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" class="pin"`)}</div>
             <div>${f("su-pin2", "Type the PIN again", S.pin2, `type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" class="pin"`)}</div>
@@ -2479,7 +2489,7 @@ function drawSignup() {
       <p class="lpriv">By starting, you agree to our <a href="/privacy">Privacy policy</a>.</p>
     </main></div>`;
   const keep = () => { if (S.step !== "form") { S.code = digits(($("#su-code") || {}).value || "").slice(0, 6); return; }
-    S.shop = $("#su-shop").value; S.name = $("#su-name").value; S.phone = digits($("#su-phone").value); S.area = $("#su-area").value;
+    S.shop = $("#su-shop").value; S.name = $("#su-name").value; S.phone = digits($("#su-phone").value); S.area = $("#su-area").value; S.state = $("#su-state").value;
     S.pin = digits($("#su-pin").value).slice(0, 6); S.pin2 = digits($("#su-pin2").value).slice(0, 6); };
   $("#sform").onsubmit = e => { e.preventDefault(); keep(); submitSignup(); };
   $("#sback").onclick = () => { keep(); if (S.step === "code") { S.step = "form"; S.err = ""; return drawSignup(); } S = null; showLogin(); L.choose = false; drawLogin(); };
@@ -2499,7 +2509,7 @@ async function submitSignup() {
   const shopName = tidy(S.shop), name = tidy(S.name);
   const err = S.step === "code" ? (S.code.length !== 6 ? "Type the 6-digit code from the text message." : "")
     : !shopName ? "Type your shop name." : shopName.length > NAME_MAX ? SIGN_ERR.NAME_TOO_LONG : !name ? "Type your name."
-    : !/^0\d{10}$/.test(S.phone) ? SIGN_ERR.BAD_PHONE : S.pin.length !== 6 ? "Choose a 6-digit PIN." : S.pin !== S.pin2 ? "The two PINs don't match. Type them again." : "";
+    : !/^0\d{10}$/.test(S.phone) ? SIGN_ERR.BAD_PHONE : !S.state ? SIGN_ERR.BAD_STATE : !tidy(S.area) ? SIGN_ERR.MISSING_TOWN : S.pin.length !== 6 ? "Choose a 6-digit PIN." : S.pin !== S.pin2 ? "The two PINs don't match. Type them again." : "";
   if (err) { S.err = esc(err); return drawSignup(); }
   S.err = ""; S.busy = true; drawSignup();
   const base = { phone: S.phone, website: ($("#su-web") || {}).value || "", bot_token: S.bot };
@@ -2509,7 +2519,7 @@ async function submitSignup() {
     if (c.pin_id) { S.pinId = c.pin_id; S.step = "code"; S.busy = false; return drawSignup(); }
     if (c.error !== "CODES_OFF") return signupFailed(c.error);
   }
-  const r = await signupCall({ action: "self_signup", ...base, shop: shopName, name, area: tidy(S.area), pin: S.pin, ms: Date.now() - S.t0, pin_id: S.pinId, code: S.code });
+  const r = await signupCall({ action: "self_signup", ...base, shop: shopName, name, area: tidy(S.area), state: S.state, pin: S.pin, ms: Date.now() - S.t0, pin_id: S.pinId, code: S.code });
   if (r.error) return signupFailed(r.error);
   // Created: log straight in and land on a welcome card that points at the first customer.
   try { sessionStorage.setItem("tb-welcome", "1"); } catch (_) { }

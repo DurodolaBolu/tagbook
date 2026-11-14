@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261114141230";</script>
+<script>window.TB_BUILD="20261114142851";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -708,6 +708,13 @@ details.wtext[open] summary::after{content:" ▴"}
 .lpick span{font-size:14px;color:var(--muted);line-height:1.4}
 .lpick:hover,.lpick:focus-visible{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);outline:none}
 #pick-new{border-color:var(--accent);background:var(--accent-soft)}
+/* Sign-up: labels clearly stronger than placeholders */
+.lform label{font-weight:600;color:var(--fg);font-size:15px}
+.lform input::placeholder{color:var(--muted);opacity:.75;font-weight:400}
+.lform select{min-height:50px;padding:12px 14px;font-size:16px;border:1px solid var(--line,#D5DCD9);border-radius:10px;background:var(--card);color:var(--fg);width:100%;box-sizing:border-box}
+.dstates .ssub{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:6px}
+.dstate{font-size:14px;color:var(--muted)}
+.dstate b{color:var(--fg);margin-right:3px}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -723,7 +730,7 @@ details.wtext[open] summary::after{content:" ▴"}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261114141230"></script>
+<script src="/app.js?v=20261114142851"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
