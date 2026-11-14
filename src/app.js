@@ -305,7 +305,7 @@ function callScriptHtml() {
 }
 const O_STATUS = { new: "To contact", nopick: "Didn't pick up", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
 const O_PILL = { new: "p-new", nopick: "p-billed", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
-const DAILY_SAFE = 5;
+const DAILY_SAFE = 3; // cold messages a day, sent from the router line; raise slowly once the line has a good history
 const lagosDay = t => new Date(new Date(t).getTime() + 3600e3).toISOString().slice(0, 10);
 async function loadLeads() {
   if (oleadBusy) return; oleadBusy = true;
@@ -510,7 +510,7 @@ function renderLeads() {
     <div class="dtop"><div><h2 class="ptitle">Leads</h2><p class="hint">${olead.length} shops · tap a button to open WhatsApp with the message ready</p></div><div class="row"><button class="btn btn-ghost" id="oadd">+ Add a lead</button></div></div>
     <div class="owa"><span>Open chats in</span><div class="aseg"><button data-wapp="business" aria-pressed="${waApp === "business"}">WhatsApp Business</button><button data-wapp="normal" aria-pressed="${waApp === "normal"}">WhatsApp</button></div></div>
     <section class="scard osent"><div class="osent-top"><b>${sentToday} of ${DAILY_SAFE}</b><span>messages sent today</span></div><div class="obar"><i style="width:${pct}%" class="${sentToday >= DAILY_SAFE ? "full" : ""}"></i></div>
-      <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the 0812 line." : `${DAILY_SAFE - sentToday} more today keeps the 0812 line safe.`}</p>
+      <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the router line." : `${DAILY_SAFE - sentToday} more today keeps the router line safe.`}</p>
       ${(() => { const t = msgTiming(); return `<p class="otime ${t.ok ? "ok" : ""}" style="margin:6px 0 0">${t.text}</p>`; })()}</section>
     ${callScriptHtml()}
     ${oAdd ? `<section class="scard dlead"><h3 class="stitle">Add a lead</h3>
