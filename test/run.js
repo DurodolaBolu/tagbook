@@ -193,6 +193,12 @@ async function handle(route) {
   // OWNER
   global.planFail = true;
   await login("08120756325"); await shot("07-owner-orders");
+  { // a far-right filter stays visible after tapping it (the row used to jump back to the start)
+    await page.click('[data-f="picked"]'); await page.waitForTimeout(300);
+    const vis = await page.evaluate(() => { const c = document.querySelector('[data-f="picked"]'), row = c.parentElement, a = c.getBoundingClientRect(), b = row.getBoundingClientRect(); return a.left >= b.left - 1 && a.right <= b.right + 1; });
+    console.log("tapped filter stays in view:", vis); await shot("07b-filter-in-view");
+    await page.click('[data-f="all"]'); await page.waitForTimeout(300);
+  }
   await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T('[data-st="plan"]'); global.planCalls = 0; await page.waitForTimeout(2500);
   console.log("plan down: calls in 2.5s (expect <=1):", global.planCalls, "| try again shown:", await page.isVisible("#planretry"));
   global.planFail = false; await T("#planretry"); await page.waitForTimeout(600);

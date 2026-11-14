@@ -21,6 +21,18 @@ const moneyAttrs = 'type="text" inputmode="numeric" pattern="[0-9]*" autocomplet
 function moneyInput(el, fn) { if (!el) return; el.addEventListener("input", () => { const c = digits(el.value); if (el.value !== c) el.value = c; fn(num(c)); }); }
 const $ = s => document.querySelector(s);
 const view = $("#view");
+// Sideways-scrolling menus (order filters, Settings sections, lead cities and statuses) are redrawn on every tap,
+// which used to jump them back to the start and hide the item just tapped. Keep the picked item in view, centred.
+function showPicked(root) {
+  root.querySelectorAll(".chips, .stabs").forEach(row => {
+    if (row.scrollWidth <= row.clientWidth + 2) return;
+    const pick = row.querySelector('[aria-pressed="true"], [aria-current="page"]');
+    if (!pick) return;
+    const r = row.getBoundingClientRect(), p = pick.getBoundingClientRect();
+    row.scrollLeft = Math.max(0, row.scrollLeft + (p.left - r.left) - (r.width - p.width) / 2);
+  });
+}
+new MutationObserver(() => showPicked(view)).observe(view, { childList: true });
 function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(t._h); t._h = setTimeout(() => t.hidden = true, 2800); }
 const busy = () => { const a = document.activeElement; return !!(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); };
 
