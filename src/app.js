@@ -339,11 +339,18 @@ const LEAD_FOLLOW = [
   g => `${g}. Following up on our message about Tagbook for your shop. Would a short video of how it works be helpful?`,
   g => `${g}. Just checking in. Did you get a chance to see our message? We'd be happy to show you how Tagbook works for laundry shops.\n\nBolu, Tagbook team`,
 ];
+// After a phone call: warm, not cold. Says which number this is, since calls go out from another line.
+const LEAD_CALLED = [
+  (g, n, visit) => `${g}. This is Bolu from Tagbook. Thank you for taking our call earlier. This is our WhatsApp number, so you can save it.\n\nTagbook helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp and see who still owes.\n\nCan we send you a 2 minute video of how it works?${visit}`,
+  (g, n, visit) => `${g}. It's Bolu from Tagbook. We spoke on the phone earlier about ${n}. We called from a different line, this is our WhatsApp number.\n\nLike we said, Tagbook keeps track of your customers' clothes and payments from your phone. Would you like a short video of how it works?${visit}`,
+  (g, n, visit) => `${g}. Bolu here, from Tagbook, following up on our call earlier.\n\nThis is the WhatsApp number we mentioned. Tagbook is a simple app for laundry shops: log customers' clothes, send bills on WhatsApp and see who hasn't paid. The first month is free.\n\nShould we send you a quick video?${visit}`,
+];
 const leadPick = {}; let leadTurn = Math.floor(Math.random() * 15);
 function leadMsg(l, kind) {
-  const list = kind === "follow" ? LEAD_FOLLOW : LEAD_FIRST, key = l.id + ":" + kind;
+  const list = kind === "follow" ? LEAD_FOLLOW : kind === "called" ? LEAD_CALLED : LEAD_FIRST, key = l.id + ":" + kind;
   if (leadPick[key] == null) leadPick[key] = leadTurn++ % list.length; // next version in turn, so neighbours never match
   if (kind === "follow") return list[leadPick[key]](greet());
+  if (kind === "called") return list[leadPick[key]](greet(), l.name, l.city === "Akure" ? "\n\nWe can also come by and set it up for you." : "");
   const akure = l.city === "Akure", near = akure ? " We're based here in Akure." : ONDO_NEAR.includes(l.city) ? " We're in Akure, not far from you." : "";
   return list[leadPick[key]](greet(), l.name, near, akure ? "\n\nSince we're in Akure, we can also come by and set it up for you." : "");
 }
@@ -459,7 +466,7 @@ const waLink = (phone, text) => {
 function renderLeads() {
   if (olead === null) { loadLeads(); view.innerHTML = `${adminSeg()}<p class="hint">Loading leads…</p>`; wireAdminSeg(); return; }
   const today = lagosDay(Date.now());
-  const sentToday = olog.filter(x => lagosDay(x.sent_at) === today).length;
+  const sentToday = olog.filter(x => x.kind !== "called" && lagosDay(x.sent_at) === today).length; // after-call messages are warm, so they don't count toward the cold limit
   const lastSent = id => olog.filter(x => x.lead_id === id).reduce((m, x) => Math.max(m, Date.parse(x.sent_at)), 0);
   const cityOrder = ["Akure"].concat(ONDO_NEAR, ["Ado Ekiti", "Osogbo", "Ile-Ife", "Ibadan", "Ilorin", "Abeokuta", "Lagos", "Benin City", "Abuja", "Port Harcourt"]);
   const cities = [...new Set(olead.map(l => l.city))].sort((a, b) => (cityOrder.indexOf(a) + 1 || 99) - (cityOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
@@ -471,10 +478,12 @@ function renderLeads() {
   const card = l => {
     const last = lastSent(l.id), days = last ? (Date.now() - last) / 864e5 : null;
     let act = "";
+    const called = `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="called" href="${waLink(l.phone, leadMsg(l, "called"))}" target="_blank" rel="noopener">Called them? Send after-call message</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="called">Copy after-call message</button>` : ""}`;
     if (!l.phone) act = `<span class="hint">No phone yet</span>`;
-    else if (l.status === "new") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="first" href="${waLink(l.phone, leadMsg(l, "first"))}" target="_blank" rel="noopener">Message on WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="first">Copy message instead</button>` : ""}`;
-    else if (l.status === "messaged") act = days !== null && days >= 2 ? `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="follow" href="${waLink(l.phone, leadMsg(l, "follow"))}" target="_blank" rel="noopener">Send follow-up</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="follow">Copy follow-up instead</button>` : ""}` : `<span class="hint">Messaged ${ago(new Date(last).toISOString())}</span>`;
+    else if (l.status === "new") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="first" href="${waLink(l.phone, leadMsg(l, "first"))}" target="_blank" rel="noopener">Message on WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="first">Copy message instead</button>` : ""}` + called;
+    else if (l.status === "messaged") act = days !== null && days >= 2 ? `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="follow" href="${waLink(l.phone, leadMsg(l, "follow"))}" target="_blank" rel="noopener">Send follow-up</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="follow">Copy follow-up instead</button>` : ""}` : `<span class="hint">Messaged ${ago(new Date(last).toISOString())}</span>`
     else if (l.status !== "no") act = `<a class="btn btn-ghost" href="${waLink(l.phone)}" target="_blank" rel="noopener">Open chat</a>`;
+    if (l.phone && l.status === "messaged") act += called;
     return `<section class="olead${l.status === "no" ? " is-no" : ""}">
       <div class="ohead"><div><b>${esc(l.name)}</b><span>${esc(l.area || "")}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</span></div><span class="pill ${O_PILL[l.status]}">${O_STATUS[l.status]}</span></div>
       ${l.notes ? `<p class="onote">${esc(l.notes)}</p>` : ""}
