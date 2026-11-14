@@ -2284,7 +2284,7 @@ function wireShops() {
       ...(agentMode() ? (v => v === "ordiventa" || v === "self" ? { claim_kind: v } : { claim_kind: "team", claim_for: v })($("#as-cf").value) : { brought_by: $("#as-ab").value || null, setup_by: $("#as-as").value || null }) });
     if (!r.ok) { toast(r.msg); $("#as-go").disabled = false; $("#as-go").textContent = "Create shop"; return; }
     const installVid = ((tuts || []).find(t => t.step_key === "install") || {}).youtube_id || "chuV8thnvrE";
-    newShop = { phone, msg: `Your Tagbook is ready, ${owner.split(" ")[0]}.\n\nOpen this link on your phone: tagbook.ordiventa.com\nPhone: ${phone}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.\n\nThis short video shows how to put Tagbook on your phone so it opens like an app: https://youtu.be/${installVid}\n\nOnce you log in, a short checklist will guide you through the rest.\n\nIf you get stuck, just message us here.\n\nWelcome, and thank you for starting with us.` };
+    newShop = { phone, msg: `Your Tagbook is ready, ${owner.split(" ")[0]}.\n\nOpen this link on your phone: tagbook.ordiventa.com\nPhone: ${phone}\nPIN: ${pin}\n\nTip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.\n\nThis short video shows how to put Tagbook on your phone so it opens like an app: https://youtu.be/${installVid}\n\nOnce you log in, tap \"+ Log clothes\" and add your next customer. We can call you to walk you through the first one, just tell us when you're ready.\n\nIf you get stuck, just message us here.\n\nWelcome, and thank you for starting with us.` };
     shopRows = null; rerenderShops();
   };
 }

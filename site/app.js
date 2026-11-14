@@ -544,7 +544,7 @@ Tip: add it to your Home Screen so it opens like an app. You can change your PIN
 
 This short video shows how to put Tagbook on your phone so it opens like an app: https://youtu.be/${o}
 
-Once you log in, a short checklist will guide you through the rest.
+Once you log in, tap "+ Log clothes" and add your next customer. We can call you to walk you through the first one, just tell us when you're ready.
 
 If you get stuck, just message us here.
 
