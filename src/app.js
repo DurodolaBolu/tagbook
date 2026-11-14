@@ -132,6 +132,8 @@ async function load() {
     ]);
     if (p.error) throw p.error;
     priv = p.data; staffList = st;
+    // Record that the owner uses the installed app, even if the checklist is hidden, so Bolu can see it.
+    if (priv && standalone() && !(priv.setup || {}).installed) markSetup("installed");
     ip.forEach(r => prices[r.item_id] = r.prices);
     ph.forEach(r => phones[r.customer_id] = r.phone);
     om.forEach(r => money[r.order_id] = r);
@@ -249,6 +251,7 @@ function shopFlags(r) {
   if (cl !== null && cl < 0) f.push([cl < -2 ? "Plan ended, orders paused" : "Plan ended, in 2-day grace", "owes"]);
   else if (cl !== null && cl <= 7) f.push([(r.paid_until && r.paid_until >= cov ? "Plan" : "Trial") + (cl === 0 ? " ends today" : " ends in " + cl + " day" + (cl === 1 ? "" : "s")), "warn"]);
   if (!r.staff) f.push(["No staff login", "warn"]);
+  if (!r.installed) f.push(["App not installed", "warn"]);
   if (!r.push) f.push(["Owner alerts off", "warn"]);
   return f;
 }
@@ -596,6 +599,7 @@ function renderAdmin() {
         <div><dt>Last order</dt><dd>${r.last_order ? ago(r.last_order) : "none yet"}</dd></div>
         <div><dt>Last opened</dt><dd>${ago(r.last_active)}</dd></div>
         <div><dt>Logins</dt><dd>${r.owners} owner, ${r.staff} staff</dd></div>
+        <div><dt>App installed</dt><dd>${r.installed ? "Yes" : "No"}</dd></div>
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
         <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}${r.self_signup ? ` · signed up themselves${r.confirmed ? "" : " · <b>not confirmed</b>"}` : ""}</dd></div>
         <div><dt>Location</dt><dd>${esc([r.area, r.state].filter(Boolean).join(", ") || "not set")}</dd></div>
@@ -668,6 +672,11 @@ function renderAdmin() {
     ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
     ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
+    ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !r.push), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
+      return real.length ? `<section class="scard dstates"><h3 class="stitle">App and alerts</h3>
+        <p class="ssub"><span class="dstate"><b>${real.length - noApp.length}</b> of ${real.length} installed the app</span><span class="dstate"><b>${real.length - noPush.length}</b> of ${real.length} have alerts on</span></p>
+        ${noApp.length ? `<p class="dfollow"><b>Not installed:</b> ${names(noApp)}</p>` : ""}
+        ${noPush.length ? `<p class="dfollow"><b>Alerts off:</b> ${names(noPush)}</p>` : ""}</section>` : ""; })()}
     ${(st => { const n = k => st.filter(x => x.kind === k).reduce((a, x) => a + Number(x.sends), 0), sh = k => Math.max(0, ...st.filter(x => x.kind === k).map(x => Number(x.shops))); const pdf = n("pdf"), txt = n("text");
       return `<section class="scard dstates"><h3 class="stitle">Bills sent, last 30 days</h3>${pdf + txt ? `<p class="ssub"><span class="dstate"><b>${pdf}</b> as PDF invoice${sh("pdf") ? ` (${sh("pdf")} shop${sh("pdf") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${txt}</b> as text${sh("text") ? ` (${sh("text")} shop${sh("text") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${Math.round(pdf / (pdf + txt) * 100)}%</b> PDF</span></p>` : `<p class="ssub">None yet. Counting started 14 Nov.</p>`}</section>`; })(sendStats)}
     ${(by => by.length ? `<section class="scard dstates"><h3 class="stitle">Shops by state</h3><p class="ssub">${by.map(([k, n]) => `<span class="dstate"><b>${n}</b> ${esc(k)}</span>`).join("")}</p></section>` : "")(Object.entries(real.reduce((m, r) => { const k = r.state || "Not set"; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]))}

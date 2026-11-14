@@ -567,3 +567,6 @@ details.early>summary{cursor:pointer;color:var(--accent);font-weight:600;padding
 details.early>summary::-webkit-details-marker{display:none}
 details.early>summary::after{content:" ▾"}
 details.early[open]>summary::after{content:" ▴"}
+.dfollow{margin:10px 0 0;font-size:14px;line-height:1.7;color:var(--muted)}
+.dfollow b{color:var(--fg);margin-right:4px}
+.dname{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:1px 10px;margin:2px 4px 2px 0;color:var(--fg);font-size:13px}
