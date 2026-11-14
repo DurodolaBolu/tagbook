@@ -702,22 +702,23 @@ function render() {
 // Right side of an order in the list: at most one money line and, only under "All" or a search,
 // one plain status word. The filter chips already say the status, so it isn't repeated there.
 function orderRight(o, showStatus) {
+  // [words, colour class]: each stage has its own colour so rows are easy to tell apart at a glance
   const st = own()
-    ? { new: "Send list", listed: "In progress", ready: "Ready, not told", told: "Customer told", picked: "Picked up" }
-    : { new: "In progress", listed: "In progress", ready: "Ready", told: "Ready", picked: "Picked up" };
+    ? { new: ["Send list", "s-new"], listed: ["In progress", "s-work"], ready: ["Ready, not told", "s-new"], told: ["Customer told", "s-told"], picked: ["Picked up", "s-done"] }
+    : { new: ["In progress", "s-work"], listed: ["In progress", "s-work"], ready: ["Ready", "s-told"], told: ["Ready", "s-told"], picked: ["Picked up", "s-done"] };
   let money = "";
   if (own() && !o.cancelled) {
     // A bold amount is always money still to collect.
     const due = owed(o);
     if (o.billed && due && (o.status === "told" || o.status === "picked")) money = `<b class="owes">Owes ${naira(due)}</b>`;
     else if (o.billed && due) money = `<b>${naira(due)} due</b>`;
-    else if (o.billed) money = `<span class="sub">Paid</span>`;
+    else if (o.billed) money = `<span class="sub s-paid">Paid</span>`;
     else if (o.m.paid) money = `<span class="sub">${naira(o.m.paid)} paid</span>`;
     else if (o.status !== "new") money = `<span class="sub">No bill yet</span>`;
   }
   if (!own() && o.billed && (o.status === "told" || o.status === "picked") && owed(o)) money = `<b class="owes">Not paid</b>`;
-  const status = o.cancelled ? "Cancelled" : showStatus ? st[o.status] : "";
-  return money + (status ? `<span class="sub">${status}</span>` : "");
+  const status = o.cancelled ? ["Cancelled", "s-done"] : showStatus ? st[o.status] : null;
+  return money + (status ? `<span class="sub ${status[1]}">${status[0]}</span>` : "");
 }
 
 /* ---------- Install banner: Android gets the real install prompt, iPhone gets the steps ---------- */

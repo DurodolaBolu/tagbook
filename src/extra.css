@@ -474,3 +474,11 @@ body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
 .order .right b{font-size:16px}
 .order .right b.owes{color:var(--owes)}
 .order .right .sub{font-size:13px;color:var(--muted)}
+/* Order stage colours (text only, no badges) */
+:root{--stage-work:#1D5FA8;--stage-told:#6B3FC4}
+:root[data-tb="dark"]{--stage-work:#8DB8F2;--stage-told:#C2A6F5}
+.order .right .sub.s-paid{color:var(--accent);font-weight:600}
+.order .right .sub.s-new{color:var(--warn);font-weight:600}
+.order .right .sub.s-work{color:var(--stage-work);font-weight:600}
+.order .right .sub.s-told{color:var(--stage-told);font-weight:600}
+.order .right .sub.s-done{color:var(--muted)}
