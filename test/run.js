@@ -213,7 +213,9 @@ async function handle(route) {
   console.log("push banner for staff:", await page.isVisible("#pushon"));
   await T("#tabs button.new"); await shot("02b-log-empty"); await T("#cnew");
   await page.fill("#ph", "08011112222"); await page.waitForTimeout(400);
-  await page.fill("#nm", "Ade Bello"); console.log("staff sees greeting question (expect false):", await page.isVisible(".gchips")); await T('[data-hm="no"]');
+  await page.fill("#nm", "Ade Bello"); console.log("staff sees greeting question (expect false):", await page.isVisible(".gchips")); await T('[data-hm="yes"]'); await page.fill("#mk", "lag-10457x9"); await page.waitForTimeout(200);
+  console.log("mark kept to 8, capitals, no dash:", await page.inputValue("#mk"));
+  await T('[data-hm="no"]');
   await T('[data-add="it0"]'); await T('[data-add="it0"]'); await T('[data-svc="wo"]'); await T('[data-add="it1"]');
   await T('[data-add="it3"]'); await page.fill("#sp", "Wedding gown"); await T("#spa");
   await page.selectOption("#br", "b2");
@@ -286,6 +288,7 @@ async function handle(route) {
     add(5, "Grace Ojo", "GO", "listed", true, 6500, 0);
     add(6, "Kemi Alade", "KA", "picked", true, 4800, 4800);
     add(7, "Musa Ibrahim", "MI", "told", true, 3000, 3000);
+    if (process.env.LONGMARK) db.customers.forEach((c, i) => { if (i % 2 === 0) c.mark = "LAG1045" + (i % 10); });
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForSelector(".order", { timeout: 8000 });
     for (const f of ["all", "new", "work", "ready", "owed", "picked"]) {
       await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);

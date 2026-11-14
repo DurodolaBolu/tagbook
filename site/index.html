@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261114143433";</script>
+<script>window.TB_BUILD="20261114160931";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -715,6 +715,13 @@ details.wtext[open] summary::after{content:" ▴"}
 .dstates .ssub{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:6px}
 .dstate{font-size:14px;color:var(--muted)}
 .dstate b{color:var(--fg);margin-right:3px}
+/* Marks can be up to 8 characters (existing tag numbers): let the badge grow instead of clipping */
+.mark{width:auto;min-width:52px;padding-left:6px;padding-right:6px;box-sizing:border-box;white-space:nowrap}
+.dhead .mark{width:auto;min-width:64px;padding-left:8px;padding-right:8px}
+.crow .mark,.cpicked .mark{width:auto;min-width:46px;max-width:92px;padding-left:5px;padding-right:5px;font-size:14px}
+.mark.long{width:52px;min-width:52px;max-width:52px;font-size:12px;letter-spacing:0;line-height:1.25;white-space:normal;word-break:break-all;padding:6px 3px}
+.crow .mark.long,.cpicked .mark.long{width:46px;min-width:46px;max-width:46px;font-size:11px}
+.dhead .mark.long{width:64px;min-width:64px;max-width:64px;font-size:14px}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -730,7 +737,7 @@ details.wtext[open] summary::after{content:" ▴"}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261114143433"></script>
+<script src="/app.js?v=20261114160931"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

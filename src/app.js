@@ -46,6 +46,8 @@ const theme = () => { try { return localStorage.getItem("tb-theme") || "light"; 
 const shopName = () => (shop && shop.name.trim()) || "Your laundry";
 const branchName = id => (BRANCHES.find(b => b.id === id) || {}).name || "";
 const liveBranches = () => BRANCHES.filter(b => b.active);
+// Long marks (existing tag numbers, up to 8) get a smaller badge so the name beside them keeps its room.
+const markCls = m => String(m || "").length > 4 ? "mark long" : "mark";
 const cust = id => customers.find(c => c.id === id) || { name: "Customer", mark: "?", phone: "" };
 // Many shops save customers as "Lexus 350" or "Tailor", so messages can greet them as Sir, Ma, Boss and so on.
 const GREETS = [["", "Their name"], ["sir", "Sir"], ["ma", "Ma"], ["chief", "Chief"], ["boss", "Boss"], ["chairman", "Chairman"], ["prof", "Prof"], ["doctor", "Doctor"], ["aunty", "Aunty"], ["uncle", "Uncle"]];
@@ -1074,7 +1076,7 @@ function renderOrders() {
     <div class="list">${shown.length ? shown.map(o => {
       const c = cust(o.cid), k = calc(o); return `
       <button class="order" data-no="${o.no}">
-        <div class="mark">${esc(c.mark)}</div>
+        <div class="${markCls(c.mark)}">${esc(c.mark)}</div>
         <div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${k.count} items${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}</span></div>
         <div class="right">${orderRight(o, filter === "all" || !!query)}</div>
       </button>`;
@@ -1144,9 +1146,9 @@ async function lookup(phone) {
   if (error) toast(failMsg(error));
   if (tab === "new") renderNew();
 }
-const custRow = c => `<button class="crow" data-pick="${c.id}"><span class="mark">${esc(c.mark)}</span><span class="cn"><b>${esc(c.name)}</b>${own() && c.phone ? `<small>${fmtPhone(c.phone)}</small>` : ""}</span></button>`;
+const custRow = c => `<button class="crow" data-pick="${c.id}"><span class="${markCls(c.mark)}">${esc(c.mark)}</span><span class="cn"><b>${esc(c.name)}</b>${own() && c.phone ? `<small>${fmtPhone(c.phone)}</small>` : ""}</span></button>`;
 function customerBlock() {
-  if (d.cust) return `<div class="cpicked"><span class="mark">${esc(d.cust.mark)}</span><span class="cn"><b>${esc(d.cust.name)}</b><small>Regular customer. Write <b>${esc(d.cust.mark)}</b> inside every cloth.</small></span><button class="mini" id="cchange">Change</button></div>`;
+  if (d.cust) return `<div class="cpicked"><span class="${markCls(d.cust.mark)}">${esc(d.cust.mark)}</span><span class="cn"><b>${esc(d.cust.name)}</b><small>Regular customer. Write <b>${esc(d.cust.mark)}</b> inside every cloth.</small></span><button class="mini" id="cchange">Change</button></div>`;
   if (!d.newMode) {
     const res = searchCustomers(d.q), recent = d.q ? [] : recentCustomers(5);
     const dg = digits(d.q), phoneLike = /^0\d{10}$/.test(dg) && dg === d.q.replace(/\s/g, "");
@@ -1169,7 +1171,7 @@ function customerBlock() {
       <p class="gprev" id="gprev">Messages will start: <b>${d.greet ? `${hello({ greet: d.greet })},` : d.greetOther ? "Hello …," : `Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},`}</b></p>` : ""}
       <label>Does this customer already have a mark on their clothes?</label>
       <div class="chips" style="margin:0"><button class="chip" data-hm="yes" aria-pressed="${d.hasMark === "yes"}">Yes, use it</button><button class="chip" data-hm="no" aria-pressed="${d.hasMark === "no"}">No, give one</button></div>
-      ${d.hasMark === "yes" ? `<label for="mk">Their mark</label><input id="mk" placeholder="e.g. BL" value="${esc(d.mark)}" autocomplete="off">
+      ${d.hasMark === "yes" ? `<label for="mk">Their mark</label><input id="mk" placeholder="e.g. BL or 1045" value="${esc(d.mark)}" maxlength="12" autocomplete="off"><p class="hint">Letters and numbers, up to 8.</p>
         ${clash ? `<div class="bad">${esc(clash.mark)} is already used by ${esc(clash.name)}. Use a different mark so their clothes don't mix.</div>` : ""}` : ""}
       ${d.hasMark === "no" && d.name.trim() ? `<div class="found">New mark: <b>${suggest(d.name)}</b>. Write this inside every cloth.</div>` : ""}`;
   } else b += `<p class="hint">Ask the customer for their number. Next time, you'll find them by name.</p>`;
@@ -1237,7 +1239,7 @@ function renderNew() {
   keep("#nm", v => d.name = v.replace(/[^a-z\s'-]/gi, ""));
   view.querySelectorAll("[data-gr]").forEach(b => b.onclick = () => { const v = b.dataset.gr; d.greetOther = v === "__other"; d.greet = d.greetOther ? "" : v; renderNew(); if (d.greetOther) { const t = $("#data-gr-txt"); if (t) t.focus(); } });
   const gt = $("#data-gr-txt"); if (gt) gt.oninput = e => { d.greet = cleanGreet(e.target.value); const pv = $("#gprev b"); if (pv) pv.textContent = d.greet ? `Hello ${d.greet},` : "Hello …,"; };
-  keep("#mk", v => d.mark = v.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase());
+  keep("#mk", v => d.mark = v.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()); // up to 8, for shops with existing tag numbers
   keep("#sp", v => d.specialName = v);
   const pd = $("#pd"); if (pd) pd.oninput = e => { const c = digits(e.target.value); const had = !!d.paid; d.paid = num(c); if (e.target.value !== c) e.target.value = c; if (had !== !!d.paid) { const p = e.target.selectionStart; renderNew(); const n = $("#pd"); n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } } };
   view.querySelectorAll("[data-dm]").forEach(b => b.onclick = () => { d.method = b.dataset.dm; renderNew(); });
@@ -1724,7 +1726,7 @@ function fixView(o) {
   let body = "";
   if (o.cancelled) {
     body = `${head(`Order #${o.no}`)}
-      <div class="dhead"><div class="mark">${esc(c.mark)}</div><div><b>${esc(c.name)}</b><span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}dropped ${fmtDay(o.at)}</span></div></div>
+      <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b><span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}dropped ${fmtDay(o.at)}</span></div></div>
       <div class="lines">${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it))}</span><span>${own() ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div>`).join("")}</div>
       <p class="fxnote">Cancelled${o.cancelled_by ? ` by ${esc(o.cancelled_by)}` : ""} on ${fmtDay(o.cancelled)}. It is not counted in your orders or totals.${o.m.paid ? ` The ${naira(o.m.paid)} paid on it still shows in your money received.` : ""}</p>
       ${own() ? `<button class="btn btn-primary" id="fxrestore">Bring this order back</button>` : ""}`;
@@ -1897,7 +1899,7 @@ function openOrder(no) {
   const y = sh.hidden ? 0 : sh.scrollTop;
   sh.innerHTML = `<div class="app">
     ${orderTop(o)}
-    <div class="dhead"><div class="mark">${esc(c.mark)}</div><div><b>${esc(c.name)}</b>
+    <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b>
       <span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${o.express ? " · express delivery" : ""}</span></div></div>
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
     <p class="hint">Dropped ${fmtDay(o.at)}</p>
