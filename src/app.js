@@ -1499,8 +1499,11 @@ async function invoicePages(o, c = cust(o.cid)) {
     terms.forEach((l, i) => text(l, M + 30, y + 82 + i * 30, F(400, 20), MUTED));
     y += h;
   }
-  room(54); y += 54;
-  text(`Thank you for your patronage, ${c.greet ? greetWord(c.greet) : c.name.split(" ")[0]}.`, M, y, F(500, 24), INK);
+  // Thank the customer by the name the shop saved (e.g. "Mr Ezekiel"), or by their own greeting if it is a name, not just sir/ma.
+  const thanks = c.greet && c.greet !== "sir" && c.greet !== "ma" ? greetWord(c.greet) : c.name;
+  const ty = wrap(`Thank you, ${thanks}! We appreciate your patronage and look forward to serving you again.`, W - 2 * M, F(500, 23));
+  room(30 + ty.length * 32); y += 54;
+  ty.forEach((l, i) => text(l, M, y + i * 32, F(500, 23), INK));
 
   // Footer on every page
   pages.forEach((cv, i) => {
