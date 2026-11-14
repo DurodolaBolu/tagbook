@@ -113,7 +113,7 @@ async function load() {
     sb.from("shops").select("id,name,created_at,is_test,staff_prices").single(),
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
-    fetchAll("customers", "id,name,mark,greet,greet_asked"),
+    fetchAll("customers", "id,name,mark,greet,greet_asked,inv_name"),
     fetchAll("orders", "id,no,customer_id,branch_id,items,express,pickup,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
   ]);
   if (base[0].error) throw base[0].error;
@@ -1286,6 +1286,7 @@ function waBlock(o, type, markable) {
   const bankNote = (type === "ready" || type === "owe") && owed(o) && !hasBank() ? `<p class="bad">Add your bank account in Settings so the invoice tells the customer where to pay.</p>` : "";
   // Bills go out as a PDF invoice; the plain text message stays one tap away for customers who prefer it.
   if (type === "ready" || type === "owe") return `<p class="wa-label">Invoice for the customer: ${type === "ready" ? "clothes ready" : "payment reminder"}</p>
+    ${billToLine(c)}
     <button class="btn btn-primary" data-pdf="${type}">Send invoice (PDF)</button>
     <p class="hint">Your phone asks where to send it. Pick WhatsApp, then ${esc(c.name.split(" ")[0])}'s chat.</p>
     <details class="wtext"><summary>Or send it as a text message</summary>${text}<div class="row"><button class="btn btn-ghost" data-copy="${type}">Copy</button></div></details>
@@ -1398,6 +1399,13 @@ function invSwatches() {
 async function invFonts() { try { await Promise.all(["400", "500", "600", "700"].map(w => document.fonts.load(`${w} 24px "IBM Plex Sans"`, "₦Aa1"))); } catch (_) { } }
 const fmtDate = ts => new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const invNo = o => "INV-" + o.no;
+// The name printed on invoices: the shop can set a proper one ("Mr. Ezekiel") while still finding the customer by what they saved ("Lexus 350").
+const billName = c => (c.inv_name || "").trim() || c.name;
+let btEdit = null; // id of the customer whose invoice name is being edited
+const billToLine = c => btEdit === c.id
+  ? `<label for="btn-in" class="wa-label" style="margin-top:10px">Name on the invoice</label><div class="row srow"><input id="btn-in" maxlength="60" value="${esc(billName(c))}" placeholder="e.g. Mr. Ezekiel" autocomplete="off"><button class="mini" id="btn-save">Save</button></div>
+     <p class="hint">Only changes the invoice. You'll still find them as ${esc(c.name)}.</p>`
+  : `<p class="billto">Bill to: <b>${esc(billName(c))}</b> <button data-bt>Change</button></p>`;
 const PAY_WORD = { cash: "cash", transfer: "transfer", pos: "POS" };
 
 async function invoicePages(o, c = cust(o.cid)) {
@@ -1435,7 +1443,7 @@ async function invoicePages(o, c = cust(o.cid)) {
   // Bill to, and invoice details
   const c2 = W / 2 + 40; label("Bill to", M, y); label("Invoice details", c2, y);
   let ly = y + 42;
-  wrap(c.name, c2 - M - 40, F(600, 28)).slice(0, 2).forEach(l => { text(l, M, ly, F(600, 28)); ly += 36; });
+  wrap(billName(c), c2 - M - 40, F(600, 28)).slice(0, 2).forEach(l => { text(l, M, ly, F(600, 28)); ly += 36; });
   if (c.phone) { text(fmtPhone(c.phone), M, ly, F(400, 22), MUTED); ly += 32; }
   if (c.mark) { text("Tag mark: " + c.mark, M, ly, F(400, 22), MUTED); ly += 32; }
   let ry = y + 42;
@@ -1499,9 +1507,8 @@ async function invoicePages(o, c = cust(o.cid)) {
     terms.forEach((l, i) => text(l, M + 30, y + 82 + i * 30, F(400, 20), MUTED));
     y += h;
   }
-  // Thank the customer by the name the shop saved (e.g. "Mr Ezekiel"), or by their own greeting if it is a name, not just sir/ma.
-  const thanks = c.greet && c.greet !== "sir" && c.greet !== "ma" ? greetWord(c.greet) : c.name;
-  const ty = wrap(`Thank you, ${thanks}! We appreciate your patronage and look forward to serving you again.`, W - 2 * M, F(500, 23));
+  // No name here: some shops save customers as a car or plate number, which reads badly in a thank-you.
+  const ty = wrap("Thank you for your patronage! We look forward to serving you again.", W - 2 * M, F(500, 23));
   room(30 + ty.length * 32); y += 54;
   ty.forEach((l, i) => text(l, M, y + i * 32, F(500, 23), INK));
 
@@ -1863,6 +1870,13 @@ function openOrder(no) {
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
   sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(o, b, b.dataset.pdf));
+  sh.querySelectorAll("[data-bt]").forEach(b => b.onclick = () => { btEdit = o.cid; openOrder(o.no); const i = $("#btn-in"); if (i) { i.focus(); i.select(); } });
+  if ($("#btn-save")) $("#btn-save").onclick = async () => {
+    const c = cust(o.cid), v = tidy($("#btn-in").value).slice(0, 60), keep = v === c.name ? "" : v;
+    $("#btn-save").disabled = true;
+    if (await put("customers", { id: c.id }, { inv_name: keep })) { c.inv_name = keep; invReady = null; toast("Saved"); }
+    btEdit = null; openOrder(o.no);
+  };
   sh.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
     const t = message(o, b.dataset.copy);
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast("Message copied")).catch(() => {

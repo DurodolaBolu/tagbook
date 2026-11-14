@@ -510,3 +510,6 @@ details.wtext[open] summary::after{content:" ▴"}
 .iprev{border:1px solid var(--line,#D5DCD9);border-radius:10px;overflow:hidden;background:#fff;max-width:420px}
 .iprev img{display:block;width:100%;min-height:200px}
 .scard textarea{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--line,#D5DCD9);border-radius:10px;resize:vertical;box-sizing:border-box;background:var(--card);color:var(--fg)}
+.billto{margin:8px 0 2px;font-size:15px;color:var(--muted)}
+.billto b{color:var(--fg)}
+.billto button{border:0;background:none;color:var(--accent);font:inherit;font-weight:500;text-decoration:underline;padding:6px 4px;cursor:pointer}

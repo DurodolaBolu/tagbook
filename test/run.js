@@ -266,6 +266,11 @@ async function handle(route) {
     await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(500);
     await page.click('.order:has-text("Adaeze")'); await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(out, "order-send.png") });
+    await page.click("[data-bt]"); await page.waitForTimeout(300); await page.fill("#btn-in", "Mrs. Adaeze Okafor");
+    await page.screenshot({ path: path.join(out, "order-billto-edit.png") });
+    await page.click("#btn-save"); await page.waitForTimeout(500);
+    console.log("invoice name saved:", db.customers.find(c => c.id === "ci").inv_name, "| saved name kept:", db.customers.find(c => c.id === "ci").name);
+    await page.screenshot({ path: path.join(out, "order-send.png") });
     await page.click("details.wtext summary"); await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(out, "order-send-text-open.png") });
     const [dl2] = await Promise.all([page.waitForEvent("download"), page.click('[data-pdf="ready"]')]); await dl2.saveAs(path.join(out, "order.pdf"));
