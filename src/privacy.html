@@ -11,9 +11,8 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 "IBM Plex Sans",Arial,sans-serif}
 main{max-width:720px;margin:0 auto;padding:28px 16px 64px}
-.top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
-.top img{width:40px;height:40px;border-radius:10px}
-.top a{color:var(--accent);font-weight:600;text-decoration:none}
+.back{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--accent);font-weight:600;text-decoration:none}
+.back.btm{margin-top:12px}
 h1{font-size:28px;line-height:1.25;margin:18px 0 4px}
 h2{font-size:19px;margin:30px 0 6px}
 p,li{margin:8px 0}
@@ -23,7 +22,7 @@ ul{padding-left:22px}
 a{color:var(--accent)}
 </style>
 </head><body><main>
-<div class="top"><img src="/icon-192.png" alt=""><a href="/">Tagbook</a></div>
+<a class="back" href="/" data-back>&larr; Back to Tagbook</a>
 <h1>Privacy policy</h1>
 <p class="meta">Last updated 14 November 2026</p>
 
@@ -81,4 +80,13 @@ a{color:var(--accent)}
 
 <h2>Changes to this policy</h2>
 <p>If we change this policy, we will update the date at the top and tell shops in the app when the change matters to them.</p>
-</main></body></html>
+<p><a class="back btm" href="/" data-back>&larr; Back to Tagbook</a></p>
+</main>
+<script>
+// Go back to where the person came from (login or Settings); if they opened this page directly, go to the app.
+document.querySelectorAll("[data-back]").forEach(a => a.addEventListener("click", e => {
+  let fromApp = false;
+  try { fromApp = document.referrer && new URL(document.referrer).origin === location.origin; } catch (_) {}
+  if (fromApp && history.length > 1) { e.preventDefault(); history.back(); }
+}));
+</script></body></html>

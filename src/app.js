@@ -961,7 +961,7 @@ function renderOrders() {
       <span>${page * PER_PAGE + 1}–${page * PER_PAGE + shown.length} of ${list.length}</span>
       <button class="mini" id="pgnext" ${page >= pages - 1 ? "disabled" : ""} aria-label="Older orders">Older ›</button></div>` : ""}
     ${refLine()}
-    <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></p>`;
+    <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy">Privacy policy</a></p>`;
   const toTop = () => { const t = $("#q"), sc = mainScroll(); if (t) sc.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top - (sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top) + sc.scrollTop - 12) }); };
   if ($("#pgprev")) $("#pgprev").onclick = () => { page--; renderOrders(); toTop(); };
   if ($("#pgnext")) $("#pgnext").onclick = () => { page++; renderOrders(); toTop(); };
@@ -1681,7 +1681,7 @@ function renderSettings() {
   if (setTab === "prices") body = priceListHtml();
   if (setTab === "plan" && own()) body = planHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
-  view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></p>`;
+  view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy">Privacy policy</a></p>`;
   wireBack(view);
   view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "prices") markSetup("prices"); if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
   if (setTab === "account") wireAccount();
@@ -1988,7 +1988,7 @@ function drawLogin() {
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
         : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
       ${L.busy ? `<p class="lbusy">Logging in…</p>` : ""}
-      <p class="lpriv"><a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></p>
+      <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };

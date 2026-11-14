@@ -131,7 +131,7 @@ async function handle(route) {
 }
 
 (async () => {
-  const srv = http.createServer((q, s) => { let f = decodeURIComponent(new URL(q.url, "http://x").pathname); if (f === "/") f = "/index.html"; const fp = path.join(SITE, f);
+  const srv = http.createServer((q, s) => { let f = decodeURIComponent(new URL(q.url, "http://x").pathname); if (f === "/") f = "/index.html"; if (!path.extname(f) && fs.existsSync(path.join(SITE, f + ".html"))) f += ".html"; const fp = path.join(SITE, f);
     if (!fs.existsSync(fp)) { s.statusCode = 404; return s.end(); } s.setHeader("content-type", { ".js": "text/javascript", ".html": "text/html", ".css": "text/css", ".json": "application/json", ".woff2": "font/woff2", ".png": "image/png" }[path.extname(fp)] || "text/plain"); s.end(fs.readFileSync(fp)); }).listen(8787);
   const browser = await chromium.launch();
   const out = path.join(__dirname, "shots"); fs.mkdirSync(out, { recursive: true });
@@ -153,6 +153,9 @@ async function handle(route) {
   for (let i = 0; i < 4; i++) { await page.keyboard.type("111111"); await page.waitForTimeout(400); }
   console.log("locked message:", await page.textContent(".lerr")); await shot("01b-locked");
   console.log("privacy link on login:", await page.isVisible('.lpriv a[href="/privacy"]'));
+  await T('.lpriv a'); await page.waitForSelector("[data-back]"); await shot("01c-privacy");
+  await page.click("a.back"); await page.waitForSelector(".lpriv a", { timeout: 8000 });
+  console.log("back from privacy lands on login:", await page.isVisible(".lpriv a"));
   global.fails["08120756325"] = 0;
 
   // SECRETARY logs an order for a new customer
