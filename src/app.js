@@ -279,7 +279,7 @@ function callScriptHtml() {
       ${l ? `<p class="ocalling">Calling ${esc(l.name)}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</p>` : ""}
       <ol>
         <li><b>Opening</b><p>"Good ${new Date().toLocaleString("en-US", { timeZone: "Africa/Lagos", hour: "numeric", hour12: false }) < 12 ? "morning" : "afternoon"}. Am I speaking with the owner of ${shop}?"</p><p class="hint">Not the owner? "Please, when is the best time to reach the owner?" Write it in the note and call back then.</p></li>
-        <li><b>Why you're calling</b><p>"My name is Bolu, from Tagbook. We help laundry shops keep track of every customer's clothes, send the bill on WhatsApp, and see who still owes, all from your phone."</p></li>
+        <li><b>Why you're calling</b><p>"My name is Bolu, from Tagbook. We built an app for laundry shops. It keeps track of every customer's clothes, sends the bill on WhatsApp, and shows you who still owes, all from your phone."</p></li>
         <li><b>Ask, then listen</b><p>"How do you keep track of your customers' clothes right now?"</p><p class="hint">Book, tags or memory: "That's exactly what Tagbook replaces."</p></li>
         <li><b>The offer</b><p>"The first month is free, then ₦3,000 a month, and you can stop anytime. Can we set it up for you now? We just need your shop name and the number you'll log in with."</p></li>
         <li><b>If they hesitate</b><p>"No problem. Can we send you a short video on WhatsApp so you can see how it works?"</p></li>
