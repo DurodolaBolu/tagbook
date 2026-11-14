@@ -1322,11 +1322,12 @@ function message(o, type) {
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
   if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
+  if (type === "early") return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as they are ready.\n\n_Sent with Tagbook_`;
   return `${hi}, a reminder from ${shopName()}: invoice INV-${o.no} (clothes dropped ${fmtDay(o.at)}) has ${naira(owed(o))} still to pay.${payTo()}\n\nThank you.\n_Sent with Tagbook_`;
 }
 const waFmt = t => esc(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<i>$2</i>").replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g, "$1<b>$2</b>");
 const wa = (o, t) => { const p = cust(o.cid).phone; return (p ? "https://wa.me/234" + p.slice(1) : "https://wa.me/") + "?text=" + encodeURIComponent(t); };
-const MSG_NAMES = { list: "list of clothes", ready: "clothes ready, with invoice", owe: "payment reminder" };
+const MSG_NAMES = { list: "list of clothes", ready: "clothes ready, with invoice", owe: "payment reminder", early: "bill before the clothes are ready" };
 function waBlock(o, type, markable) {
   const c = cust(o.cid);
   // Staff don't decide how a customer is greeted, so the owner answers once before the first message goes out.
@@ -1334,9 +1335,9 @@ function waBlock(o, type, markable) {
     ${greetChips("-", "data-og", ogOther)}${ogOther ? `<button class="btn btn-primary" id="og-save" style="margin-top:8px">Save</button>` : ""}<p class="hint">Asked once per customer. You can change it later under More, Edit customer.</p></div>`;
   const text = `<div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div>
     <a class="btn btn-${type === "list" ? "primary" : "ghost"}" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>`;
-  const bankNote = (type === "ready" || type === "owe") && owed(o) && !hasBank() ? `<p class="bad">Add your bank account in Settings so the invoice tells the customer where to pay.</p>` : "";
+  const bankNote = (type === "ready" || type === "owe" || type === "early") && owed(o) && !hasBank() ? `<p class="bad">Add your bank account in Settings so the invoice tells the customer where to pay.</p>` : "";
   // Bills go out as a PDF invoice; the plain text message stays one tap away for customers who prefer it.
-  if (type === "ready" || type === "owe") return `<p class="wa-label">Invoice for the customer: ${type === "ready" ? "clothes ready" : "payment reminder"}</p>
+  if (type === "ready" || type === "owe" || type === "early") return `<p class="wa-label">Invoice for the customer: ${type === "ready" ? "clothes ready" : type === "early" ? "before the clothes are ready" : "payment reminder"}</p>
     ${billToLine(c)}
     <button class="btn btn-primary" data-pdf="${type}">Send invoice (PDF)</button>
     <p class="hint">Your phone asks where to send it. Pick WhatsApp, then ${esc(c.name.split(" ")[0])}'s chat.</p>
@@ -1499,7 +1500,8 @@ async function invoicePages(o, c = cust(o.cid)) {
   if (c.mark) { text("Tag mark: " + c.mark, M, ly, F(400, 22), MUTED); ly += 32; }
   let ry = y + 42;
   const kv = (kk, v) => { text(kk, c2, ry, F(400, 22), MUTED); if (v) text(v, c2 + 200, ry, F(600, 22)); ry += 36; };
-  kv("Invoice no.", invNo(o)); kv("Dropped off", fmtDate(o.at)); kv("Invoice date", fmtDate(o.m.billed_at || Date.now()));
+  kv("Invoice no.", invNo(o)); kv("Dropped off", fmtDate(o.at)); kv("Invoice date", fmtDate(Date.now()));
+  kv("Clothes", o.status === "picked" ? "Collected" : o.status === "ready" || o.status === "told" ? "Ready for pickup" : "Being cleaned");
   kv("Status", "");
   const st = due === 0 ? ["Paid", "#DCF2E7", "#0F6B47"] : paid ? ["Part paid", "#FEF3C7", "#92400E"] : ["Unpaid", "#FDE2E1", "#B42318"];
   g.font = F(600, 19); const pw = g.measureText(st[0]).width + 32; box(c2 + 200, ry - 36 - 25, pw, 34, 17, st[1]); text(st[0], c2 + 216, ry - 36, F(600, 19), st[2]);
@@ -1559,7 +1561,8 @@ async function invoicePages(o, c = cust(o.cid)) {
     y += h;
   }
   // No name here: some shops save customers as a car or plate number, which reads badly in a thank-you.
-  const ty = wrap("Thank you for your patronage! We look forward to serving you again.", W - 2 * M, F(500, 23));
+  const early = o.status === "new" || o.status === "listed";
+  const ty = wrap(early ? "Thank you for your patronage! We'll let you know as soon as your clothes are ready." : "Thank you for your patronage! We look forward to serving you again.", W - 2 * M, F(500, 23));
   room(30 + ty.length * 32); y += 54;
   ty.forEach((l, i) => text(l, M, y + i * 32, F(500, 23), INK));
 
@@ -1602,10 +1605,11 @@ function saveFile(f) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
-const invCaption = (o, type) => { const c = cust(o.cid); return type === "owe" ? `${hello(c)}, a reminder from ${shopName()}: invoice ${invNo(o)} has ${naira(owed(o))} still to pay. The invoice is attached.` : `${hello(c)}, your clothes are ready at ${shopName()}. Your invoice is attached.`; };
-let invReady = null; // the last invoice made, so a second tap shares at once
+const invCaption = (o, type) => { const c = cust(o.cid); return type === "early" ? `${hello(c)}, here is your bill from ${shopName()} (invoice ${invNo(o)}). Your clothes are being cleaned, and we'll let you know as soon as they're ready.` : type === "owe" ? `${hello(c)}, a reminder from ${shopName()}: invoice ${invNo(o)} has ${naira(owed(o))} still to pay. The invoice is attached.` : `${hello(c)}, your clothes are ready at ${shopName()}. Your invoice is attached.`; };
+let invReady = null;
+let earlyOpen = null; // order whose "send the bill now" panel is open // the last invoice made, so a second tap shares at once
 async function sendInvoice(o, btn, type) {
-  const key = [o.id, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length].join(":"), label = "Send invoice (PDF)";
+  const key = [o.id, o.status, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length].join(":"), label = "Send invoice (PDF)";
   let f = invReady && invReady.key === key ? invReady.file : null;
   if (!f) {
     btn.disabled = true; btn.textContent = "Making the invoice…";
@@ -1628,7 +1632,7 @@ async function sendInvoice(o, btn, type) {
 const SAMPLE_INV = () => {
   const unit = [800, 800, 2000, 3500], items = [{ label: "Shirt", svc: "wi", qty: 4 }, { label: "Trouser", svc: "wi", qty: 2 }, { label: "Native (2 piece)", svc: "wsi", qty: 1 }, { label: "Duvet", svc: "wo", qty: 1 }];
   const total = items.reduce((s, it, i) => s + unit[i] * it.qty, 0) - 500, day = 864e5;
-  return { o: { id: "sample", no: 33, at: Date.now() - 2 * day, items, express: false, billed: true, m: { unit, custom: {}, delivery: 0, discount: 500, total, paid: 5000, billed_at: Date.now(), payments: [{ amt: 5000, at: Date.now() - day, method: "transfer" }], express_amt: 0 } },
+  return { o: { id: "sample", no: 33, status: "ready", at: Date.now() - 2 * day, items, express: false, billed: true, m: { unit, custom: {}, delivery: 0, discount: 500, total, paid: 5000, billed_at: Date.now(), payments: [{ amt: 5000, at: Date.now() - day, method: "transfer" }], express_amt: 0 } },
     c: { name: "Adaeze Okafor", phone: "08031234567", mark: "AO", greet: null } };
 };
 function invoiceSettingsHtml() {
@@ -1865,7 +1869,10 @@ function openOrder(no) {
         <div><span>Discount</span><input id="dc" ${moneyAttrs} placeholder="0" value="${o.m.discount || ""}" aria-label="Discount"></div>
         <div><b>Total</b><b id="tot">${naira(k.total)}</b></div></div>
         <button class="btn ${o.billed ? "btn-ghost" : "btn-primary"}" id="bill">${o.billed ? "Update bill" : "Save bill"}</button>
-        ${o.status === "new" || o.status === "listed" ? `<p class="hint">You can save or change the bill any time. It goes to the customer only when the clothes are packed and ready.</p>` : ""}`;
+        ${o.status === "new" || o.status === "listed" ? (o.billed
+          ? `<details class="early"${earlyOpen === o.id ? " open" : ""}><summary>Send the bill now, before the clothes are ready</summary>${waBlock(o, "early", false)}</details>
+             <p class="hint">For customers who pay first. The bill also goes out with the ready message.</p>`
+          : `<p class="hint">You can save or change the bill any time. Save it to send it now, or it goes with the ready message.</p>`) : ""}`;
     } else {
       html += `<div class="lines">
         ${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it))}</span><span>${naira(unitPrice(o, it, i) * it.qty)}</span></div>`).join("")}
@@ -1921,6 +1928,7 @@ function openOrder(no) {
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
   sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(o, b, b.dataset.pdf));
+  sh.querySelectorAll("details.early").forEach(dt => dt.ontoggle = () => { earlyOpen = dt.open ? o.id : null; });
   sh.querySelectorAll("[data-bt]").forEach(b => b.onclick = () => { btEdit = o.cid; openOrder(o.no); const i = $("#btn-in"); if (i) { i.focus(); i.select(); } });
   sh.querySelectorAll("[data-btok]").forEach(b => b.onclick = async () => { const c = cust(o.cid); b.disabled = true; if (await put("customers", { id: c.id }, { inv_name: c.name.slice(0, 60) })) c.inv_name = c.name.slice(0, 60); openOrder(o.no); });
   if ($("#btn-save")) $("#btn-save").onclick = async () => {

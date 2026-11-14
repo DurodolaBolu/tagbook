@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261114160931";</script>
+<script>window.TB_BUILD="20261114161339";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -722,6 +722,12 @@ details.wtext[open] summary::after{content:" ▴"}
 .mark.long{width:52px;min-width:52px;max-width:52px;font-size:12px;letter-spacing:0;line-height:1.25;white-space:normal;word-break:break-all;padding:6px 3px}
 .crow .mark.long,.cpicked .mark.long{width:46px;min-width:46px;max-width:46px;font-size:11px}
 .dhead .mark.long{width:64px;min-width:64px;max-width:64px;font-size:14px}
+/* Optional: send the bill before the clothes are ready */
+details.early{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:4px 14px 12px;background:var(--card)}
+details.early>summary{cursor:pointer;color:var(--accent);font-weight:600;padding:10px 0;list-style:none}
+details.early>summary::-webkit-details-marker{display:none}
+details.early>summary::after{content:" ▾"}
+details.early[open]>summary::after{content:" ▴"}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -737,7 +743,7 @@ details.wtext[open] summary::after{content:" ▴"}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261114160931"></script>
+<script src="/app.js?v=20261114161339"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

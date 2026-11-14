@@ -330,6 +330,14 @@ async function handle(route) {
     await page.click("details.wtext summary"); await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(out, "order-send-text-open.png") });
     const [dl2] = await Promise.all([page.waitForEvent("download"), page.click('[data-pdf="ready"]')]); await dl2.saveAs(path.join(out, "order.pdf"));
+    // the same order while still being cleaned: the bill can go out early
+    db.orders.find(o => o.id === "oi").status = "listed";
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(800);
+    await page.click('.order:has-text("Adaeze")'); await page.waitForTimeout(800);
+    await page.click("details.early summary"); await page.waitForTimeout(300);
+    await page.evaluate(() => document.querySelector("details.early").scrollIntoView({ block: "start" }));
+    await page.screenshot({ path: path.join(out, "order-early.png") });
+    const [dl3] = await Promise.all([page.waitForEvent("download"), page.click('[data-pdf="early"]')]); await dl3.saveAs(path.join(out, "order-early.pdf"));
     process.exit(0);
   }
   if (process.env.CAPTURE) { // design review: every Settings section, phone and laptop, optional extra CSS
