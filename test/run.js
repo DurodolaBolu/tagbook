@@ -157,6 +157,15 @@ async function handle(route) {
   const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); try { await page.waitForSelector("#tabs button", { timeout: 8000 }); } catch (e) { console.log("LOGIN STUCK:", await page.textContent(".lerr").catch(() => "?"), await page.evaluate(() => document.body.innerText.slice(0, 300))); throw e; } };
   const T = async (sel) => { await page.click(sel); await page.waitForTimeout(250); };
 
+  if (process.env.CAPTURE_LOGIN) { // design review: phone box and PIN boxes
+    const C = process.env.CAPTURE_LOGIN; await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(C, "login-phone-empty.png") });
+    await page.keyboard.type("0812075"); await page.waitForTimeout(200); await page.screenshot({ path: path.join(C, "login-phone-typing.png") });
+    await page.keyboard.type("6325"); await page.keyboard.press("Enter"); await page.waitForTimeout(300);
+    await page.keyboard.type("482"); await page.waitForTimeout(300); await page.screenshot({ path: path.join(C, "login-pin-3.png") });
+    process.exit(0);
+  }
   // self sign-up from /start: form checks, number already in use, then a new shop lands on the welcome card
   {
     await page.goto("http://localhost:8787/?start=1"); await page.waitForSelector("#sform");

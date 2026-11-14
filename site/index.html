@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261114133607";</script>
+<script>window.TB_BUILD="20261114134842";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -693,6 +693,14 @@ details.wtext[open] summary::after{content:" ▴"}
 .scard.welcome h3{margin:0 0 6px;font-size:19px}
 .scard.welcome p{margin:0 0 4px;line-height:1.5}
 .scard.welcome .btn{margin-top:12px}
+/* PIN boxes fill with colour as each digit is typed; empty phone box shows a cursor, not a sample number */
+.pb{transition:background-color .15s ease,border-color .15s ease,transform .15s ease}
+.pb.full{background:var(--accent);border-color:var(--accent);transform:scale(1.04)}
+.pb.full::after{background:#fff;width:13px;height:13px}
+.phonebox{display:flex;align-items:center;justify-content:center;gap:2px;height:68px;padding-top:0;padding-bottom:0;box-sizing:border-box}
+.phonebox .pcur{display:inline-block;width:2px;height:28px;background:var(--accent);animation:blink 1s steps(1) infinite;margin-left:2px}
+.phonebox.empty{justify-content:flex-start;color:var(--muted);border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.phonebox .pgh{font-size:16px;font-weight:400;letter-spacing:0;margin-left:10px;color:var(--muted)}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -708,7 +716,7 @@ details.wtext[open] summary::after{content:" ▴"}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261114133607"></script>
+<script src="/app.js?v=20261114134842"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

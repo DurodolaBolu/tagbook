@@ -2456,7 +2456,7 @@ function drawSignup() {
         <form class="lform" id="sform" novalidate>
           ${f("su-shop", "Shop name", S.shop, `maxlength="${NAME_MAX}" autocomplete="organization" placeholder="e.g. Bright Wash Laundry"`)}
           ${f("su-name", "Your name", S.name, `maxlength="40" autocomplete="name" placeholder="e.g. Mrs. Adaeze Okafor"`)}
-          ${f("su-phone", "Your phone number", S.phone ? fmtPhone(S.phone) : "", `inputmode="tel" autocomplete="tel" maxlength="13" placeholder="0803 412 7790"`, "You'll log in with this number.")}
+          ${f("su-phone", "Your phone number", S.phone ? fmtPhone(S.phone) : "", `inputmode="tel" autocomplete="tel" maxlength="13" placeholder="11 digits, starting with 0"`, "You'll log in with this number.")}
           ${f("su-area", "Town or area", S.area, `maxlength="60" placeholder="e.g. Oba Ile, Akure"`)}
           <div class="sgrid">
             <div>${f("su-pin", "Choose a 6-digit PIN", S.pin, `type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" class="pin"`)}</div>
@@ -2528,7 +2528,7 @@ function drawLogin() {
   const pinStep = L.step === "pin";
   const boxes = pinStep
     ? `<div class="pinboxes${L.err && !L.pin ? " shake" : ""}" aria-label="PIN, ${L.pin.length} of 6 digits entered">${[0, 1, 2, 3, 4, 5].map(i => `<span class="pb ${i < L.pin.length ? "full" : ""} ${i === L.pin.length ? "cur" : ""}"></span>`).join("")}</div>`
-    : `<div class="phonebox ${L.phone ? "" : "empty"}" aria-live="polite">${L.phone ? fmtPhone(L.phone) : "0803 412 7790"}</div>`;
+    : `<div class="phonebox ${L.phone ? "" : "empty"}" aria-live="polite">${L.phone ? fmtPhone(L.phone) + `<i class="pcur"></i>` : `<i class="pcur"></i><span class="pgh">Use the numbers below</span>`}</div>`;
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "back"];
   box.innerHTML = `<div class="lwrap">
     <aside class="lside"><div class="lart">${ART_MACHINE}</div>
