@@ -63,6 +63,7 @@ async function handle(route) {
     if (body.action === "add_staff") { if (db.staff.some(s => s.phone === body.phone)) return send(409, { error: "PHONE_IN_USE" }); db.staff.push({ user_id: uid(), shop_id: shopId, role: "secretary", name: body.name, phone: body.phone, active: true, created_at: new Date().toISOString() }); }
     return send(200, { ok: true });
   }
+  if (/^\/rest\/v1\/rpc\/(admin_dashboard|admin_agents|admin_shops|team_options|admin_team_pay)$/.test(p)) return send(200, []);
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId);
   if (p === "/rest/v1/rpc/my_plan") { global.planCalls = (global.planCalls || 0) + 1; if (global.planFail) return send(500, { message: "down" }); }
   if (p === "/rest/v1/rpc/my_plan") return send(200, { state: "trial", until: "2099-01-01", grace_until: "2099-01-03", days_left: 9999, prices: { m1: 3000, m6: 15000, m12: 30000 } });
@@ -197,6 +198,19 @@ async function handle(route) {
   global.planFail = false; await T("#planretry"); await page.waitForTimeout(600);
   console.log("plan after Try again shows plans:", await page.isVisible("[data-plan]"));
   await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);
+  if (process.env.CAPTURE_LEADS) { // design review: leads page with the call script
+    db.outreach_leads = [
+      { id: "l1", name: "K-kleen Laundry", area: "NDDC Rd, Oba Ile", city: "Akure", phone: "08036661786", status: "replied", notes: "Said he'd reach out. Price question answered.", created_at: new Date().toISOString() },
+      { id: "l2", name: "Washmenn Laundry", area: "Oda Rd", city: "Akure", phone: "08031112222", status: "new", notes: null, created_at: new Date().toISOString() }];
+    db.outreach_log = [];
+    await page.setViewportSize({ width: 390, height: 1700 });
+    await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(800);
+    await page.click('[data-av="leads"]').catch(() => {}); await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(process.env.CAPTURE_LEADS, "leads-closed.png") });
+    await page.evaluate(() => { const a = document.querySelector('[data-call="l2"]'); a.removeAttribute("href"); a.click(); }); await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(process.env.CAPTURE_LEADS, "leads-open.png") });
+    process.exit(0);
+  }
   if (process.env.CAPTURE_ORDERS) { // design review: order list under each filter, on a phone
     await page.setViewportSize({ width: 390, height: 1400 });
     // sample orders in every state, like a real shop's day

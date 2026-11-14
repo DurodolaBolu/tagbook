@@ -482,3 +482,15 @@ body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
 .order .right .sub.s-work{color:var(--stage-work);font-weight:600}
 .order .right .sub.s-told{color:var(--stage-told);font-weight:600}
 .order .right .sub.s-done{color:var(--muted)}
+/* Leads: call script */
+.oscript{padding:0;overflow:hidden}
+.oscript-top{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:16px 18px;border:0;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.oscript-top b{display:block;font-size:17px}
+.otime{display:block;font-size:14px;color:var(--warn);margin-top:2px}
+.otime.ok{color:var(--accent)}
+.oscript-body{padding:0 18px 18px}
+.oscript-body ol{margin:0;padding-left:22px}
+.oscript-body li{margin:0 0 16px}
+.oscript-body li p{margin:4px 0 0;line-height:1.55}
+.ocalling{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--accent-deep);font-weight:600}
+.oact .ocall{flex:0 0 auto}

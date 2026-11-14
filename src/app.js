@@ -245,6 +245,37 @@ function wireAdminSeg() { view.querySelectorAll("[data-av]").forEach(b => b.oncl
 let oCopy = null; // iPhone + WhatsApp Business: Apple gives websites no way to open Business, so we copy the message instead
 const iosBiz = () => isIOS && waApp === "business";
 let olead = null, olog = [], oleadBusy = false, oCity = "Akure", oStatus = "new", oQ = "", oAdd = false;
+let oCall = null, oScriptOpen = (() => { try { return localStorage.getItem("tb-script-open") === "1"; } catch (_) { return false; } })();
+// Is now a good time to phone a laundry? Lagos time. Weekdays 10am-12pm and 3-5pm; Saturday mornings are
+// busy with drop-offs, so 12-2pm and 3-5pm; Sunday most shops are closed or at church.
+function callTiming() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Lagos" }));
+  const d = now.getDay(), m = now.getHours() * 60 + now.getMinutes();
+  const slots = d === 0 ? [] : d === 6 ? [[720, 840], [900, 1020]] : [[600, 720], [900, 1020]];
+  const fmt = x => { const h = Math.floor(x / 60), mm = x % 60; return `${h % 12 || 12}${mm ? ":" + String(mm).padStart(2, "0") : ""}${h < 12 ? "am" : "pm"}`; };
+  const cur = slots.find(([a, b]) => m >= a && m < b);
+  if (cur) return { ok: true, text: `Good time to call now, until ${fmt(cur[1])}.` };
+  const next = slots.find(([a]) => m < a);
+  if (next) return { ok: false, text: `Not the best time. Next good time today: ${fmt(next[0])} to ${fmt(next[1])}.` };
+  return { ok: false, text: d === 0 ? "Sunday: most shops are closed or at church. Call tomorrow from 10am." : d === 6 ? "Done for today. Shops close soon; call Monday from 10am." : "Done for today. Call tomorrow from " + (d === 5 ? "12pm (Saturday)." : "10am.") };
+}
+function callScriptHtml() {
+  const t = callTiming(), l = oCall && olead && olead.find(x => x.id === oCall), shop = l ? `<b>${esc(l.name)}</b>` : "[Shop name]";
+  return `<section class="scard oscript">
+    <button class="oscript-top" id="oscript" aria-expanded="${oScriptOpen}"><span><b>Call script</b><span class="otime ${t.ok ? "ok" : ""}">${t.text}</span></span><span aria-hidden="true">${oScriptOpen ? "▴" : "▾"}</span></button>
+    ${oScriptOpen ? `<div class="oscript-body">
+      ${l ? `<p class="ocalling">Calling ${esc(l.name)}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</p>` : ""}
+      <ol>
+        <li><b>Opening</b><p>"Good ${new Date().toLocaleString("en-US", { timeZone: "Africa/Lagos", hour: "numeric", hour12: false }) < 12 ? "morning" : "afternoon"}. Am I speaking with the owner of ${shop}?"</p><p class="hint">Not the owner? "Please, when is the best time to reach the owner?" Write it in the note and call back then.</p></li>
+        <li><b>Why you're calling</b><p>"My name is Bolu, from Tagbook. We help laundry shops keep track of every customer's clothes, send the bill on WhatsApp, and see who still owes, all from your phone."</p></li>
+        <li><b>Ask, then listen</b><p>"How do you keep track of your customers' clothes right now?"</p><p class="hint">Book, tags or memory: "That's exactly what Tagbook replaces."</p></li>
+        <li><b>The offer</b><p>"The first month is free, then ₦3,000 a month, and you can stop anytime. Can we set it up for you now? We just need your shop name and the number you'll log in with."</p></li>
+        <li><b>If they hesitate</b><p>"No problem. Can we send you a short video on WhatsApp so you can see how it works?"</p></li>
+      </ol>
+      <p class="hint">Keep it under 3 minutes. After the call, set the status below and add a one-line note.</p>
+    </div>` : ""}
+  </section>`;
+}
 const O_STATUS = { new: "To contact", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
 const O_PILL = { new: "p-new", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
 const DAILY_SAFE = 5;
@@ -425,7 +456,7 @@ function renderLeads() {
       ${oCopy && oCopy.id === l.id ? `<div class="ocopy"><p><b>Message copied.</b> Now open <b>WhatsApp Business</b>, start a new chat with <b>${fmtPhone(l.phone)}</b> and paste the message.</p>
         <div class="row"><button class="btn btn-ghost" data-copynum="${l.id}">Copy number</button><button class="btn btn-ghost" data-recopy="${l.id}">Copy message again</button></div>
         <div class="row"><button class="btn btn-primary" data-sent="${l.id}">I've sent it</button><button class="btn btn-ghost" data-nocopy>Not now</button></div></div>` : ""}
-      <div class="oact">${act}<select data-ost="${l.id}" aria-label="Change status for ${esc(l.name)}">${Object.entries(O_STATUS).map(([k, v]) => `<option value="${k}" ${k === l.status ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+      <div class="oact">${l.phone && l.status !== "no" ? `<a class="btn btn-ghost ocall" data-call="${l.id}" href="tel:${l.phone}">Call</a>` : ""}${act}<select data-ost="${l.id}" aria-label="Change status for ${esc(l.name)}">${Object.entries(O_STATUS).map(([k, v]) => `<option value="${k}" ${k === l.status ? "selected" : ""}>${v}</option>`).join("")}</select></div>
     </section>`;
   };
   view.innerHTML = `${adminSeg()}
@@ -433,6 +464,7 @@ function renderLeads() {
     <div class="owa"><span>Open chats in</span><div class="aseg"><button data-wapp="business" aria-pressed="${waApp === "business"}">WhatsApp Business</button><button data-wapp="normal" aria-pressed="${waApp === "normal"}">WhatsApp</button></div></div>
     <section class="scard osent"><div class="osent-top"><b>${sentToday} of ${DAILY_SAFE}</b><span>messages sent today</span></div><div class="obar"><i style="width:${pct}%" class="${sentToday >= DAILY_SAFE ? "full" : ""}"></i></div>
       <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the 0812 line." : `${DAILY_SAFE - sentToday} more today keeps the 0812 line safe.`}</p></section>
+    ${callScriptHtml()}
     ${oAdd ? `<section class="scard dlead"><h3 class="stitle">Add a lead</h3>
       <label for="ol-n">Shop name</label><input id="ol-n" autocomplete="off">
       <div class="sgrid"><div><label for="ol-a">Area</label><input id="ol-a" placeholder="e.g. Oba Ile" autocomplete="off"></div>
@@ -449,6 +481,9 @@ function renderLeads() {
       return `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${(cut ? ls.slice(0, 6) : ls).map(card).join("")}</div>${cut ? `<button class="btn btn-ghost omore" data-oc="${esc(c)}">See all ${ls.length} in ${esc(c)}</button>` : ""}`;
     }).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
   wireAdminSeg();
+  $("#oscript").onclick = () => { oScriptOpen = !oScriptOpen; try { localStorage.setItem("tb-script-open", oScriptOpen ? "1" : "0"); } catch (_) { } renderAdmin(); };
+  // Tapping Call opens the phone's dialer and opens the script for that shop, so it's there when you come back.
+  view.querySelectorAll("[data-call]").forEach(a => a.onclick = () => { oCall = a.dataset.call; oScriptOpen = true; setTimeout(() => { renderAdmin(); const sc = $(".oscript"); if (sc) sc.scrollIntoView({ block: "start" }); }, 300); });
   view.querySelectorAll("[data-wapp]").forEach(b => b.onclick = () => { waApp = b.dataset.wapp; try { localStorage.setItem("tb-wa-app", waApp); } catch (_) { } renderAdmin(); });
   view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); if (b.classList.contains("omore")) mainScroll().scrollTo(0, 0); });
   view.querySelectorAll("[data-os]").forEach(b => b.onclick = () => { oStatus = b.dataset.os; renderAdmin(); });
