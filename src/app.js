@@ -304,7 +304,7 @@ function nudgeMsg(r) {
   return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it. We can also give you a quick call to help.\n\nBolu, Tagbook team`;
 }
 /* ---------- Plan & billing ---------- */
-let plan = null, planPick = "m6", planBusy = false;
+let plan = null, planPick = "m6", planBusy = false, planFailed = false;
 const PRICE_MONTH = 3000;
 const PLAN_INFO = { m1: ["1 month", 1, ""], m6: ["6 months", 6, "1 month free"], m12: ["1 year", 12, "2 months free"] };
 const longDay = d => d ? new Date(String(d).slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -331,7 +331,9 @@ async function billingCall(body) {
   return { error: j.error || "NETWORK" };
 }
 function planHtml() {
-  if (!plan || !plan.prices) return card("Plan & billing", "", `<p class="hint">Loading…</p>`);
+  if (!plan || !plan.prices) return card("Plan & billing", "", planFailed
+    ? `<p class="hint" style="margin-top:0">Couldn't load your plan. Check your internet and try again.</p><button class="btn btn-ghost" id="planretry">Try again</button>`
+    : `<p class="hint">Loading…</p>`);
   const p = plan, d = p.days_left;
   const status = {
     trial: [`Free trial`, `Ends ${longDay(p.until)} · ${d} day${d === 1 ? "" : "s"} left`],
@@ -361,7 +363,12 @@ function planHtml() {
     + ((p.payments || []).length ? card("Payment history", "", p.payments.map(x => `<div class="staff-row"><div><b>${naira(x.amount)} · ${x.months} month${x.months === 1 ? "" : "s"}</b><span>${longDay(x.paid_at)}${x.method === "manual" ? " · paid to Tagbook directly" : " · Paystack"} · covered until ${longDay(x.paid_until)}</span></div></div>`).join("")) : "");
 }
 function wirePlan() {
-  if (!plan || !plan.prices) { if (!planBusy) { planBusy = true; loadPlan().finally(() => { planBusy = false; if (tab === "prices" && setTab === "plan") renderSettings(); }); } return; }
+  // Load the plan once when the tab opens. If it fails, show "Try again" instead of retrying on its own.
+  if (!plan || !plan.prices) {
+    if ($("#planretry")) $("#planretry").onclick = () => { planFailed = false; renderSettings(); };
+    if (!planBusy && !planFailed) { planBusy = true; loadPlan().finally(() => { planBusy = false; planFailed = !(plan && plan.prices); if (tab === "prices" && setTab === "plan") renderSettings(); }); }
+    return;
+  }
   view.querySelectorAll("[data-plan]").forEach(b => b.onclick = () => { planPick = b.dataset.plan; renderSettings(); });
   const go_ = $("#paygo"); if (!go_) return;
   go_.onclick = async () => {
@@ -1647,7 +1654,7 @@ function renderSettings() {
   let body = "";
   if (setTab === "account") body = (!own() && shop.staff_prices ? staffPriceHtml() : "") + (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
       `<label for="np">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}><button class="btn btn-ghost" id="npb">Save new PIN</button>`)
-    + `<section class="scard"><button class="btn btn-ghost" id="out" style="margin-top:0">Log out</button></section>`;
+    + `<button class="logout" id="out"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>Log out</button>`;
   if (setTab === "business") { const p = sPriv(); body =
     card("Business name", "Shown at the top of the app and in every WhatsApp message.",
       `<input id="sn" maxlength="${NAME_MAX}" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off" aria-label="Business name">`)

@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261114060316";</script>
+<script>window.TB_BUILD="20261114060828";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -627,6 +627,9 @@ body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
 .sbody > .btn{margin-top:18px}
 .sbody > .hint{margin:10px 2px 0;font-size:14px;line-height:1.5}
 .scard .stitle + p:not(.hint){margin-top:8px}
+/* Log out: a quiet text link, not an action button */
+.logout{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;margin:20px 0 0;border:0;background:transparent;color:var(--muted);font:inherit;font-size:16px;font-weight:500;cursor:pointer;border-radius:10px}
+.logout:hover,.logout:focus-visible{color:var(--fg);background:var(--card)}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -642,7 +645,7 @@ body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261114060316"></script>
+<script src="/app.js?v=20261114060828"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

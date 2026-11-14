@@ -466,3 +466,6 @@ body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
 .sbody > .btn{margin-top:18px}
 .sbody > .hint{margin:10px 2px 0;font-size:14px;line-height:1.5}
 .scard .stitle + p:not(.hint){margin-top:8px}
+/* Log out: a quiet text link, not an action button */
+.logout{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;margin:20px 0 0;border:0;background:transparent;color:var(--muted);font:inherit;font-size:16px;font-weight:500;cursor:pointer;border-radius:10px}
+.logout:hover,.logout:focus-visible{color:var(--fg);background:var(--card)}

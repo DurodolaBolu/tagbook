@@ -64,6 +64,7 @@ async function handle(route) {
     return send(200, { ok: true });
   }
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId);
+  if (p === "/rest/v1/rpc/my_plan") { global.planCalls = (global.planCalls || 0) + 1; if (global.planFail) return send(500, { message: "down" }); }
   if (p === "/rest/v1/rpc/my_plan") return send(200, { state: "trial", until: "2099-01-01", grace_until: "2099-01-03", days_left: 9999, prices: { m1: 3000, m6: 15000, m12: 30000 } });
   if (p === "/rest/v1/rpc/admin_shops") return send(200, db.shops.map(s => ({ id: s.id, name: s.name, created_at: s.created_at, trial_ends: s.trial_ends || null, owner_name: "Bolu", owner_phone: "08120756325", staff: db.staff.length, orders: db.orders.length, last_order: new Date().toISOString(), referred_by: s.referred_by || null, referred_by_name: (db.shops.find(k => k.id === s.referred_by) || {}).name || null, referrals: db.shops.filter(k => k.referred_by === s.id).length })));
   if (p === "/rest/v1/rpc/agent_ref_options") return send(200, db.shops.map(s => ({ id: s.id, name: s.name })));
@@ -189,7 +190,13 @@ async function handle(route) {
   console.log("staff sees price list (expect true):", await page.isVisible(".pli.ro"), "| shirt price shown:", (await page.textContent("#view")).includes("₦800"), "| no edit inputs:", !(await page.isVisible("[data-pp]"))); await T("#out"); await T("#out"); await page.waitForTimeout(500);
 
   // OWNER
+  global.planFail = true;
   await login("08120756325"); await shot("07-owner-orders");
+  await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(300); await T('[data-st="plan"]'); global.planCalls = 0; await page.waitForTimeout(2500);
+  console.log("plan down: calls in 2.5s (expect <=1):", global.planCalls, "| try again shown:", await page.isVisible("#planretry"));
+  global.planFail = false; await T("#planretry"); await page.waitForTimeout(600);
+  console.log("plan after Try again shows plans:", await page.isVisible("[data-plan]"));
+  await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);
   if (process.env.CAPTURE) { // design review: every Settings section, phone and laptop, optional extra CSS
     const css = process.env.EXTRA_CSS ? fs.readFileSync(process.env.EXTRA_CSS, "utf8") : "";
     for (const [w, h, tag] of [[390, 2600, "phone"], [1280, 1800, "laptop"]]) {
