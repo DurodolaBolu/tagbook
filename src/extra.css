@@ -494,3 +494,19 @@ body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
 .oscript-body li p{margin:4px 0 0;line-height:1.55}
 .ocalling{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--accent-deep);font-weight:600}
 .oact .ocall{flex:0 0 auto}
+/* Invoice: send block on the order, and the Invoice tab in Settings */
+details.wtext{margin-top:12px}
+details.wtext summary{cursor:pointer;color:var(--accent,#0F7B5F);font-weight:500;padding:8px 0;list-style:none}
+details.wtext summary::-webkit-details-marker{display:none}
+details.wtext summary::after{content:" ▾"}
+details.wtext[open] summary::after{content:" ▴"}
+.ilogo{display:flex;align-items:center;justify-content:center;height:132px;border:1px dashed var(--line,#D5DCD9);border-radius:12px;background:#fff;margin-bottom:4px}
+.ilogo img{max-height:110px;max-width:80%;object-fit:contain}
+.ilogo span{color:var(--muted);font-size:14px}
+.ilogo + .row .btn{margin-top:12px}
+.iswatch{display:flex;gap:14px;flex-wrap:wrap}
+.iswatch button{width:48px;height:48px;border-radius:50%;background:var(--c);border:3px solid var(--card);box-shadow:0 0 0 1px var(--line,#D5DCD9);cursor:pointer;padding:0}
+.iswatch button[aria-pressed=true]{box-shadow:0 0 0 3px var(--c)}
+.iprev{border:1px solid var(--line,#D5DCD9);border-radius:10px;overflow:hidden;background:#fff;max-width:420px}
+.iprev img{display:block;width:100%;min-height:200px}
+.scard textarea{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--line,#D5DCD9);border-radius:10px;resize:vertical;box-sizing:border-box;background:var(--card);color:var(--fg)}

@@ -242,6 +242,35 @@ async function handle(route) {
     }
     process.exit(0);
   }
+  if (process.env.CAPTURE_INVOICE) { // design review: invoice settings, the send block on an order, and the PDFs
+    const out = process.env.CAPTURE_INVOICE, t0 = db.orders[0];
+    db.customers.push({ id: "ci", shop_id: t0.shop_id, name: "Adaeze Okafor", mark: "AO", created_at: new Date().toISOString(), greet: "ma", greet_asked: true });
+    db.customer_phones.push({ customer_id: "ci", shop_id: t0.shop_id, phone: "08031234567" });
+    db.orders.push({ ...JSON.parse(JSON.stringify(t0)), id: "oi", no: 41, customer_id: "ci", branch_id: "b1", status: "ready", list_sent: true, notified: true, billed: true, settled: false, created_at: new Date(Date.now() - 2 * 864e5).toISOString() });
+    const its = db.orders.find(o => o.id === "oi").items;
+    const unit = its.map(() => 800), total = its.reduce((s, it) => s + 800 * it.qty, 0);
+    db.order_money.push({ order_id: "oi", shop_id: t0.shop_id, unit, custom: {}, delivery: 500, discount: 0, total: total + 500, billed_at: new Date().toISOString(), paid: 1000, payments: [{ amt: 1000, at: Date.now(), method: "cash" }], express_amt: 0 });
+    Object.assign(db.shop_private[0], { inv_tagline: "Laundry and dry cleaning", inv_address: "12 Oba Adesida Road, Akure", inv_phone: "08120756325", inv_email: "hello@brightwash.ng", inv_terms: "Clothes not collected within 30 days may be given away. Please check your pockets before drop-off." });
+    await page.setViewportSize({ width: 390, height: 2400 });
+    await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(800);
+    await page.click('[data-st="invoice"]'); await page.waitForTimeout(1500);
+    await page.screenshot({ path: path.join(out, "settings-before-logo.png"), fullPage: true });
+    await page.setInputFiles("#ilf", process.env.LOGO); await page.waitForTimeout(2500);
+    await page.screenshot({ path: path.join(out, "settings-with-logo.png"), fullPage: true });
+    console.log("swatches:", await page.$$eval("[data-ic]", b => b.map(x => x.dataset.ic + (x.getAttribute("aria-pressed") === "true" ? "*" : ""))));
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#isample")]); await dl.saveAs(path.join(out, "sample.pdf"));
+    await page.click("[data-ic]:nth-child(4)"); await page.waitForTimeout(1200);
+    await page.screenshot({ path: path.join(out, "settings-navy.png"), fullPage: true });
+    await page.click("[data-ic]:nth-child(1)"); await page.waitForTimeout(600);
+    await page.setViewportSize({ width: 390, height: 1500 });
+    await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(500);
+    await page.click('.order:has-text("Adaeze")'); await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(out, "order-send.png") });
+    await page.click("details.wtext summary"); await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(out, "order-send-text-open.png") });
+    const [dl2] = await Promise.all([page.waitForEvent("download"), page.click('[data-pdf="ready"]')]); await dl2.saveAs(path.join(out, "order.pdf"));
+    process.exit(0);
+  }
   if (process.env.CAPTURE) { // design review: every Settings section, phone and laptop, optional extra CSS
     const css = process.env.EXTRA_CSS ? fs.readFileSync(process.env.EXTRA_CSS, "utf8") : "";
     for (const [w, h, tag] of [[390, 2600, "phone"], [1280, 1800, "laptop"]]) {

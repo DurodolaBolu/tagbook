@@ -205,7 +205,7 @@ function subscribe() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && me) refresh(); });
 
 /* ---------- Money ---------- */
-const sPriv = () => priv || { express_type: "manual", express_value: 0, bank_name: "", acct_no: "", acct_name: "" };
+const sPriv = () => priv || { express_type: "manual", express_value: 0, bank_name: "", acct_no: "", acct_name: "", inv_logo: "", inv_color: "", inv_tagline: "", inv_address: "", inv_phone: "", inv_email: "", inv_terms: "" };
 const hasBank = () => { const p = sPriv(); return p.bank_name.trim() && p.acct_no.length === 10 && p.acct_name.trim(); };
 const payTo = () => { const p = sPriv(); return hasBank() ? `\n\nPay by transfer to:\n${p.bank_name.trim()}\n${p.acct_no}\n${p.acct_name.trim()}\nPlease send your payment receipt here.` : ""; };
 const expManual = () => sPriv().express_type === "manual";
@@ -1281,6 +1281,17 @@ function waBlock(o, type, markable) {
   // Staff don't decide how a customer is greeted, so the owner answers once before the first message goes out.
   if (own() && c.id && !c.greet_asked) return `<div class="gask"><p class="wa-label" style="margin-top:0;color:var(--fg);font-size:15px">Before you send: how do you greet ${esc(c.name)} in messages?</p>
     ${greetChips("-", "data-og", ogOther)}${ogOther ? `<button class="btn btn-primary" id="og-save" style="margin-top:8px">Save</button>` : ""}<p class="hint">Asked once per customer. You can change it later under More, Edit customer.</p></div>`;
+  const text = `<div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div>
+    <a class="btn btn-${type === "list" ? "primary" : "ghost"}" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>`;
+  const bankNote = (type === "ready" || type === "owe") && owed(o) && !hasBank() ? `<p class="bad">Add your bank account in Settings so the invoice tells the customer where to pay.</p>` : "";
+  // Bills go out as a PDF invoice; the plain text message stays one tap away for customers who prefer it.
+  if (type === "ready" || type === "owe") return `<p class="wa-label">Invoice for the customer: ${type === "ready" ? "clothes ready" : "payment reminder"}</p>
+    <button class="btn btn-primary" data-pdf="${type}">Send invoice (PDF)</button>
+    <p class="hint">Your phone asks where to send it. Pick WhatsApp, then ${esc(c.name.split(" ")[0])}'s chat.</p>
+    <details class="wtext"><summary>Or send it as a text message</summary>${text}<div class="row"><button class="btn btn-ghost" data-copy="${type}">Copy</button></div></details>
+    ${markable ? `<button class="btn btn-ghost" data-done="${type}">I've sent it</button>` : ""}
+    ${bankNote}
+    ${markable ? `<p class="hint">After sending, tap “I've sent it”. Until then this stays here.</p>` : ""}`;
   return `<p class="wa-label">WhatsApp to customer: ${MSG_NAMES[type]}</p>
     <div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div>
     <a class="btn btn-primary" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>
@@ -1329,6 +1340,300 @@ function printReceipt(o) {
 const printBlock = o => `<div class="prow"><button class="btn btn-ghost" id="prt">${own() && o.billed ? "Print receipt" : "Print drop-off slip"}</button>
   <div class="aseg" aria-label="Receipt paper width"><button data-paper="80" aria-pressed="${paper === "80"}">80mm</button><button data-paper="58" aria-pressed="${paper === "58"}">58mm</button></div></div>`;
 const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
+
+/* ---------- Invoice as a PDF ----------
+   Drawn on a canvas at A4 size (so ₦ and the shop's logo always render), saved as JPEG pages inside a
+   small hand-written PDF, then handed to the phone's share sheet so the owner can pick WhatsApp. */
+const INV_GREEN = "#0F7B5F", INV_NAVY = "#24386B", INV_CHAR = "#2F3437", INV_EXTRA = ["#8B2346", "#0E6E82"];
+const isHex = h => /^#[0-9a-f]{6}$/i.test(h || "");
+const invColor = () => isHex(sPriv().inv_color) ? sPriv().inv_color.toUpperCase() : INV_GREEN;
+const goodLogo = d => typeof d === "string" && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(d);
+const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgb2hex = c => "#" + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("").toUpperCase();
+const relLum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+// Darken a colour (same hue) until white text on it is easy to read: contrast 4.6 or more.
+// Works in HSL so the hue and richness stay: gold becomes deep gold, not olive.
+const hsl2rgb = (h, s, l) => { const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l); return [0, 8, 4].map(n => 255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)))); };
+function deepen(c) {
+  const [r, g, b] = c.map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let l = (mx + mn) / 2; const s = d ? Math.max(.68, d / (1 - Math.abs(2 * l - 1))) : 0;
+  const h = !d ? 0 : mx === r ? (((g - b) / d) % 6 + 6) % 6 * 60 : mx === g ? ((b - r) / d + 2) * 60 : ((r - g) / d + 4) * 60;
+  let x = hsl2rgb(h, Math.min(1, s), l);
+  for (let i = 0; i < 80 && 1.05 / (relLum(x) + .05) < 4.6; i++) { l -= .01; x = hsl2rgb(h, Math.min(1, s), l); }
+  return x;
+}
+const loadImg = src => new Promise(r => { if (!src) return r(null); const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = src; });
+// The logo's own colours: skip white, black, greys and see-through pixels, group the rest by hue,
+// and keep up to 3 clearly different hues, most used first.
+function logoColours(img) {
+  const n = 72, cv = document.createElement("canvas"); cv.width = cv.height = n;
+  const g = cv.getContext("2d"); const s = Math.min(n / img.width, n / img.height);
+  g.drawImage(img, 0, 0, Math.max(1, img.width * s), Math.max(1, img.height * s));
+  const d = g.getImageData(0, 0, n, n).data, buckets = {};
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 200) continue;
+    const r = d[i] / 255, gg = d[i + 1] / 255, b = d[i + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), l = (mx + mn) / 2, dl = mx - mn;
+    if (dl < .12 || l > .93 || l < .07) continue;
+    const sat = dl / (1 - Math.abs(2 * l - 1)); if (sat < .22) continue;
+    let h = mx === r ? ((gg - b) / dl) % 6 : mx === gg ? (b - r) / dl + 2 : (r - gg) / dl + 4; h = (h * 60 + 360) % 360;
+    const k = Math.floor(h / 15), bk = buckets[k] || (buckets[k] = { n: 0, h: 0, rgb: [0, 0, 0] });
+    bk.n++; bk.h += h; bk.rgb[0] += d[i]; bk.rgb[1] += d[i + 1]; bk.rgb[2] += d[i + 2];
+  }
+  const min = n * n * .01, picks = [];
+  Object.values(buckets).filter(b => b.n >= min).sort((a, b) => b.n - a.n).forEach(b => {
+    const h = b.h / b.n, far = picks.every(p => Math.min(Math.abs(p.h - h), 360 - Math.abs(p.h - h)) >= 28);
+    if (far && picks.length < 3) picks.push({ h, hex: rgb2hex(deepen(b.rgb.map(v => v / b.n))) });
+  });
+  return picks.map(p => p.hex);
+}
+let invSw = { key: null, list: null };
+function invSwatches() {
+  const p = sPriv(), cur = invColor();
+  let list = p.inv_logo && invSw.key === p.inv_logo && invSw.list ? invSw.list.slice() : [];
+  [INV_GREEN].concat(INV_EXTRA).forEach(h => { if (list.length < 3 && !list.includes(h)) list.push(h); });
+  list = list.slice(0, 3).concat([INV_NAVY, INV_CHAR]);
+  if (!list.includes(cur)) list[2] = cur;
+  return list;
+}
+async function invFonts() { try { await Promise.all(["400", "500", "600", "700"].map(w => document.fonts.load(`${w} 24px "IBM Plex Sans"`, "₦Aa1"))); } catch (_) { } }
+const fmtDate = ts => new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const invNo = o => "INV-" + o.no;
+const PAY_WORD = { cash: "cash", transfer: "transfer", pos: "POS" };
+
+async function invoicePages(o, c = cust(o.cid)) {
+  await invFonts();
+  const S = 1.4, W = 1240, H = 1754, M = 92, col = invColor(), p = sPriv(), k = calc(o);
+  const logo = goodLogo(p.inv_logo) ? await loadImg(p.inv_logo) : null;
+  const INK = "#13201E", MUTED = "#5B6664", LINE = "#E1E6E3", TINT = "#F5F7F6";
+  const F = (w, z) => `${w} ${z}px "IBM Plex Sans", Arial, sans-serif`;
+  const pages = []; let g, y;
+  const newPage = () => { const cv = document.createElement("canvas"); cv.width = W * S; cv.height = H * S; g = cv.getContext("2d"); g.scale(S, S); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); pages.push(cv); y = M; };
+  const text = (t, x, yy, font, color, align) => { g.font = font; g.fillStyle = color || INK; g.textAlign = align || "left"; g.fillText(t, x, yy); };
+  const wrap = (t, maxW, font) => { g.font = font; const out = []; String(t).split("\n").forEach(par => { let line = ""; par.split(/\s+/).filter(Boolean).forEach(wd => { const tt = line ? line + " " + wd : wd; if (g.measureText(tt).width > maxW && line) { out.push(line); line = wd; } else line = tt; }); if (line) out.push(line); }); return out; };
+  const fit = (t, maxW, font) => { g.font = font; t = String(t); if (g.measureText(t).width <= maxW) return t; while (t.length > 1 && g.measureText(t + "…").width > maxW) t = t.slice(0, -1); return t + "…"; };
+  const box = (x, yy, w, h, r, fill, stroke) => { g.beginPath(); if (g.roundRect) g.roundRect(x, yy, w, h, r); else g.rect(x, yy, w, h); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 2; g.stroke(); } };
+  const label = (t, x, yy, color) => { g.save(); if ("letterSpacing" in g) g.letterSpacing = "2px"; text(t.toUpperCase(), x, yy, F(600, 17), color || MUTED); g.restore(); };
+  const bottom = H - 100, room = h => { if (y + h > bottom) newPage(); };
+  const total = o.billed ? (+o.m.total || 0) : k.total, paid = +o.m.paid || 0, due = Math.max(0, total - paid);
+
+  newPage();
+  // Header: logo, shop name and contact lines on the left; INVOICE and its number on the right
+  let x = M;
+  if (logo) { const s = Math.min(132 / logo.width, 132 / logo.height), lw = logo.width * s, lh = logo.height * s; g.drawImage(logo, M, y + (132 - lh) / 2, lw, lh); x = M + lw + 28; }
+  text("INVOICE", W - M, y + 52, F(700, 50), col, "right");
+  text(invNo(o), W - M, y + 90, F(500, 24), MUTED, "right");
+  const nameW = W - M - 320 - x; let hy = y + 44;
+  wrap(shopName(), nameW, F(700, 38)).slice(0, 2).forEach(l => { text(l, x, hy, F(700, 38), INK); hy += 44; });
+  hy -= 6;
+  if (p.inv_tagline) { hy += 30; text(fit(p.inv_tagline, nameW, F(400, 22)), x, hy, F(400, 22), MUTED); }
+  if (p.inv_address) wrap(p.inv_address, nameW, F(400, 20)).slice(0, 2).forEach(l => { hy += 28; text(l, x, hy, F(400, 20), MUTED); });
+  const contact = [p.inv_phone ? "WhatsApp " + fmtPhone(p.inv_phone) : "", p.inv_email || ""].filter(Boolean).join("  ·  ");
+  if (contact) { hy += 28; text(fit(contact, nameW, F(400, 20)), x, hy, F(400, 20), MUTED); }
+  y = Math.max(y + 132, hy + 10) + 26;
+  g.fillStyle = col; g.fillRect(M, y, W - 2 * M, 5); y += 50;
+
+  // Bill to, and invoice details
+  const c2 = W / 2 + 40; label("Bill to", M, y); label("Invoice details", c2, y);
+  let ly = y + 42;
+  wrap(c.name, c2 - M - 40, F(600, 28)).slice(0, 2).forEach(l => { text(l, M, ly, F(600, 28)); ly += 36; });
+  if (c.phone) { text(fmtPhone(c.phone), M, ly, F(400, 22), MUTED); ly += 32; }
+  if (c.mark) { text("Tag mark: " + c.mark, M, ly, F(400, 22), MUTED); ly += 32; }
+  let ry = y + 42;
+  const kv = (kk, v) => { text(kk, c2, ry, F(400, 22), MUTED); if (v) text(v, c2 + 200, ry, F(600, 22)); ry += 36; };
+  kv("Invoice no.", invNo(o)); kv("Dropped off", fmtDate(o.at)); kv("Invoice date", fmtDate(o.m.billed_at || Date.now()));
+  kv("Status", "");
+  const st = due === 0 ? ["Paid", "#DCF2E7", "#0F6B47"] : paid ? ["Part paid", "#FEF3C7", "#92400E"] : ["Unpaid", "#FDE2E1", "#B42318"];
+  g.font = F(600, 19); const pw = g.measureText(st[0]).width + 32; box(c2 + 200, ry - 36 - 25, pw, 34, 17, st[1]); text(st[0], c2 + 216, ry - 36, F(600, 19), st[2]);
+  y = Math.max(ly, ry) + 30;
+
+  // Items
+  const cQty = 760, cPrice = 950, cAmt = W - M - 22;
+  const head = () => { box(M, y, W - 2 * M, 54, 8, col); [["Item", M + 22, "left"], ["Qty", cQty, "right"], ["Price", cPrice, "right"], ["Amount", cAmt, "right"]].forEach(([t, xx, a]) => text(t, xx, y + 35, F(600, 20), "#fff", a)); y += 54; };
+  head();
+  o.items.forEach((it, i) => {
+    if (y + 74 > bottom) { newPage(); head(); }
+    if (i % 2) { g.fillStyle = TINT; g.fillRect(M, y, W - 2 * M, 74); }
+    const up = unitPrice(o, it, i);
+    text(fit(pname(it), cQty - M - 120, F(500, 23)), M + 22, y + 33, F(500, 23));
+    text(SERVICES[it.svc] || "", M + 22, y + 59, F(400, 18), MUTED);
+    text(String(it.qty), cQty, y + 45, F(400, 23), INK, "right");
+    text(naira(up), cPrice, y + 45, F(400, 23), INK, "right");
+    text(naira(up * it.qty), cAmt, y + 45, F(600, 23), INK, "right");
+    y += 74; g.fillStyle = LINE; g.fillRect(M, y - 1, W - 2 * M, 1);
+  });
+
+  // Totals, ending in the balance bar
+  const rows = [["Subtotal", naira(k.sub)]];
+  if (k.exp) rows.push(["Express delivery", naira(k.exp)]);
+  if (+o.m.delivery) rows.push(["Pickup / delivery", naira(o.m.delivery)]);
+  if (+o.m.discount) rows.push(["Discount", "-" + naira(o.m.discount)]);
+  const last = (o.m.payments || []).slice(-1)[0];
+  room(rows.length * 42 + 190); y += 24;
+  const tw = 540, tx = W - M - tw;
+  const trow = (l, r, bold) => { text(l, tx + 18, y + 28, F(bold ? 600 : 400, 23), bold ? INK : MUTED); text(r, W - M - 18, y + 28, F(bold ? 700 : 500, 23), INK, "right"); y += 42; };
+  rows.forEach(r => trow(r[0], r[1]));
+  g.fillStyle = LINE; g.fillRect(tx, y + 4, tw, 2); y += 14;
+  trow("Total", naira(total), true);
+  if (paid) trow(`Paid${last ? " · " + fmtDate(last.at) : ""}${last && PAY_WORD[last.method] ? " · " + PAY_WORD[last.method] : ""}`, naira(paid));
+  y += 10; box(tx, y, tw, 66, 10, col);
+  text(due ? "Balance due" : "Paid in full", tx + 22, y + 43, F(600, 24), "#fff");
+  text(naira(due), W - M - 22, y + 44, F(700, 30), "#fff", "right");
+  y += 66;
+
+  // How to pay
+  if (due && hasBank()) {
+    room(230); y += 34;
+    box(M, y, W - 2 * M, 196, 12, null, LINE);
+    label("How to pay", M + 30, y + 46, col);
+    text(p.acct_no, M + 30, y + 98, F(700, 36));
+    text(fit(`${p.bank_name.trim()}  ·  ${p.acct_name.trim()}`, W - 2 * M - 60, F(500, 23)), M + 30, y + 136, F(500, 23));
+    text(fit(`Use ${invNo(o)} as the reference, then send your payment receipt on WhatsApp.`, W - 2 * M - 60, F(400, 20)), M + 30, y + 172, F(400, 20), MUTED);
+    y += 196;
+  }
+  // Terms
+  const terms = p.inv_terms ? wrap(p.inv_terms, W - 2 * M - 60, F(400, 20)).slice(0, 8) : [];
+  if (terms.length) {
+    const h = 74 + terms.length * 30; room(h + 30); y += 24;
+    box(M, y, W - 2 * M, h, 12, TINT);
+    label("Terms", M + 30, y + 44);
+    terms.forEach((l, i) => text(l, M + 30, y + 82 + i * 30, F(400, 20), MUTED));
+    y += h;
+  }
+  room(54); y += 54;
+  text(`Thank you for your patronage, ${c.greet ? greetWord(c.greet) : c.name.split(" ")[0]}.`, M, y, F(500, 24), INK);
+
+  // Footer on every page
+  pages.forEach((cv, i) => {
+    const gg = cv.getContext("2d");
+    gg.fillStyle = LINE; gg.fillRect(M, H - 82, W - 2 * M, 1);
+    gg.font = F(400, 17); gg.fillStyle = MUTED; gg.textAlign = "center"; gg.fillText("Invoice made with Tagbook  ·  tagbook.ordiventa.com", W / 2, H - 46);
+    if (pages.length > 1) { gg.textAlign = "right"; gg.fillText(`Page ${i + 1} of ${pages.length}`, W - M, H - 46); }
+  });
+  return pages;
+}
+// A minimal PDF: one full-page JPEG image per page.
+async function pagesToPdf(pages) {
+  const blobs = await Promise.all(pages.map(cv => new Promise((ok, no) => cv.toBlob(b => b ? ok(b) : no(new Error("jpeg")), "image/jpeg", .88))));
+  const imgs = await Promise.all(blobs.map(b => b.arrayBuffer()));
+  const enc = new TextEncoder(), parts = [], offs = []; let len = 0;
+  const add = d => { const u = typeof d === "string" ? enc.encode(d) : new Uint8Array(d); parts.push(u); len += u.length; };
+  const obj = (n, body) => { offs[n] = len; add(`${n} 0 obj\n`); body(); add("\nendobj\n"); };
+  const n = pages.length, PW = 595.28, PH = 841.89;
+  add("%PDF-1.4\n%âã\n");
+  obj(1, () => add("<< /Type /Catalog /Pages 2 0 R >>"));
+  obj(2, () => add(`<< /Type /Pages /Kids [${pages.map((_, i) => `${3 + 3 * i} 0 R`).join(" ")}] /Count ${n} >>`));
+  imgs.forEach((jpg, i) => {
+    const pg = 3 + 3 * i, cs = `q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`;
+    obj(pg, () => add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${pg + 2} 0 R >> >> /Contents ${pg + 1} 0 R >>`));
+    obj(pg + 1, () => add(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+    obj(pg + 2, () => { add(`<< /Type /XObject /Subtype /Image /Width ${pages[i].width} /Height ${pages[i].height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.byteLength} >>\nstream\n`); add(jpg); add("\nendstream"); });
+  });
+  const size = 3 + 3 * n, xref = len;
+  add(`xref\n0 ${size}\n0000000000 65535 f \n${offs.slice(1).map(v => String(v).padStart(10, "0") + " 00000 n \n").join("")}trailer\n<< /Size ${size} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: "application/pdf" });
+}
+async function invoiceFile(o, c = cust(o.cid)) {
+  const blob = await pagesToPdf(await invoicePages(o, c));
+  const name = `${invNo(o)} ${shopName()} ${c.name}`.replace(/[^A-Za-z0-9 -]+/g, "").trim().replace(/\s+/g, "-").slice(0, 80) + ".pdf";
+  return new File([blob], name, { type: "application/pdf" });
+}
+function saveFile(f) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+const invCaption = (o, type) => { const c = cust(o.cid); return type === "owe" ? `${hello(c)}, a reminder from ${shopName()}: invoice ${invNo(o)} has ${naira(owed(o))} still to pay. The invoice is attached.` : `${hello(c)}, your clothes are ready at ${shopName()}. Your invoice is attached.`; };
+let invReady = null; // the last invoice made, so a second tap shares at once
+async function sendInvoice(o, btn, type) {
+  const key = [o.id, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length].join(":"), label = "Send invoice (PDF)";
+  let f = invReady && invReady.key === key ? invReady.file : null;
+  if (!f) {
+    btn.disabled = true; btn.textContent = "Making the invoice…";
+    try { f = await invoiceFile(o); invReady = { key, file: f }; } catch (_) { btn.disabled = false; btn.textContent = label; toast("Couldn't make the invoice. Try again."); return; }
+    btn.disabled = false; btn.textContent = label;
+  }
+  if (navigator.canShare && navigator.canShare({ files: [f] })) {
+    try { await navigator.share({ files: [f], text: invCaption(o, type) }); }
+    catch (e) {
+      // Some phones only allow sharing straight after a tap; the invoice is ready now, so one more tap sends it.
+      if (e && e.name === "NotAllowedError") { btn.textContent = "Invoice ready. Tap to send"; return; }
+      if (!e || e.name !== "AbortError") toast("Couldn't open sharing. Try again.");
+    }
+    return;
+  }
+  saveFile(f); toast("Invoice saved to your downloads. Attach it in WhatsApp.");
+}
+
+/* Settings, Invoice tab (owner only) */
+const SAMPLE_INV = () => {
+  const unit = [800, 800, 2000, 3500], items = [{ label: "Shirt", svc: "wi", qty: 4 }, { label: "Trouser", svc: "wi", qty: 2 }, { label: "Native (2 piece)", svc: "wsi", qty: 1 }, { label: "Duvet", svc: "wo", qty: 1 }];
+  const total = items.reduce((s, it, i) => s + unit[i] * it.qty, 0) - 500, day = 864e5;
+  return { o: { id: "sample", no: 33, at: Date.now() - 2 * day, items, express: false, billed: true, m: { unit, custom: {}, delivery: 0, discount: 500, total, paid: 5000, billed_at: Date.now(), payments: [{ amt: 5000, at: Date.now() - day, method: "transfer" }], express_amt: 0 } },
+    c: { name: "Adaeze Okafor", phone: "08031234567", mark: "AO", greet: null } };
+};
+function invoiceSettingsHtml() {
+  const p = sPriv(), cur = invColor(), logo = goodLogo(p.inv_logo);
+  return card("Logo", "Shown at the top of every invoice. A logo on a white or clear background looks best.",
+      `<div class="ilogo">${logo ? `<img src="${esc(p.inv_logo)}" alt="Your logo">` : `<span>No logo yet</span>`}</div>
+       <input type="file" id="ilf" accept="image/png,image/jpeg,image/webp" hidden>
+       <div class="row"><button class="btn btn-ghost" id="ilu">${logo ? "Change logo" : "Upload logo"}</button>${logo ? `<button class="btn btn-ghost" id="ilr">Remove logo</button>` : ""}</div>`)
+    + card("Invoice colour", logo ? "The first three come from your logo. Tap one to see it on the invoice." : "Upload your logo to get colours taken from it.",
+      `<div class="iswatch" role="group" aria-label="Invoice colour">${invSwatches().map(h => `<button data-ic="${h}" aria-pressed="${h === cur}" aria-label="Colour ${h}" style="--c:${h}"></button>`).join("")}</div>`)
+    + card("Preview", "A sample invoice with your details.",
+      `<div class="iprev"><img id="iprev" alt="Sample invoice"></div><button class="btn btn-ghost" id="isample">Download sample PDF</button>`)
+    + card("Details on the invoice", "Leave any of these empty to hide it.",
+      `<label for="itg">Short line under your name</label><input id="itg" maxlength="60" value="${esc(p.inv_tagline || "")}" placeholder="e.g. Dry cleaning and laundry" autocomplete="off">
+       <label for="iad">Address</label><input id="iad" maxlength="120" value="${esc(p.inv_address || "")}" placeholder="e.g. 12 Oba Adesida Road, Akure" autocomplete="off">
+       <label for="iph">WhatsApp number</label><input id="iph" type="text" inputmode="tel" maxlength="13" value="${esc(fmtPhone(p.inv_phone || ""))}" placeholder="${esc(fmtPhone(me.phone))}" autocomplete="off">
+       <label for="iem">Email</label><input id="iem" type="email" maxlength="80" value="${esc(p.inv_email || "")}" placeholder="e.g. hello@yourlaundry.com" autocomplete="off">`)
+    + card("Terms", "Printed near the bottom of every invoice. Leave it empty if you don't want any.",
+      `<textarea id="itm" rows="4" maxlength="400" placeholder="e.g. Clothes not collected within 30 days may be given away. Please check your pockets before drop-off.">${esc(p.inv_terms || "")}</textarea>`);
+}
+let prevTurn = 0;
+async function drawInvPreview() {
+  const img = $("#iprev"); if (!img) return; const turn = ++prevTurn;
+  const { o, c } = SAMPLE_INV(); const pages = await invoicePages(o, c);
+  if (turn === prevTurn && $("#iprev")) $("#iprev").src = pages[0].toDataURL("image/jpeg", .8);
+}
+async function readLogo(file) {
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error("Use a PNG or JPG picture.");
+  const url = URL.createObjectURL(file), img = await loadImg(url); URL.revokeObjectURL(url);
+  if (!img || !img.width) throw new Error("Couldn't open that picture. Try another one.");
+  const s = Math.min(1, 320 / Math.max(img.width, img.height)), cv = document.createElement("canvas");
+  cv.width = Math.max(1, Math.round(img.width * s)); cv.height = Math.max(1, Math.round(img.height * s));
+  const g = cv.getContext("2d"); g.drawImage(img, 0, 0, cv.width, cv.height);
+  let data = cv.toDataURL("image/png");
+  if (data.length > 250000) { g.globalCompositeOperation = "destination-over"; g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height); data = cv.toDataURL("image/jpeg", .86); }
+  return { data, colours: logoColours(cv) };
+}
+async function logoSwatches() {
+  const p = sPriv(); if (!goodLogo(p.inv_logo) || invSw.key === p.inv_logo) return false;
+  const img = await loadImg(p.inv_logo); invSw = { key: p.inv_logo, list: img ? logoColours(img) : [] }; return true;
+}
+function wireInvoice() {
+  const savePriv = async fields => { Object.assign(priv, fields); invReady = null; savedToast(await put("shop_private", { shop_id: shop.id }, fields)); };
+  drawInvPreview();
+  logoSwatches().then(changed => { if (changed && setTab === "invoice" && tab === "prices") renderSettings(); });
+  $("#ilu").onclick = () => $("#ilf").click();
+  $("#ilf").onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    $("#ilu").disabled = true; $("#ilu").textContent = "Adding logo…";
+    try {
+      const r = await readLogo(f); invSw = { key: r.data, list: r.colours };
+      await savePriv({ inv_logo: r.data, inv_color: r.colours[0] || invColor() });
+    } catch (err) { toast(err.message); }
+    renderSettings();
+  };
+  if ($("#ilr")) $("#ilr").onclick = async () => { const b = $("#ilr"); if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again to remove"; return; } await savePriv({ inv_logo: "" }); renderSettings(); };
+  view.querySelectorAll("[data-ic]").forEach(b => b.onclick = async () => {
+    view.querySelectorAll("[data-ic]").forEach(x => x.setAttribute("aria-pressed", x === b)); priv.inv_color = b.dataset.ic; drawInvPreview();
+    await savePriv({ inv_color: b.dataset.ic });
+  });
+  $("#isample").onclick = async () => { const b = $("#isample"); b.disabled = true; try { const { o, c } = SAMPLE_INV(); saveFile(await invoiceFile(o, c)); } catch (_) { toast("Couldn't make the sample. Try again."); } b.disabled = false; };
+  const field = (id, key, max, clean) => $(id).onchange = e => { const v = (clean ? clean(e.target.value) : tidy(e.target.value)).slice(0, max); e.target.value = key === "inv_phone" ? fmtPhone(v) : v; savePriv({ [key]: v }).then(drawInvPreview); };
+  field("#itg", "inv_tagline", 60); field("#iad", "inv_address", 120); field("#iem", "inv_email", 80, v => v.trim());
+  field("#itm", "inv_terms", 400, v => v.replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim());
+  $("#iph").onchange = e => { const v = digits(e.target.value); if (v && !/^0\d{10}$/.test(v)) { toast("The number must be 11 digits and start with 0."); return; } e.target.value = fmtPhone(v); savePriv({ inv_phone: v }).then(drawInvPreview); };
+}
 
 /* ---------- Owner only: edit clothes, edit customer, cancel an order (kept on record) ---------- */
 let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false, fxGreet = "", fxOther = false, ogOther = false;
@@ -1554,6 +1859,7 @@ function openOrder(no) {
   const ogs = $("#og-save"); if (ogs) ogs.onclick = () => { const g = cleanGreet($("#data-og-txt").value); if (!g) { toast("Type how you greet them"); return; } setGreet(g); };
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
+  sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(o, b, b.dataset.pdf));
   sh.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
     const t = message(o, b.dataset.copy);
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast("Message copied")).catch(() => {
@@ -1711,7 +2017,7 @@ const genPinAttrs = () => `type="text" inputmode="numeric" pattern="[0-9]*" maxl
 let resetFor = null, setTab = "business", priceOpen = null, priceQ = "", addOpen = false;
 const wide = window.matchMedia("(min-width: 900px)");
 wide.addEventListener("change", () => { if (me && tab === "prices") renderSettings(); });
-const SET_TABS = [["business", "Business"], ["plan", "Plan & billing"], ["prices", "Price list"], ["staff", "Staff"], ["branches", "Branches"], ["account", "My account"]];
+const SET_TABS = [["business", "Business"], ["invoice", "Invoice"], ["plan", "Plan & billing"], ["prices", "Price list"], ["staff", "Staff"], ["branches", "Branches"], ["account", "My account"]];
 const card = (title, sub, body) => `<section class="scard"><h3 class="stitle">${title}</h3>${sub ? `<p class="hint" style="margin-top:-4px">${sub}</p>` : ""}${body}</section>`;
 const shortSvc = { wi: "Wash & iron", wo: "Wash", io: "Iron", wsi: "Starch" };
 function renderSettings() {
@@ -1753,6 +2059,7 @@ function renderSettings() {
        <button class="btn btn-primary" id="sfa">Add staff login</button>`))
     + card("Price list for staff", "Lets staff see your prices so they can answer customers who ask. They can't change prices or see any bill.",
       `<div class="chips" style="margin:0"><button class="chip" data-sp="1" aria-pressed="${!!shop.staff_prices}">Staff can see prices</button><button class="chip" data-sp="0" aria-pressed="${!shop.staff_prices}">Hide prices from staff</button></div>`);
+  if (setTab === "invoice") body = invoiceSettingsHtml();
   if (setTab === "prices") body = priceListHtml();
   if (setTab === "plan" && own()) body = planHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
@@ -1761,6 +2068,7 @@ function renderSettings() {
   view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "prices") markSetup("prices"); if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
   if (setTab === "account") wireAccount();
   if (setTab === "business") wireBusiness();
+  if (setTab === "invoice") wireInvoice();
   if (setTab === "branches") wireBranches();
   if (setTab === "staff") wireStaff();
   if (setTab === "prices") wirePrices();
