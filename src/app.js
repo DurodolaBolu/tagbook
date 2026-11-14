@@ -707,9 +707,11 @@ function orderRight(o, showStatus) {
     : { new: "In progress", listed: "In progress", ready: "Ready", told: "Ready", picked: "Picked up" };
   let money = "";
   if (own() && !o.cancelled) {
+    // A bold amount is always money still to collect.
     const due = owed(o);
-    if (o.billed && (o.status === "told" || o.status === "picked") && due) money = `<b class="owes">Owes ${naira(due)}</b>`;
-    else if (o.billed) money = `<b>${naira(o.m.total)}</b>`;
+    if (o.billed && due && (o.status === "told" || o.status === "picked")) money = `<b class="owes">Owes ${naira(due)}</b>`;
+    else if (o.billed && due) money = `<b>${naira(due)} due</b>`;
+    else if (o.billed) money = `<span class="sub">Paid</span>`;
     else if (o.m.paid) money = `<span class="sub">${naira(o.m.paid)} paid</span>`;
     else if (o.status !== "new") money = `<span class="sub">No bill yet</span>`;
   }
