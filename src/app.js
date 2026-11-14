@@ -1405,7 +1405,7 @@ let btEdit = null; // id of the customer whose invoice name is being edited
 const billToLine = c => btEdit === c.id
   ? `<label for="btn-in" class="wa-label" style="margin-top:10px">Name on the invoice</label><div class="row srow"><input id="btn-in" maxlength="60" value="${esc(billName(c))}" placeholder="e.g. Mr. Ezekiel" autocomplete="off"><button class="mini" id="btn-save">Save</button></div>
      <p class="hint">Only changes the invoice. You'll still find them as ${esc(c.name)}.</p>`
-  : `<p class="billto">Bill to: <b>${esc(billName(c))}</b> <button data-bt>Change</button></p>`;
+  : `<p class="billto">Bill to: <b>${esc(billName(c))}</b> <button data-bt>Change</button></p>${(c.inv_name || "").trim() ? "" : `<p class="billnote">Is “${esc(c.name)}” their real name? If not, tap Change and type it. Don't know their name? Send it as a text message instead.</p><button class="mini" data-btok>Yes, it's their real name</button>`}`;
 const PAY_WORD = { cash: "cash", transfer: "transfer", pos: "POS" };
 
 async function invoicePages(o, c = cust(o.cid)) {
@@ -1871,8 +1871,9 @@ function openOrder(no) {
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
   sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(o, b, b.dataset.pdf));
   sh.querySelectorAll("[data-bt]").forEach(b => b.onclick = () => { btEdit = o.cid; openOrder(o.no); const i = $("#btn-in"); if (i) { i.focus(); i.select(); } });
+  sh.querySelectorAll("[data-btok]").forEach(b => b.onclick = async () => { const c = cust(o.cid); b.disabled = true; if (await put("customers", { id: c.id }, { inv_name: c.name.slice(0, 60) })) c.inv_name = c.name.slice(0, 60); openOrder(o.no); });
   if ($("#btn-save")) $("#btn-save").onclick = async () => {
-    const c = cust(o.cid), v = tidy($("#btn-in").value).slice(0, 60), keep = v === c.name ? "" : v;
+    const c = cust(o.cid), keep = tidy($("#btn-in").value).slice(0, 60);
     $("#btn-save").disabled = true;
     if (await put("customers", { id: c.id }, { inv_name: keep })) { c.inv_name = keep; invReady = null; toast("Saved"); }
     btEdit = null; openOrder(o.no);

@@ -266,6 +266,7 @@ async function handle(route) {
     await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(500);
     await page.click('.order:has-text("Adaeze")'); await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(out, "order-send.png") });
+    await page.screenshot({ path: path.join(out, "order-name-check.png") });
     await page.click("[data-bt]"); await page.waitForTimeout(300); await page.fill("#btn-in", "Mrs. Adaeze Okafor");
     await page.screenshot({ path: path.join(out, "order-billto-edit.png") });
     await page.click("#btn-save"); await page.waitForTimeout(500);
