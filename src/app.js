@@ -699,19 +699,23 @@ function render() {
   drawSupportFab();
 }
 
-function pills(o) {
-  const m = own()
-    ? { new: ["Send list", "p-new"], listed: ["In progress", "p-billed"], ready: ["Ready, not told", "p-new"], told: ["Customer told", "p-ready"], picked: ["Picked up", "p-collected"] }
-    : { new: ["In progress", "p-billed"], listed: ["In progress", "p-billed"], ready: ["Ready", "p-ready"], told: ["Ready", "p-ready"], picked: ["Picked up", "p-collected"] };
-  if (o.cancelled) return `<span class="pill p-collected">Cancelled</span>`;
-  let h = `<span class="pill ${m[o.status][1]}">${m[o.status][0]}</span>`;
-  if (own() && !o.billed && o.status !== "new") h += `<span class="pill p-new">No bill yet</span>`;
-  if (own() && o.m.paid && (o.status === "new" || o.status === "listed")) h += `<span class="pill p-ready">Paid ${naira(o.m.paid)}</span>`;
-  if (o.billed && (o.status === "told" || o.status === "picked")) {
-    if (own() && owed(o)) h += `<span class="pill p-owed">Owes ${naira(owed(o))}</span>`;
-    if (!own()) h += `<span class="pill ${owed(o) ? "p-owed" : "p-collected"}">${owed(o) ? "Not paid" : "Paid"}</span>`;
+// Right side of an order in the list: at most one money line and, only under "All" or a search,
+// one plain status word. The filter chips already say the status, so it isn't repeated there.
+function orderRight(o, showStatus) {
+  const st = own()
+    ? { new: "Send list", listed: "In progress", ready: "Ready, not told", told: "Customer told", picked: "Picked up" }
+    : { new: "In progress", listed: "In progress", ready: "Ready", told: "Ready", picked: "Picked up" };
+  let money = "";
+  if (own() && !o.cancelled) {
+    const due = owed(o);
+    if (o.billed && (o.status === "told" || o.status === "picked") && due) money = `<b class="owes">Owes ${naira(due)}</b>`;
+    else if (o.billed) money = `<b>${naira(o.m.total)}</b>`;
+    else if (o.m.paid) money = `<span class="sub">${naira(o.m.paid)} paid</span>`;
+    else if (o.status !== "new") money = `<span class="sub">No bill yet</span>`;
   }
-  return h;
+  if (!own() && o.billed && (o.status === "told" || o.status === "picked") && owed(o)) money = `<b class="owes">Not paid</b>`;
+  const status = o.cancelled ? "Cancelled" : showStatus ? st[o.status] : "";
+  return money + (status ? `<span class="sub">${status}</span>` : "");
 }
 
 /* ---------- Install banner: Android gets the real install prompt, iPhone gets the steps ---------- */
@@ -961,7 +965,7 @@ function renderOrders() {
       <button class="order" data-no="${o.no}">
         <div class="mark">${esc(c.mark)}</div>
         <div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${k.count} items${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}</span></div>
-        <div class="right">${own() && o.billed ? `<b>${naira(o.m.total)}</b>` : ""}${pills(o)}</div>
+        <div class="right">${orderRight(o, filter === "all" || !!query)}</div>
       </button>`;
     }).join("") : `<div class="empty">${orders.length ? "No orders here. Change the filter or search." : "No orders yet. Tap “+ Log clothes” to add the first one."}</div>`}</div>
     ${pages > 1 ? `<div class="pager"><button class="mini" id="pgprev" ${page === 0 ? "disabled" : ""} aria-label="Newer orders">‹ Newer</button>

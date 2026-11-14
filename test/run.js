@@ -197,6 +197,31 @@ async function handle(route) {
   global.planFail = false; await T("#planretry"); await page.waitForTimeout(600);
   console.log("plan after Try again shows plans:", await page.isVisible("[data-plan]"));
   await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);
+  if (process.env.CAPTURE_ORDERS) { // design review: order list under each filter, on a phone
+    await page.setViewportSize({ width: 390, height: 1400 });
+    // sample orders in every state, like a real shop's day
+    const t0 = db.orders[0];
+    const add = (no, name, mark, status, billed, total, paid) => {
+      const cid = "c" + no, id = "s" + no;
+      db.customers.push({ id: cid, shop_id: t0.shop_id, name, mark, created_at: new Date().toISOString(), greet: null, greet_asked: true });
+      db.customer_phones.push({ customer_id: cid, shop_id: t0.shop_id, phone: "0803000" + String(1000 + no).slice(-4) });
+      db.orders.push({ ...JSON.parse(JSON.stringify(t0)), id, no, customer_id: cid, branch_id: "b1", status, list_sent: status !== "new", notified: true, billed, settled: billed && paid >= total, created_at: new Date().toISOString() });
+      db.order_money.push({ order_id: id, shop_id: t0.shop_id, unit: null, custom: {}, delivery: 0, discount: 0, total: billed ? total : 0, billed_at: billed ? new Date().toISOString() : null, paid, payments: paid ? [{ amt: paid, at: Date.now(), method: "transfer", by: "Bolu" }] : [], express_amt: 0 });
+    };
+    add(2, "Collins Okoro", "CO", "told", true, 10000, 2500);
+    add(3, "Funmi Adeyemi", "FA", "new", false, 0, 0);
+    add(4, "Tunde Bakare", "TB", "listed", false, 0, 2000);
+    add(5, "Grace Ojo", "GO", "listed", true, 6500, 0);
+    add(6, "Kemi Alade", "KA", "picked", true, 4800, 4800);
+    add(7, "Musa Ibrahim", "MI", "told", true, 3000, 3000);
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForSelector(".order", { timeout: 8000 });
+    for (const f of ["all", "new", "work", "ready", "owed", "picked"]) {
+      await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);
+      await page.click(`[data-f="${f}"]`, { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(process.env.CAPTURE_ORDERS, `orders-${f}.png`) });
+    }
+    process.exit(0);
+  }
   if (process.env.CAPTURE) { // design review: every Settings section, phone and laptop, optional extra CSS
     const css = process.env.EXTRA_CSS ? fs.readFileSync(process.env.EXTRA_CSS, "utf8") : "";
     for (const [w, h, tag] of [[390, 2600, "phone"], [1280, 1800, "laptop"]]) {
