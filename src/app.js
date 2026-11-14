@@ -1647,7 +1647,7 @@ function renderSettings() {
   let body = "";
   if (setTab === "account") body = (!own() && shop.staff_prices ? staffPriceHtml() : "") + (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
       `<label for="np">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}><button class="btn btn-ghost" id="npb">Save new PIN</button>`)
-    + card("Log out", "", `<button class="btn btn-ghost" id="out" style="margin-top:0">Log out</button>`);
+    + `<section class="scard"><button class="btn btn-ghost" id="out" style="margin-top:0">Log out</button></section>`;
   if (setTab === "business") { const p = sPriv(); body =
     card("Business name", "Shown at the top of the app and in every WhatsApp message.",
       `<input id="sn" maxlength="${NAME_MAX}" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off" aria-label="Business name">`)

@@ -64,7 +64,7 @@ async function handle(route) {
     return send(200, { ok: true });
   }
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId);
-  if (p === "/rest/v1/rpc/my_plan") return send(200, { state: "trial", until: "2099-01-01", grace_until: "2099-01-03", days_left: 9999 });
+  if (p === "/rest/v1/rpc/my_plan") return send(200, { state: "trial", until: "2099-01-01", grace_until: "2099-01-03", days_left: 9999, prices: { m1: 3000, m6: 15000, m12: 30000 } });
   if (p === "/rest/v1/rpc/admin_shops") return send(200, db.shops.map(s => ({ id: s.id, name: s.name, created_at: s.created_at, trial_ends: s.trial_ends || null, owner_name: "Bolu", owner_phone: "08120756325", staff: db.staff.length, orders: db.orders.length, last_order: new Date().toISOString(), referred_by: s.referred_by || null, referred_by_name: (db.shops.find(k => k.id === s.referred_by) || {}).name || null, referrals: db.shops.filter(k => k.referred_by === s.id).length })));
   if (p === "/rest/v1/rpc/agent_ref_options") return send(200, db.shops.map(s => ({ id: s.id, name: s.name })));
   if (p === "/rest/v1/rpc/team_options") return send(200, [{ id: "11111111-1111-1111-1111-111111111111", name: "Louis" }]);
@@ -190,6 +190,19 @@ async function handle(route) {
 
   // OWNER
   await login("08120756325"); await shot("07-owner-orders");
+  if (process.env.CAPTURE) { // design review: every Settings section, phone and laptop, optional extra CSS
+    const css = process.env.EXTRA_CSS ? fs.readFileSync(process.env.EXTRA_CSS, "utf8") : "";
+    for (const [w, h, tag] of [[390, 2600, "phone"], [1280, 1800, "laptop"]]) {
+      await page.setViewportSize({ width: w, height: h });
+      for (const t of ["business", "prices", "branches", "staff", "account", "plan"]) {
+        await page.goto("http://localhost:8787/#shop"); await page.waitForTimeout(400);
+        if (css) await page.addStyleTag({ content: css });
+        await page.click(`[data-st="${t}"]`, { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(300);
+        await page.screenshot({ path: path.join(process.env.CAPTURE, `${tag}-${t}.png`), fullPage: true });
+      }
+    }
+    await page.setViewportSize({ width: 390, height: 844 }); process.exit(0);
+  }
   // an owner still on the old password is asked once to confirm their PIN
   global.unswitched.add(db.staff.find(x => x.phone === "08120756325").user_id);
   await page.reload(); await page.waitForSelector("#llater", { timeout: 8000 }); await shot("07a-confirm-pin");
