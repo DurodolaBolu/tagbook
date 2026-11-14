@@ -8,6 +8,7 @@ npx esbuild src/app.js --bundle --minify --format=iife --target=es2019 --outfile
 node --check site/app.js
 cp src/font/*.woff2 src/font/plex.css site/font/
 cp icon-192.png icon-512.png apple-touch-icon.png robots.txt site/
+cp src/privacy.html site/privacy.html
 GEAR=$(cat src/gear.html)
 cat > site/index.html <<HTML
 <!doctype html>

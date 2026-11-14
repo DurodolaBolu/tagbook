@@ -4,9 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 const SB_URL = "https://uungxatdvelljmaugzuz.supabase.co";
 const SB_KEY = "sb_publishable_oE_-Yt6fovcOpIC01tnrpw_ueK-Zx7v";
 const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "tagbook-auth" } });
-// Logins are phone + 6-digit PIN. The phone becomes a hidden email and the PIN the password (same as the admin function).
-const emailFor = p => `p${p}@users.tagbook.ordiventa.com`;
-const passFor = pin => `tb-${pin}-tagbook`;
+// Logins are phone + 6-digit PIN, checked by the "login" server function, which counts wrong PINs
+// and pauses a login after 5. The app never builds the real password itself.
 
 const SERVICES = { wi: "Wash and iron", wo: "Wash only", io: "Iron only", wsi: "Wash, starch and iron" };
 const STEPS = [["new", "Logged"], ["listed", "List sent"], ["ready", "Ready"], ["told", "Told"], ["picked", "Picked up"]];
@@ -962,7 +961,7 @@ function renderOrders() {
       <span>${page * PER_PAGE + 1}–${page * PER_PAGE + shown.length} of ${list.length}</span>
       <button class="mini" id="pgnext" ${page >= pages - 1 ? "disabled" : ""} aria-label="Older orders">Older ›</button></div>` : ""}
     ${refLine()}
-    <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
+    <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></p>`;
   const toTop = () => { const t = $("#q"), sc = mainScroll(); if (t) sc.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top - (sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top) + sc.scrollTop - 12) }); };
   if ($("#pgprev")) $("#pgprev").onclick = () => { page--; renderOrders(); toTop(); };
   if ($("#pgnext")) $("#pgnext").onclick = () => { page++; renderOrders(); toTop(); };
@@ -1682,7 +1681,7 @@ function renderSettings() {
   if (setTab === "prices") body = priceListHtml();
   if (setTab === "plan" && own()) body = planHtml();
   if (setTab === "shops" && isAdmin) body = shopsHtml();
-  view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)}</p>`;
+  view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></p>`;
   wireBack(view);
   view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "prices") markSetup("prices"); if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
   if (setTab === "account") wireAccount();
@@ -1715,9 +1714,9 @@ function wireAccount() {
   $("#npb").onclick = async () => {
     const pin = digits($("#np").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; }
     $("#npb").disabled = true;
-    const { error } = await sb.auth.updateUser({ password: passFor(pin) });
+    const r = await callAdmin({ action: "change_my_pin", pin });
     $("#npb").disabled = false;
-    if (error) { toast(failMsg(error)); return; }
+    if (!r.ok) { toast(r.msg); return; }
     $("#np").value = ""; toast("New PIN saved. Use it next time you log in.");
   };
   $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } try { await disablePush(); } catch (_) { } await sb.auth.signOut(); location.hash = ""; location.reload(); };
@@ -1989,6 +1988,7 @@ function drawLogin() {
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
         : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
       ${L.busy ? `<p class="lbusy">Logging in…</p>` : ""}
+      <p class="lpriv"><a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
@@ -2009,13 +2009,22 @@ function next() {
   if (!/^0\d{10}$/.test(L.phone)) { L.err = "Type your 11-digit phone number, starting with 0."; drawLogin(); return; }
   L.step = "pin"; L.pin = ""; L.err = ""; drawLogin();
 }
+const waitWords = s => { const m = Math.ceil(s / 60); return m >= 60 ? `${Math.ceil(m / 60)} hour${m > 60 ? "s" : ""}` : `${m} minute${m === 1 ? "" : "s"}`; };
 async function tryLogin() {
   L.busy = true; drawLogin();
-  const { error } = await sb.auth.signInWithPassword({ email: emailFor(L.phone), password: passFor(L.pin) });
+  let res = null, code = "";
+  try {
+    const r = await fetch(`${SB_URL}/functions/v1/login`, { method: "POST", headers: { "Content-Type": "application/json", apikey: SB_KEY }, body: JSON.stringify({ phone: L.phone, pin: L.pin }) });
+    res = await r.json().catch(() => ({})); code = r.ok ? "" : (res.error || "TRY_LATER");
+  } catch (_) { code = "NETWORK"; }
+  if (!code) { const { error } = await sb.auth.setSession({ access_token: res.access_token, refresh_token: res.refresh_token }); if (error) code = "TRY_LATER"; }
   L.busy = false;
-  if (error) {
+  if (code) {
     L.pin = "";
-    L.err = /fetch|network/i.test(error.message) ? "Can't reach Tagbook. Check your internet and try again." : "Wrong PIN. Try again.";
+    L.err = code === "NETWORK" ? "Can't reach Tagbook. Check your internet and try again."
+      : code === "LOCKED" ? `Too many wrong PINs. For your safety, wait ${waitWords(res.wait || 900)} and try again, or ask your shop owner for a new PIN.`
+      : code === "BAD_LOGIN" ? "Wrong phone number or PIN. Try again."
+      : "Tagbook is busy. Try again in a minute.";
     drawLogin(); if (navigator.vibrate) try { navigator.vibrate(120); } catch (_) { }
     return;
   }

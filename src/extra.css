@@ -441,3 +441,5 @@ body.tplaying nav.tabs{visibility:hidden}
 @media (min-width:480px) and (max-width:899px){#supfab{right:calc(50% - 204px)}}
 @media (min-width:900px){#supfab{right:28px;bottom:28px;width:58px;height:58px}}
 body:has(#supfab:not([hidden])) #app .app{padding-bottom:150px}
+.lpriv{text-align:center;margin:14px 0 0;font-size:14px}
+.lpriv a,.foot a{color:var(--muted);text-decoration:underline}

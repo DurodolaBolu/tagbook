@@ -49,6 +49,15 @@ async function handle(route) {
   }
   if (p === "/auth/v1/user") { if (method === "PUT") return send(200, { id: current }); return send(200, { id: current, aud: "authenticated" }); }
   if (p === "/auth/v1/logout") { current = null; return send(204); }
+  if (p === "/functions/v1/login") {
+    // stand-in for the login function: 5 wrong PINs on a phone = locked 15 minutes
+    global.fails = global.fails || {};
+    const s = db.staff.find(x => x.phone === body.phone);
+    if ((global.fails[body.phone] || 0) >= 5) return send(429, { error: "LOCKED", wait: 900 });
+    if (!s || body.pin !== "482915") { global.fails[body.phone] = (global.fails[body.phone] || 0) + 1; return global.fails[body.phone] >= 5 ? send(429, { error: "LOCKED", wait: 900 }) : send(401, { error: "BAD_LOGIN" }); }
+    global.fails[body.phone] = 0; current = s.user_id;
+    return send(200, { access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.sig", refresh_token: "r" });
+  }
   if (p === "/functions/v1/admin") {
     if (body.action === "create_shop") { if (current !== ownerId) return send(403, { error: "NOT_ALLOWED" }); db.shops.push({ id: uid(), name: body.shop, created_at: new Date().toISOString(), trial_ends: body.trial_ends, referred_by: body.referred_by }); global.lastCreate = body; return send(200, { ok: true }); }
     if (body.action === "add_staff") { if (db.staff.some(s => s.phone === body.phone)) return send(409, { error: "PHONE_IN_USE" }); db.staff.push({ user_id: uid(), shop_id: shopId, role: "secretary", name: body.name, phone: body.phone, active: true, created_at: new Date().toISOString() }); }
@@ -134,13 +143,17 @@ async function handle(route) {
   await ctx.addInitScript(() => { try { Object.defineProperty(Notification, "permission", { get: () => "default" }); } catch (_) {} });
   await ctx.routeWebSocket(/realtime/, ws => {});
   const shot = async n => page.screenshot({ path: path.join(out, n + ".png"), fullPage: true });
-  const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); await page.waitForSelector("#tabs button"); };
+  const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); try { await page.waitForSelector("#tabs button", { timeout: 8000 }); } catch (e) { console.log("LOGIN STUCK:", await page.textContent(".lerr").catch(() => "?"), await page.evaluate(() => document.body.innerText.slice(0, 300))); throw e; } };
   const T = async (sel) => { await page.click(sel); await page.waitForTimeout(250); };
 
   // bad login
   await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); await shot("01-login");
   await page.keyboard.type("08120756325"); await page.keyboard.press("Enter"); await page.keyboard.type("111111"); await page.waitForTimeout(600);
   console.log("bad login message:", await page.textContent(".lerr"));
+  for (let i = 0; i < 4; i++) { await page.keyboard.type("111111"); await page.waitForTimeout(400); }
+  console.log("locked message:", await page.textContent(".lerr")); await shot("01b-locked");
+  console.log("privacy link on login:", await page.isVisible('.lpriv a[href="/privacy"]'));
+  global.fails["08120756325"] = 0;
 
   // SECRETARY logs an order for a new customer
   await login("08000000091"); await shot("02-sec-empty");
