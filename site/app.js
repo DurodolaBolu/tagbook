@@ -39,10 +39,10 @@ Please send your payment receipt here.`:""},Os=()=>Ae().express_type==="manual";
       ${e?`<p class="ocalling">Calling ${v(e.name)}${e.phone?` \xB7 ${re(e.phone)}`:""}</p>`:""}
       <ol>
         <li><b>Opening</b><p>"Good ${new Date().toLocaleString("en-US",{timeZone:"Africa/Lagos",hour:"numeric",hour12:!1})<12?"morning":"afternoon"}. Am I speaking with the owner of ${s}?"</p><p class="hint">Not the owner? "Please, when is the best time to reach the owner?" Write it in the note and call back then.</p></li>
-        <li><b>Why you're calling</b><p>"My name is Bolu, from Tagbook. We built an app for laundry shops. It keeps track of every customer's clothes, sends the bill on WhatsApp, and shows you who still owes, all from your phone."</p></li>
-        <li><b>Ask, then listen</b><p>"How do you keep track of your customers' clothes right now?"</p><p class="hint">Book, tags or memory: "That's exactly what Tagbook replaces."</p></li>
+        <li><b>Who you are, then ask</b><p>"My name is Bolu, from Tagbook. We work with laundry shops. Quick question: how do you keep track of your customers' clothes right now? A book, tags?"</p><p class="hint">End on the question, not on the pitch. If you explain first, they just say "okay" and the call stops there.</p></li>
+        <li><b>Listen, then connect</b><p>"Okay. Tagbook does that on your phone. It records every customer's clothes, sends the bill on WhatsApp, and shows you who still owes."</p><p class="hint">Use their answer: "So no more searching through the book" or "So the tags and the record match".</p></li>
         <li><b>The offer</b><p>"The first month is free, then \u20A63,000 a month, and you can stop anytime. Can we set it up for you now? We just need your shop name and the number you'll log in with."</p></li>
-        <li><b>If they hesitate</b><p>"No problem. Can we send you a short video on WhatsApp so you can see how it works?"</p></li>
+        <li><b>If they hesitate</b><p>"No problem. Can we send you a short video on WhatsApp so you can see how it works?"</p><p class="hint">Then tap "Called them? Send after-call message" below and send the video right after it.</p></li>
       </ol>
       <p class="hint">Keep it under 3 minutes. After the call, set the status below and add a one-line note.</p>
     </div>`:""}
@@ -78,15 +78,17 @@ Bolu, Tagbook team`,t=>`${t}. Following up on our message about Tagbook for your
 
 Bolu, Tagbook team`],Lu=[(t,e,s)=>`${t}. This is Bolu from Tagbook. Thank you for taking our call earlier. This is our WhatsApp number, so you can save it.
 
-Tagbook helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp and see who still owes.
+Here's the short video we talked about. It shows how Tagbook records your customers' clothes, sends the bill on WhatsApp and shows who still owes.
 
-Can we send you a 2 minute video of how it works?${s}`,(t,e,s)=>`${t}. It's Bolu from Tagbook. We spoke on the phone earlier about ${e}. We called from a different line, this is our WhatsApp number.
+Quick question: how do you keep track of your customers' clothes right now? A book, tags, or memory?${s}`,(t,e,s)=>`${t}. It's Bolu from Tagbook. We spoke on the phone earlier about ${e}. We called from a different line, this is our WhatsApp number.
 
-Like we said, Tagbook keeps track of your customers' clothes and payments from your phone. Would you like a short video of how it works?${s}`,(t,e,s)=>`${t}. Bolu here, from Tagbook, following up on our call earlier.
+Here's the short video of how Tagbook works.
 
-This is the WhatsApp number we mentioned. Tagbook is a simple app for laundry shops: log customers' clothes, send bills on WhatsApp and see who hasn't paid. The first month is free.
+While you watch: how are you keeping track of your customers' clothes at the moment?${s}`,(t,e,s)=>`${t}. Bolu here, from Tagbook, following up on our call earlier. This is the WhatsApp number we mentioned.
 
-Should we send you a quick video?${s}`],$n={},Du=Math.floor(Math.random()*15);function xr(t,e){let s=e==="follow"?Nu:e==="called"?Lu:ju,n=t.id+":"+e;if($n[n]==null&&($n[n]=Du++%s.length),e==="follow")return s[$n[n]](Dr());if(e==="called")return s[$n[n]](Dr(),t.name,t.city==="Akure"?`
+Here's the video. Tagbook is a simple app for laundry shops: log customers' clothes, send bills on WhatsApp and see who hasn't paid. The first month is free.
+
+How do you track your customers' clothes right now?${s}`],$n={},Du=Math.floor(Math.random()*15);function xr(t,e){let s=e==="follow"?Nu:e==="called"?Lu:ju,n=t.id+":"+e;if($n[n]==null&&($n[n]=Du++%s.length),e==="follow")return s[$n[n]](Dr());if(e==="called")return s[$n[n]](Dr(),t.name,t.city==="Akure"?`
 
 We can also come by and set it up for you.`:"");let r=t.city==="Akure",a=r?" We're based here in Akure.":Dl.includes(t.city)?" We're in Akure, not far from you.":"";return s[$n[n]](Dr(),t.name,a,r?`
 

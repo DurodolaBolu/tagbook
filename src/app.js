@@ -292,10 +292,10 @@ function callScriptHtml() {
       ${l ? `<p class="ocalling">Calling ${esc(l.name)}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</p>` : ""}
       <ol>
         <li><b>Opening</b><p>"Good ${new Date().toLocaleString("en-US", { timeZone: "Africa/Lagos", hour: "numeric", hour12: false }) < 12 ? "morning" : "afternoon"}. Am I speaking with the owner of ${shop}?"</p><p class="hint">Not the owner? "Please, when is the best time to reach the owner?" Write it in the note and call back then.</p></li>
-        <li><b>Why you're calling</b><p>"My name is Bolu, from Tagbook. We built an app for laundry shops. It keeps track of every customer's clothes, sends the bill on WhatsApp, and shows you who still owes, all from your phone."</p></li>
-        <li><b>Ask, then listen</b><p>"How do you keep track of your customers' clothes right now?"</p><p class="hint">Book, tags or memory: "That's exactly what Tagbook replaces."</p></li>
+        <li><b>Who you are, then ask</b><p>"My name is Bolu, from Tagbook. We work with laundry shops. Quick question: how do you keep track of your customers' clothes right now? A book, tags?"</p><p class="hint">End on the question, not on the pitch. If you explain first, they just say "okay" and the call stops there.</p></li>
+        <li><b>Listen, then connect</b><p>"Okay. Tagbook does that on your phone. It records every customer's clothes, sends the bill on WhatsApp, and shows you who still owes."</p><p class="hint">Use their answer: "So no more searching through the book" or "So the tags and the record match".</p></li>
         <li><b>The offer</b><p>"The first month is free, then ₦3,000 a month, and you can stop anytime. Can we set it up for you now? We just need your shop name and the number you'll log in with."</p></li>
-        <li><b>If they hesitate</b><p>"No problem. Can we send you a short video on WhatsApp so you can see how it works?"</p></li>
+        <li><b>If they hesitate</b><p>"No problem. Can we send you a short video on WhatsApp so you can see how it works?"</p><p class="hint">Then tap "Called them? Send after-call message" below and send the video right after it.</p></li>
       </ol>
       <p class="hint">Keep it under 3 minutes. After the call, set the status below and add a one-line note.</p>
     </div>` : ""}
@@ -341,9 +341,9 @@ const LEAD_FOLLOW = [
 ];
 // After a phone call: warm, not cold. Says which number this is, since calls go out from another line.
 const LEAD_CALLED = [
-  (g, n, visit) => `${g}. This is Bolu from Tagbook. Thank you for taking our call earlier. This is our WhatsApp number, so you can save it.\n\nTagbook helps laundry and dry cleaning shops record every customer's clothes, send the bill on WhatsApp and see who still owes.\n\nCan we send you a 2 minute video of how it works?${visit}`,
-  (g, n, visit) => `${g}. It's Bolu from Tagbook. We spoke on the phone earlier about ${n}. We called from a different line, this is our WhatsApp number.\n\nLike we said, Tagbook keeps track of your customers' clothes and payments from your phone. Would you like a short video of how it works?${visit}`,
-  (g, n, visit) => `${g}. Bolu here, from Tagbook, following up on our call earlier.\n\nThis is the WhatsApp number we mentioned. Tagbook is a simple app for laundry shops: log customers' clothes, send bills on WhatsApp and see who hasn't paid. The first month is free.\n\nShould we send you a quick video?${visit}`,
+  (g, n, visit) => `${g}. This is Bolu from Tagbook. Thank you for taking our call earlier. This is our WhatsApp number, so you can save it.\n\nHere's the short video we talked about. It shows how Tagbook records your customers' clothes, sends the bill on WhatsApp and shows who still owes.\n\nQuick question: how do you keep track of your customers' clothes right now? A book, tags, or memory?${visit}`,
+  (g, n, visit) => `${g}. It's Bolu from Tagbook. We spoke on the phone earlier about ${n}. We called from a different line, this is our WhatsApp number.\n\nHere's the short video of how Tagbook works.\n\nWhile you watch: how are you keeping track of your customers' clothes at the moment?${visit}`,
+  (g, n, visit) => `${g}. Bolu here, from Tagbook, following up on our call earlier. This is the WhatsApp number we mentioned.\n\nHere's the video. Tagbook is a simple app for laundry shops: log customers' clothes, send bills on WhatsApp and see who hasn't paid. The first month is free.\n\nHow do you track your customers' clothes right now?${visit}`,
 ];
 const leadPick = {}; let leadTurn = Math.floor(Math.random() * 15);
 function leadMsg(l, kind) {
