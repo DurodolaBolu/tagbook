@@ -58,6 +58,15 @@ async function handle(route) {
     global.fails[body.phone] = 0; current = s.user_id; if (global.unswitched) global.unswitched.delete(s.user_id);
     return send(200, { access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.sig", refresh_token: "r" });
   }
+  if (p === "/functions/v1/admin" && (body.action === "signup_code" || body.action === "self_signup")) {
+    if (body.action === "signup_code") return send(400, { error: "CODES_OFF" });
+    global.signups = (global.signups || []).concat([body]);
+    if (body.website) return send(400, { error: "BAD_FORM" });
+    if (db.staff.some(s => s.phone === body.phone)) return send(409, { error: "PHONE_IN_USE" });
+    if (body.ms < 4000) return send(400, { error: "TOO_FAST" });
+    db.staff.push({ user_id: "u-new", shop_id: shopId, role: "owner", name: body.name, phone: body.phone, active: true, created_at: new Date().toISOString() });
+    return send(200, { ok: true });
+  }
   if (p === "/functions/v1/admin") {
     if (body.action === "create_shop") { if (current !== ownerId) return send(403, { error: "NOT_ALLOWED" }); db.shops.push({ id: uid(), name: body.shop, created_at: new Date().toISOString(), trial_ends: body.trial_ends, referred_by: body.referred_by }); global.lastCreate = body; return send(200, { ok: true }); }
     if (body.action === "add_staff") { if (db.staff.some(s => s.phone === body.phone)) return send(409, { error: "PHONE_IN_USE" }); db.staff.push({ user_id: uid(), shop_id: shopId, role: "secretary", name: body.name, phone: body.phone, active: true, created_at: new Date().toISOString() }); }
@@ -147,6 +156,29 @@ async function handle(route) {
   const shot = async n => page.screenshot({ path: path.join(out, n + ".png"), fullPage: true });
   const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); try { await page.waitForSelector("#tabs button", { timeout: 8000 }); } catch (e) { console.log("LOGIN STUCK:", await page.textContent(".lerr").catch(() => "?"), await page.evaluate(() => document.body.innerText.slice(0, 300))); throw e; } };
   const T = async (sel) => { await page.click(sel); await page.waitForTimeout(250); };
+
+  // self sign-up from /start: form checks, number already in use, then a new shop lands on the welcome card
+  {
+    await page.goto("http://localhost:8787/?start=1"); await page.waitForSelector("#sform");
+    const C = process.env.CAPTURE_SIGNUP; if (C) { await page.setViewportSize({ width: 390, height: 1100 }); await page.screenshot({ path: path.join(C, "signup-empty.png"), fullPage: true }); }
+    await page.fill("#su-shop", "Ksolo247 Laundry"); await page.fill("#su-name", "Egwu Solomon"); await page.fill("#su-phone", "08120756325");
+    await page.fill("#su-area", "Oba Ile, Akure"); await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482916");
+    await page.click("#sgo"); await page.waitForTimeout(300);
+    console.log("signup pin mismatch caught:", /don't match/.test(await page.textContent(".lerr")));
+    await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482915"); await page.waitForTimeout(4000);
+    await page.click("#sgo"); await page.waitForTimeout(800);
+    console.log("signup number in use caught:", /already has a Tagbook account/.test(await page.textContent(".lerr")));
+    if (C) await page.screenshot({ path: path.join(C, "signup-in-use.png"), fullPage: true });
+    const saved = db.orders; db.orders = [];
+    await page.fill("#su-phone", "08144737794"); await page.click("#sgo");
+    await page.waitForSelector(".scard.welcome", { timeout: 8000 }).catch(() => {});
+    console.log("signup lands on welcome card:", !!(await page.$(".scard.welcome")), "| honeypot empty:", global.signups.slice(-1)[0].website === "", "| area sent:", global.signups.slice(-1)[0].area);
+    if (C) { await page.screenshot({ path: path.join(C, "signup-welcome.png"), fullPage: true }); }
+    db.orders = saved; db.staff = db.staff.filter(s => s.user_id !== "u-new");
+    await page.evaluate(() => { try { sessionStorage.clear(); localStorage.clear(); } catch (_) { } });
+    if (C) process.exit(0);
+    await ctx.clearCookies();
+  }
 
   // bad login
   await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); await shot("01-login");

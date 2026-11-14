@@ -515,3 +515,20 @@ details.wtext[open] summary::after{content:" ▴"}
 .billto button{border:0;background:none;color:var(--accent);font:inherit;font-weight:500;text-decoration:underline;padding:6px 4px;cursor:pointer}
 .billnote{margin:4px 0 8px;padding:10px 12px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-size:14px;line-height:1.45}
 .billnote + .mini{margin:0 0 10px}
+/* Self sign-up */
+.lsign{justify-content:flex-start}
+.lnew{margin:18px 0 0;font-size:15px;color:var(--muted);text-align:center}
+.lform{display:flex;flex-direction:column;width:100%;max-width:420px;text-align:left;margin-top:8px}
+.lform label{font-size:14px;font-weight:500;margin:16px 0 6px}
+.lform input{min-height:50px;padding:12px 14px;font-size:16px;border:1px solid var(--line,#D5DCD9);border-radius:10px;background:var(--card);color:var(--fg);box-sizing:border-box;width:100%}
+.lform .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lform .btn{margin-top:14px}
+.lform .hint{margin:6px 0 0;font-size:13px}
+.lform .lerr{margin:12px 0 0;text-align:left}
+.lform .lerr a,.lform .lerr .llink{font-size:inherit}
+.lsign .lfoot{text-align:center}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.sbot{margin-top:14px;min-height:65px}
+.scard.welcome h3{margin:0 0 6px;font-size:19px}
+.scard.welcome p{margin:0 0 4px;line-height:1.5}
+.scard.welcome .btn{margin-top:12px}

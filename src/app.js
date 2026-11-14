@@ -594,7 +594,7 @@ function renderAdmin() {
         <div><dt>Last opened</dt><dd>${ago(r.last_active)}</dd></div>
         <div><dt>Logins</dt><dd>${r.owners} owner, ${r.staff} staff</dd></div>
         <div><dt>Owner alerts</dt><dd>${r.push ? "On" : "Off"}</dd></div>
-        <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}</dd></div>
+        <div><dt>Joined</dt><dd>${fmtDay(Date.parse(r.created_at))}${r.self_signup ? ` · signed up themselves${r.area ? " · " + esc(r.area) : ""}${r.confirmed ? "" : " · <b>not confirmed</b>"}` : ""}</dd></div>
         <div><dt>Trial</dt><dd>${r.trial_ends ? (left >= 0 ? `ends ${fmtDay(Date.parse(r.trial_ends))} (${left} day${left === 1 ? "" : "s"})` : `ended ${fmtDay(Date.parse(r.trial_ends))}`) : "none"}</dd></div>
         <div><dt>Agent</dt><dd>${esc(r.brought_by_name || "Ordiventa")} · helper: ${esc(r.setup_by_name || "none")}</dd></div>
         <div><dt>Paid</dt><dd>${r.paid_until ? `until ${longDay(r.paid_until)} · ${naira(r.paid_total)} so far` : r.paid_total ? naira(r.paid_total) + " so far" : "not yet"}${r.free_months ? ` · ${r.free_months} free month${r.free_months === 1 ? "" : "s"} earned` : ""}</dd></div>
@@ -662,6 +662,7 @@ function renderAdmin() {
       <div class="stat"><b>${naira(real.length * PRICE_MONTH)}</b><span>Monthly, once all pay</span></div>
     </div>
     ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
+    ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area ? " · " + esc(r.area) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
     ${refHtml}
@@ -706,6 +707,11 @@ function renderAdmin() {
     markFor = null; toast(`Saved. Paid until ${longDay(data.paid_until)}.`); dashAt = 0; loadDash();
   });
   view.querySelectorAll("[data-ncopy]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.ncopy); if (await copyText(nudgeMsg(r))) { nCopy = r.id; renderAdmin(); } else toast("Couldn't copy"); });
+  view.querySelectorAll("[data-sconf]").forEach(b => b.onclick = async () => {
+    b.disabled = true; const { error } = await sb.rpc("admin_confirm_shop", { p_shop: b.dataset.sconf });
+    if (error) { b.disabled = false; return toast("Couldn't save. Try again."); }
+    const r = dash.find(x => x.id === b.dataset.sconf); if (r) r.confirmed = true; toast("Marked as confirmed"); renderAdmin();
+  });
   view.querySelectorAll("[data-nnum]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.nnum); toast(await copyText("+234" + String(r.owner_phone).replace(/^0/, "")) ? "Number copied" : "Couldn't copy"); });
   view.querySelectorAll("[data-nclose]").forEach(b => b.onclick = () => { nCopy = null; renderAdmin(); });
   $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };
@@ -905,6 +911,17 @@ function setupSteps() {
   ];
 }
 const tutFor = k => { const t = (tuts || []).find(t => t.step_key === k && (t.audience !== "staff")); return t ? t.youtube_id : null; };
+// Shown once after a shop signs up on its own, until they log their first customer.
+function welcomeCard() {
+  let on = false; try { on = sessionStorage.getItem("tb-welcome") === "1"; } catch (_) { }
+  if (!on || !own()) return "";
+  if (orders.length) { try { sessionStorage.removeItem("tb-welcome"); } catch (_) { } return ""; }
+  const first = ((me && me.name) || "").split(" ").filter(w => !/^(mr|mrs|miss|ms|dr|chief)\.?$/i.test(w))[0] || "";
+  return `<section class="scard welcome"><h3>Welcome to Tagbook${first ? ", " + esc(first) : ""} 🎉</h3>
+    <p>Your free month has started. The best way to learn Tagbook is with a real customer: log the next one who brings clothes.</p>
+    <button class="btn btn-primary" id="wlog">+ Log clothes</button>
+    <p class="hint">We'll also call you shortly to help you get started.</p></section>`;
+}
 function setupCard() {
   if (!own() || !priv || setupState().complete || setupLater()) return "";
   if (!tuts && !tutsBusy) loadTuts().then(() => { if (tab === "orders" && !openNo) renderOrders(); });
@@ -1034,6 +1051,7 @@ function renderOrders() {
   const askPush = !setupHtml.includes("setup") && own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
   view.innerHTML = `
     ${planBanner()}
+    ${welcomeCard()}
     ${setupHtml || installCard()}
     ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
@@ -1067,6 +1085,7 @@ function renderOrders() {
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
   wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine();
+  if ($("#wlog")) $("#wlog").onclick = () => go("log");
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
@@ -2385,12 +2404,125 @@ function confirmPin(st) {
 }
 function showLogin(msg) {
   me = null;
+  if (wantsSignup()) { history.replaceState(null, "", "/"); return showSignup(); }
   document.documentElement.dataset.tb = theme() === "dark" ? "dark" : "light";
   $("#app").hidden = true; $("#tabsnav").hidden = true; $("#sheet").hidden = true; document.body.classList.remove("has-sheet");
   const last = lastUser();
   L = { step: last ? "pin" : "phone", phone: last ? last.phone : "", pin: "", err: msg || "", busy: false, help: false, last };
   drawLogin();
 }
+/* ---------- Self sign-up: a shop owner starts on their own (tagbook.ordiventa.com/start) ---------- */
+// Optional Cloudflare bot check: paste the Turnstile site key here and add TURNSTILE_SECRET in Supabase.
+const TURNSTILE_SITE = "";
+let S = null; // sign-up form state
+const wantsSignup = () => /[?&]start\b/.test(location.search) || location.hash === "#start";
+function showSignup() {
+  document.documentElement.dataset.tb = theme() === "dark" ? "dark" : "light";
+  $("#app").hidden = true; $("#tabsnav").hidden = true;
+  L = L || { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null };
+  S = { step: "form", shop: "", name: "", phone: "", area: "", pin: "", pin2: "", err: "", busy: false, t0: Date.now(), pinId: "", code: "", bot: "" };
+  drawSignup();
+}
+const SIGN_ERR = {
+  BAD_PHONE: "Type your 11-digit phone number, starting with 0.",
+  MISSING_NAME: "Type your shop name and your name.",
+  NAME_TOO_LONG: `Shop name is too long. Keep it to ${NAME_MAX} letters.`,
+  BAD_PIN: "Your PIN must be 6 digits.",
+  TOO_FAST: "Please check your details, then tap Start again.",
+  BOT_CHECK: "Please complete the check above, then try again.",
+  TOO_MANY: "Too many sign-ups from this phone today. Message us on WhatsApp and we'll set you up.",
+  BUSY: "Lots of shops are signing up today. Message us on WhatsApp and we'll set you up.",
+  BAD_CODE: "That code isn't right, or it has expired. Check the text message, or send a new code.",
+  CODE_FAILED: "We couldn't send the code. Check the number, or message us on WhatsApp.",
+};
+function drawSignup() {
+  const box = $("#login"); box.hidden = false;
+  const f = (id, label, val, attrs, hint) => `<label for="${id}">${label}</label><input id="${id}" value="${esc(val)}" ${attrs}>${hint ? `<p class="hint">${hint}</p>` : ""}`;
+  const help = `https://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent("Hello Tagbook, I want to set up my laundry shop.")}`;
+  box.innerHTML = `<div class="lwrap">
+    <aside class="lside"><div class="lart">${ART_MACHINE}</div>
+      <p class="lbrand">Tagbook</p><p class="ltag">Every cloth, accounted for.</p></aside>
+    <main class="lmain lsign">
+      ${S.step === "code" ? `<h1 class="lname">Check your text messages</h1>
+        <p class="lask">We sent a 6-digit code to ${fmtPhone(S.phone)}.</p>
+        <form class="lform" id="sform" novalidate>
+          ${f("su-code", "Code", S.code, `inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="pin"`)}
+          <p class="lerr" role="alert">${S.err}</p>
+          <button class="btn btn-primary" id="sgo" ${S.busy ? "disabled" : ""}>${S.busy ? "Setting up your shop…" : "Start my free month"}</button>
+        </form>
+        <p class="lfoot"><button class="llink" id="sback">Change my details</button> · <button class="llink" id="sresend">Send a new code</button></p>`
+      : `<h1 class="lname">Start your free month</h1>
+        <p class="lask">Set up your laundry on Tagbook in 1 minute. No payment now.</p>
+        <form class="lform" id="sform" novalidate>
+          ${f("su-shop", "Shop name", S.shop, `maxlength="${NAME_MAX}" autocomplete="organization" placeholder="e.g. Bright Wash Laundry"`)}
+          ${f("su-name", "Your name", S.name, `maxlength="40" autocomplete="name" placeholder="e.g. Mrs. Adaeze Okafor"`)}
+          ${f("su-phone", "Your phone number", S.phone ? fmtPhone(S.phone) : "", `inputmode="tel" autocomplete="tel" maxlength="13" placeholder="0803 412 7790"`, "You'll log in with this number.")}
+          ${f("su-area", "Town or area", S.area, `maxlength="60" placeholder="e.g. Oba Ile, Akure"`)}
+          <div class="sgrid">
+            <div>${f("su-pin", "Choose a 6-digit PIN", S.pin, `type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" class="pin"`)}</div>
+            <div>${f("su-pin2", "Type the PIN again", S.pin2, `type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" class="pin"`)}</div>
+          </div>
+          <input id="su-web" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+          ${TURNSTILE_SITE ? `<div id="sbot" class="sbot"></div>` : ""}
+          <p class="lerr" role="alert">${S.err}</p>
+          <button class="btn btn-primary" id="sgo" ${S.busy ? "disabled" : ""}>${S.busy ? "Setting up your shop…" : "Start my free month"}</button>
+          <p class="hint">Free for 1 month, then ₦3,000 a month. Stop anytime.</p>
+        </form>
+        <p class="lfoot">Already have Tagbook? <button class="llink" id="sback">Log in</button></p>
+        <p class="lfoot">Rather we set it up for you? <a class="llink" href="${help}" target="_blank" rel="noopener">Message us on WhatsApp</a></p>`}
+      <p class="lpriv">By starting, you agree to our <a href="/privacy">Privacy policy</a>.</p>
+    </main></div>`;
+  const keep = () => { if (S.step !== "form") { S.code = digits(($("#su-code") || {}).value || "").slice(0, 6); return; }
+    S.shop = $("#su-shop").value; S.name = $("#su-name").value; S.phone = digits($("#su-phone").value); S.area = $("#su-area").value;
+    S.pin = digits($("#su-pin").value).slice(0, 6); S.pin2 = digits($("#su-pin2").value).slice(0, 6); };
+  $("#sform").onsubmit = e => { e.preventDefault(); keep(); submitSignup(); };
+  $("#sback").onclick = () => { keep(); if (S.step === "code") { S.step = "form"; S.err = ""; return drawSignup(); } S = null; showLogin(); };
+  if ($("#sresend")) $("#sresend").onclick = () => { S.pinId = ""; S.code = ""; submitSignup(); };
+  if (TURNSTILE_SITE && $("#sbot")) loadTurnstile().then(() => { try { window.turnstile.render("#sbot", { sitekey: TURNSTILE_SITE, callback: t => { S.bot = t; } }); } catch (_) { } });
+  const first = S.step === "code" ? $("#su-code") : null; if (first) first.focus();
+}
+let tsLoading = null;
+const loadTurnstile = () => tsLoading || (tsLoading = new Promise(ok => { const sc = document.createElement("script"); sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; sc.async = true; sc.onload = ok; sc.onerror = ok; document.head.appendChild(sc); }));
+async function signupCall(body) {
+  try {
+    const r = await fetch(`${SB_URL}/functions/v1/admin`, { method: "POST", headers: { "Content-Type": "application/json", apikey: SB_KEY }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({})); return r.ok ? d : { error: d.error || "TRY_LATER" };
+  } catch (_) { return { error: "NETWORK" }; }
+}
+async function submitSignup() {
+  const shopName = tidy(S.shop), name = tidy(S.name);
+  const err = S.step === "code" ? (S.code.length !== 6 ? "Type the 6-digit code from the text message." : "")
+    : !shopName ? "Type your shop name." : shopName.length > NAME_MAX ? SIGN_ERR.NAME_TOO_LONG : !name ? "Type your name."
+    : !/^0\d{10}$/.test(S.phone) ? SIGN_ERR.BAD_PHONE : S.pin.length !== 6 ? "Choose a 6-digit PIN." : S.pin !== S.pin2 ? "The two PINs don't match. Type them again." : "";
+  if (err) { S.err = esc(err); return drawSignup(); }
+  S.err = ""; S.busy = true; drawSignup();
+  const base = { phone: S.phone, website: ($("#su-web") || {}).value || "", bot_token: S.bot };
+  // Text-message codes switch on from the server; until then the server answers CODES_OFF and we go straight on.
+  if (S.step === "form") {
+    const c = await signupCall({ action: "signup_code", ...base });
+    if (c.pin_id) { S.pinId = c.pin_id; S.step = "code"; S.busy = false; return drawSignup(); }
+    if (c.error !== "CODES_OFF") return signupFailed(c.error);
+  }
+  const r = await signupCall({ action: "self_signup", ...base, shop: shopName, name, area: tidy(S.area), pin: S.pin, ms: Date.now() - S.t0, pin_id: S.pinId, code: S.code });
+  if (r.error) return signupFailed(r.error);
+  // Created: log straight in and land on a welcome card that points at the first customer.
+  try { sessionStorage.setItem("tb-welcome", "1"); } catch (_) { }
+  const phone = S.phone, pin = S.pin; S = null;
+  L = { step: "pin", phone, pin, err: "", busy: false, help: false, last: null };
+  tryLogin();
+}
+function signupFailed(code) {
+  S.busy = false;
+  const help = `https://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent("Hello Tagbook, I want to set up my laundry shop.")}`;
+  S.err = code === "PHONE_IN_USE" ? `This number already has a Tagbook account. <button class="llink" id="slogin">Log in instead</button>, or <a class="llink" href="${help}" target="_blank" rel="noopener">message us</a> if it isn't yours.`
+    : code === "NETWORK" ? "Can't reach Tagbook. Check your internet and try again."
+    : (code === "TOO_MANY" || code === "BUSY" || code === "CODE_FAILED") ? `${SIGN_ERR[code]} <a class="llink" href="${help}" target="_blank" rel="noopener">Open WhatsApp</a>`
+    : esc(SIGN_ERR[code] || "Tagbook is busy. Try again in a minute.");
+  if (code === "BAD_CODE" || code === "TOO_FAST") { /* stay on this step */ }
+  drawSignup();
+  if ($("#slogin")) $("#slogin").onclick = () => { const p = S.phone; S = null; L = { step: "pin", phone: p, pin: "", err: "", busy: false, help: false, last: null }; drawLogin(); };
+}
+
 function drawLogin() {
   const box = $("#login"); box.hidden = false;
   const pinStep = L.step === "pin";
@@ -2417,12 +2549,14 @@ function drawLogin() {
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
         : L.confirm ? `<p class="lfoot"><button class="llink" id="llater">Not now</button></p>`
         : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
+      ${!L.confirm && !pinStep ? `<p class="lnew">New shop? <button class="llink" id="lnew">Start free</button></p>` : ""}
       ${L.busy ? `<p class="lbusy">${L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
       <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
   if ($("#lgo")) $("#lgo").onclick = () => next();
+  if ($("#lnew")) $("#lnew").onclick = () => showSignup();
   if ($("#llater")) $("#llater").onclick = () => { try { sessionStorage.setItem("tb-pin-later", "1"); } catch (_) { } L = null; start(); };
   if ($("#lswitch")) $("#lswitch").onclick = () => { if (L.last) { try { localStorage.removeItem(LAST_KEY); } catch (_) { } } L = { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null }; drawLogin(); };
 }
@@ -2462,7 +2596,7 @@ async function tryLogin() {
   await start();
 }
 document.addEventListener("keydown", e => {
-  if (!L || $("#login").hidden) return;
+  if (!L || $("#login").hidden || S) return;
   if (/^\d$/.test(e.key)) { press(e.key); e.preventDefault(); }
   else if (e.key === "Backspace") { press("back"); e.preventDefault(); }
   else if (e.key === "Enter" && L.step === "phone") { next(); e.preventDefault(); }
