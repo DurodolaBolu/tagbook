@@ -173,6 +173,8 @@ async function handle(route) {
     if (C) { await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: path.join(C, "first-visit.png") }); }
     await page.click("#pick-new"); await page.waitForSelector("#sform");
     console.log("first visit shows the choice, Start a new shop opens sign-up:", !!(await page.$("#sform")));
+    await page.click("#sback"); await page.waitForSelector("#lnew"); await page.click("#lnew"); await page.waitForSelector("#sform");
+    console.log("sign-up, Log in, then Start a new shop goes back to sign-up:", !!(await page.$("#sform")));
     await page.goto("http://localhost:8787/?start=1"); await page.waitForSelector("#sform"); if (C) { await page.setViewportSize({ width: 390, height: 1100 }); await page.screenshot({ path: path.join(C, "signup-empty.png"), fullPage: true }); }
     await page.fill("#su-shop", "Ksolo247 Laundry"); await page.fill("#su-name", "Egwu Solomon"); await page.fill("#su-phone", "08120756325");
     await page.selectOption("#su-state", "Ondo"); await page.fill("#su-area", "Oba Ile"); await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482916");

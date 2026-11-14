@@ -2581,12 +2581,14 @@ function drawLogin() {
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
         : L.confirm ? `<p class="lfoot"><button class="llink" id="llater">Not now</button></p>`
         : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
+      ${!L.confirm && !pinStep ? `<p class="lnew">New to Tagbook? <button class="llink" id="lnew">Start a new shop</button></p>` : ""}
       ${L.busy ? `<p class="lbusy">${L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
       <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
   if ($("#lgo")) $("#lgo").onclick = () => next();
+  if ($("#lnew")) $("#lnew").onclick = () => showSignup();
   if ($("#llater")) $("#llater").onclick = () => { try { sessionStorage.setItem("tb-pin-later", "1"); } catch (_) { } L = null; start(); };
   if ($("#lswitch")) $("#lswitch").onclick = () => { if (L.last) { try { localStorage.removeItem(LAST_KEY); } catch (_) { } } L = { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null }; drawLogin(); };
 }
