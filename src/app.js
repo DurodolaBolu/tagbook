@@ -271,6 +271,19 @@ function callTiming() {
   if (next) return { ok: false, text: `Not the best time. Next good time today: ${fmt(next[0])} to ${fmt(next[1])}.` };
   return { ok: false, text: d === 0 ? "Sunday: most shops are closed or at church. Call tomorrow from 10am." : d === 6 ? "Done for today. Shops close soon; call Monday from 10am." : "Done for today. Call tomorrow from " + (d === 5 ? "12pm (Saturday)." : "10am.") };
 }
+// Good times to send a first WhatsApp to a laundry owner (Lagos time): when they're likely to check their phone and reply.
+// Weekdays 9-11am, 1-3pm, 7-8:30pm; Saturday 1-4pm (mornings are busy); Sunday from 3pm to 7pm.
+function msgTiming() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Lagos" }));
+  const d = now.getDay(), m = now.getHours() * 60 + now.getMinutes();
+  const slots = d === 0 ? [[900, 1140]] : d === 6 ? [[780, 960]] : [[540, 660], [780, 900], [1140, 1230]];
+  const fmt = x => { const h = Math.floor(x / 60), mm = x % 60; return `${h % 12 || 12}${mm ? ":" + String(mm).padStart(2, "0") : ""}${h < 12 ? "am" : "pm"}`; };
+  const cur = slots.find(([a, b]) => m >= a && m < b);
+  if (cur) return { ok: true, text: `Good time to message now, until ${fmt(cur[1])}.` };
+  const next = slots.find(([a]) => m < a);
+  if (next) return { ok: false, text: `Owners are busy now. Next good time to message: ${fmt(next[0])} to ${fmt(next[1])}.` };
+  return { ok: false, text: m >= 1260 || m < 480 ? "Too late to message strangers. Carry on tomorrow." : "Done for today. Carry on tomorrow." };
+}
 function callScriptHtml() {
   const t = callTiming(), l = oCall && olead && olead.find(x => x.id === oCall), shop = l ? `<b>${esc(l.name)}</b>` : "[Shop name]";
   return `<section class="scard oscript">
@@ -475,7 +488,8 @@ function renderLeads() {
     <div class="dtop"><div><h2 class="ptitle">Leads</h2><p class="hint">${olead.length} shops · tap a button to open WhatsApp with the message ready</p></div><div class="row"><button class="btn btn-ghost" id="oadd">+ Add a lead</button></div></div>
     <div class="owa"><span>Open chats in</span><div class="aseg"><button data-wapp="business" aria-pressed="${waApp === "business"}">WhatsApp Business</button><button data-wapp="normal" aria-pressed="${waApp === "normal"}">WhatsApp</button></div></div>
     <section class="scard osent"><div class="osent-top"><b>${sentToday} of ${DAILY_SAFE}</b><span>messages sent today</span></div><div class="obar"><i style="width:${pct}%" class="${sentToday >= DAILY_SAFE ? "full" : ""}"></i></div>
-      <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the 0812 line." : `${DAILY_SAFE - sentToday} more today keeps the 0812 line safe.`}</p></section>
+      <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the 0812 line." : `${DAILY_SAFE - sentToday} more today keeps the 0812 line safe.`}</p>
+      ${(() => { const t = msgTiming(); return `<p class="otime ${t.ok ? "ok" : ""}" style="margin:6px 0 0">${t.text}</p>`; })()}</section>
     ${callScriptHtml()}
     ${oAdd ? `<section class="scard dlead"><h3 class="stitle">Add a lead</h3>
       <label for="ol-n">Shop name</label><input id="ol-n" autocomplete="off">
