@@ -154,12 +154,12 @@ async function handle(route) {
   await ctx.addInitScript(() => { try { Object.defineProperty(Notification, "permission", { get: () => "default" }); } catch (_) {} });
   await ctx.routeWebSocket(/realtime/, ws => {});
   const shot = async n => page.screenshot({ path: path.join(out, n + ".png"), fullPage: true });
-  const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); try { await page.waitForSelector("#tabs button", { timeout: 8000 }); } catch (e) { console.log("LOGIN STUCK:", await page.textContent(".lerr").catch(() => "?"), await page.evaluate(() => document.body.innerText.slice(0, 300))); throw e; } };
+  const login = async (phone, pin = "482915") => { await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad, #pick-in"); if (await page.$("#pick-in")) await page.click("#pick-in"); if (await page.$(".lhi")) { await page.click("#lhelp"); await page.click("#lswitch"); } await page.keyboard.type(phone); await page.keyboard.press("Enter"); await page.waitForTimeout(100); await page.keyboard.type(pin); try { await page.waitForSelector("#tabs button", { timeout: 8000 }); } catch (e) { console.log("LOGIN STUCK:", await page.textContent(".lerr").catch(() => "?"), await page.evaluate(() => document.body.innerText.slice(0, 300))); throw e; } };
   const T = async (sel) => { await page.click(sel); await page.waitForTimeout(250); };
 
   if (process.env.CAPTURE_LOGIN) { // design review: phone box and PIN boxes
     const C = process.env.CAPTURE_LOGIN; await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); await page.waitForTimeout(300);
+    await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad, #pick-in"); if (await page.$("#pick-in")) await page.click("#pick-in"); await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(C, "login-phone-empty.png") });
     await page.keyboard.type("0812075"); await page.waitForTimeout(200); await page.screenshot({ path: path.join(C, "login-phone-typing.png") });
     await page.keyboard.type("6325"); await page.keyboard.press("Enter"); await page.waitForTimeout(300);
@@ -168,8 +168,12 @@ async function handle(route) {
   }
   // self sign-up from /start: form checks, number already in use, then a new shop lands on the welcome card
   {
-    await page.goto("http://localhost:8787/?start=1"); await page.waitForSelector("#sform");
-    const C = process.env.CAPTURE_SIGNUP; if (C) { await page.setViewportSize({ width: 390, height: 1100 }); await page.screenshot({ path: path.join(C, "signup-empty.png"), fullPage: true }); }
+    const C = process.env.CAPTURE_SIGNUP;
+    await page.goto("http://localhost:8787/"); await page.waitForSelector("#pick-new");
+    if (C) { await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: path.join(C, "first-visit.png") }); }
+    await page.click("#pick-new"); await page.waitForSelector("#sform");
+    console.log("first visit shows the choice, Start a new shop opens sign-up:", !!(await page.$("#sform")));
+    await page.goto("http://localhost:8787/?start=1"); await page.waitForSelector("#sform"); if (C) { await page.setViewportSize({ width: 390, height: 1100 }); await page.screenshot({ path: path.join(C, "signup-empty.png"), fullPage: true }); }
     await page.fill("#su-shop", "Ksolo247 Laundry"); await page.fill("#su-name", "Egwu Solomon"); await page.fill("#su-phone", "08120756325");
     await page.fill("#su-area", "Oba Ile, Akure"); await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482916");
     await page.click("#sgo"); await page.waitForTimeout(300);
@@ -190,7 +194,7 @@ async function handle(route) {
   }
 
   // bad login
-  await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad"); await shot("01-login");
+  await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad, #pick-in"); if (await page.$("#pick-in")) await page.click("#pick-in"); await shot("01-login");
   await page.keyboard.type("08120756325"); await page.keyboard.press("Enter"); await page.keyboard.type("111111"); await page.waitForTimeout(600);
   console.log("bad login message:", await page.textContent(".lerr"));
   for (let i = 0; i < 4; i++) { await page.keyboard.type("111111"); await page.waitForTimeout(400); }

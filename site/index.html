@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261114134842";</script>
+<script>window.TB_BUILD="20261114140552";</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -701,6 +701,13 @@ details.wtext[open] summary::after{content:" ▴"}
 .phonebox .pcur{display:inline-block;width:2px;height:28px;background:var(--accent);animation:blink 1s steps(1) infinite;margin-left:2px}
 .phonebox.empty{justify-content:flex-start;color:var(--muted);border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
 .phonebox .pgh{font-size:16px;font-weight:400;letter-spacing:0;margin-left:10px;color:var(--muted)}
+/* First visit: choose log in or start a new shop */
+.lchoose .lask{margin-bottom:18px}
+.lpick{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;max-width:360px;text-align:left;padding:18px 18px;margin:0 0 12px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);color:var(--fg);font:inherit;cursor:pointer}
+.lpick b{font-size:18px}
+.lpick span{font-size:14px;color:var(--muted);line-height:1.4}
+.lpick:hover,.lpick:focus-visible{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);outline:none}
+#pick-new{border-color:var(--accent);background:var(--accent-soft)}
 </style>
 </head><body>
 <div id="installbar" class="installbar" hidden></div>
@@ -716,7 +723,7 @@ details.wtext[open] summary::after{content:" ▴"}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261114134842"></script>
+<script src="/app.js?v=20261114140552"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

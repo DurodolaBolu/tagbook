@@ -902,8 +902,8 @@ function setupSteps() {
   if (standalone() && !st.installed) markSetup("installed");
   return [
     { k: "login", t: "Log in", done: true },
+    { k: "prices", t: "Check your price list", d: "Change any price that's different in your shop. Bills are worked out from it.", go: "Open", done: !!st.prices },
     { k: "install", t: "Install Tagbook on this phone", d: "So it opens like an app and can notify you.", go: "Show me", done: !!st.installed || standalone() || (!isPhone() && !installEvt) },
-    { k: "prices", t: "Check your price list", d: "Change any price that's different in your shop.", go: "Open", done: !!st.prices },
     { k: "bank", t: "Add your bank details", d: "Your bill shows customers where to pay.", go: "Add", done: !!hasBank() },
     { k: "staff", t: "Add your staff", d: "Each staff gets their own login.", go: "Add", done: staffList.some(x => x.role !== "owner") || !!st.alone, alone: true },
     { k: "push", t: "Turn on notifications", d: "Get a buzz when staff log clothes.", go: "Turn on", done: pushSupported() && Notification.permission === "granted" },
@@ -917,9 +917,14 @@ function welcomeCard() {
   if (!on || !own()) return "";
   if (orders.length) { try { sessionStorage.removeItem("tb-welcome"); } catch (_) { } return ""; }
   const first = ((me && me.name) || "").split(" ").filter(w => !/^(mr|mrs|miss|ms|dr|chief)\.?$/i.test(w))[0] || "";
+  // Prices first: bills use them, so logging clothes on the sample prices would give wrong totals.
+  const pricesDone = !!setupState().prices;
   return `<section class="scard welcome"><h3>Welcome to Tagbook${first ? ", " + esc(first) : ""} 🎉</h3>
-    <p>Your free month has started. The best way to learn Tagbook is with a real customer: log the next one who brings clothes.</p>
-    <button class="btn btn-primary" id="wlog">+ Log clothes</button>
+    ${pricesDone
+      ? `<p>Your prices are set. Now log the next customer who brings clothes. It's the quickest way to learn Tagbook.</p>
+         <button class="btn btn-primary" id="wlog">+ Log clothes</button>`
+      : `<p>Your free month has started. First, put in your own prices. The list has sample prices, and every bill is worked out from it.</p>
+         <button class="btn btn-primary" id="wprices">Check my prices</button>`}
     <p class="hint">We'll also call you shortly to help you get started.</p></section>`;
 }
 function setupCard() {
@@ -1086,6 +1091,7 @@ function renderOrders() {
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
   wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine();
   if ($("#wlog")) $("#wlog").onclick = () => go("log");
+  if ($("#wprices")) $("#wprices").onclick = async () => { await markSetup("prices"); setTab = "prices"; go("shop"); };
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
@@ -2408,7 +2414,7 @@ function showLogin(msg) {
   document.documentElement.dataset.tb = theme() === "dark" ? "dark" : "light";
   $("#app").hidden = true; $("#tabsnav").hidden = true; $("#sheet").hidden = true; document.body.classList.remove("has-sheet");
   const last = lastUser();
-  L = { step: last ? "pin" : "phone", phone: last ? last.phone : "", pin: "", err: msg || "", busy: false, help: false, last };
+  L = { step: last ? "pin" : "phone", phone: last ? last.phone : "", pin: "", err: msg || "", busy: false, help: false, last, choose: !last && !msg };
   drawLogin();
 }
 /* ---------- Self sign-up: a shop owner starts on their own (tagbook.ordiventa.com/start) ---------- */
@@ -2476,7 +2482,7 @@ function drawSignup() {
     S.shop = $("#su-shop").value; S.name = $("#su-name").value; S.phone = digits($("#su-phone").value); S.area = $("#su-area").value;
     S.pin = digits($("#su-pin").value).slice(0, 6); S.pin2 = digits($("#su-pin2").value).slice(0, 6); };
   $("#sform").onsubmit = e => { e.preventDefault(); keep(); submitSignup(); };
-  $("#sback").onclick = () => { keep(); if (S.step === "code") { S.step = "form"; S.err = ""; return drawSignup(); } S = null; showLogin(); };
+  $("#sback").onclick = () => { keep(); if (S.step === "code") { S.step = "form"; S.err = ""; return drawSignup(); } S = null; showLogin(); L.choose = false; drawLogin(); };
   if ($("#sresend")) $("#sresend").onclick = () => { S.pinId = ""; S.code = ""; submitSignup(); };
   if (TURNSTILE_SITE && $("#sbot")) loadTurnstile().then(() => { try { window.turnstile.render("#sbot", { sitekey: TURNSTILE_SITE, callback: t => { S.bot = t; } }); } catch (_) { } });
   const first = S.step === "code" ? $("#su-code") : null; if (first) first.focus();
@@ -2525,6 +2531,22 @@ function signupFailed(code) {
 
 function drawLogin() {
   const box = $("#login"); box.hidden = false;
+  if (L.choose) {
+    box.innerHTML = `<div class="lwrap">
+      <aside class="lside"><div class="lart">${ART_MACHINE}</div>
+        <p class="lbrand">Tagbook</p><p class="ltag">Every cloth, accounted for.</p></aside>
+      <main class="lmain lchoose">
+        <div class="lart small">${ART_MACHINE}</div>
+        <h1 class="lname">Welcome to Tagbook</h1>
+        <p class="lask">What would you like to do?</p>
+        <button class="lpick" id="pick-in"><b>Log in</b><span>I already use Tagbook, as a shop owner or staff</span></button>
+        <button class="lpick" id="pick-new"><b>Start a new shop</b><span>I own a laundry and want to try Tagbook free for 1 month</span></button>
+        <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
+      </main></div>`;
+    $("#pick-in").onclick = () => { L.choose = false; drawLogin(); };
+    $("#pick-new").onclick = () => { L.choose = false; showSignup(); };
+    return;
+  }
   const pinStep = L.step === "pin";
   const boxes = pinStep
     ? `<div class="pinboxes${L.err && !L.pin ? " shake" : ""}" aria-label="PIN, ${L.pin.length} of 6 digits entered">${[0, 1, 2, 3, 4, 5].map(i => `<span class="pb ${i < L.pin.length ? "full" : ""} ${i === L.pin.length ? "cur" : ""}"></span>`).join("")}</div>`
@@ -2549,14 +2571,12 @@ function drawLogin() {
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
         : L.confirm ? `<p class="lfoot"><button class="llink" id="llater">Not now</button></p>`
         : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
-      ${!L.confirm && !pinStep ? `<p class="lnew">New shop? <button class="llink" id="lnew">Start free</button></p>` : ""}
       ${L.busy ? `<p class="lbusy">${L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
       <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
   if ($("#lgo")) $("#lgo").onclick = () => next();
-  if ($("#lnew")) $("#lnew").onclick = () => showSignup();
   if ($("#llater")) $("#llater").onclick = () => { try { sessionStorage.setItem("tb-pin-later", "1"); } catch (_) { } L = null; start(); };
   if ($("#lswitch")) $("#lswitch").onclick = () => { if (L.last) { try { localStorage.removeItem(LAST_KEY); } catch (_) { } } L = { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null }; drawLogin(); };
 }
