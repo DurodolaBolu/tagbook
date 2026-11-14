@@ -1955,6 +1955,11 @@ const ART_MACHINE = `<svg class="art machine" viewBox="0 0 200 200" aria-hidden=
 </svg>`;
 const loadingHtml = (msg) => `<div class="loading washing"><div class="lart big">${ART_MACHINE}</div><p>${msg}</p></div>`;
 let L = null;
+function confirmPin(st) {
+  $("#app").classList.remove("is-loading"); $("#app").hidden = true; $("#tabsnav").hidden = true;
+  L = { step: "pin", phone: st.phone, pin: "", err: "", busy: false, help: false, last: { name: st.name, phone: st.phone }, confirm: true };
+  drawLogin();
+}
 function showLogin(msg) {
   me = null;
   document.documentElement.dataset.tb = theme() === "dark" ? "dark" : "light";
@@ -1976,23 +1981,26 @@ function drawLogin() {
     <main class="lmain">
       <button class="lhelp" id="lhelp" aria-label="Help" aria-expanded="${L.help}">?</button>
       <div class="lart small">${ART_MACHINE}</div>
-      ${pinStep && L.last ? `<p class="lhi">Welcome back,</p><h1 class="lname">${esc(L.last.name)}</h1>${L.last.shop ? `<p class="lshop">${esc(L.last.shop)}</p>` : ""}`
+      ${L.confirm ? `<p class="lhi">One quick safety step,</p><h1 class="lname">${esc(L.last.name)}</h1>`
+        : pinStep && L.last ? `<p class="lhi">Welcome back,</p><h1 class="lname">${esc(L.last.name)}</h1>${L.last.shop ? `<p class="lshop">${esc(L.last.shop)}</p>` : ""}`
         : `<h1 class="lname">${pinStep ? "Enter your PIN" : "Welcome to Tagbook"}</h1>`}
-      <p class="lask">${pinStep ? (L.last ? "Enter your 6-digit PIN to continue" : `PIN for ${fmtPhone(L.phone)}`) : "Enter your phone number"}</p>
-      ${L.help ? `<p class="lhelptext">Forgot your PIN? Ask the shop owner to set a new one in Settings.${pinStep ? ` <button class="llink" id="lswitch">Log in with a different number</button>` : ""}</p>` : ""}
+      <p class="lask">${L.confirm ? "Enter your PIN once to switch on Tagbook's new login protection. You only do this once." : pinStep ? (L.last ? "Enter your 6-digit PIN to continue" : `PIN for ${fmtPhone(L.phone)}`) : "Enter your phone number"}</p>
+      ${L.help ? `<p class="lhelptext">Forgot your PIN? Ask the shop owner to set a new one in Settings.${pinStep && !L.confirm ? ` <button class="llink" id="lswitch">Log in with a different number</button>` : ""}</p>` : ""}
       ${boxes}
       <p class="lerr" role="alert">${esc(L.err)}</p>
       <div class="keypad">${keys.map(k => k === "" ? `<span></span>` : k === "back"
         ? `<button class="key" data-k="back" aria-label="Delete"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M9 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-6-6zM12 10l4 4m0-4-4 4"/></svg></button>`
         : `<button class="key" data-k="${k}" ${L.busy ? "disabled" : ""}>${k}</button>`).join("")}</div>
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
+        : L.confirm ? `<p class="lfoot"><button class="llink" id="llater">Not now</button></p>`
         : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
-      ${L.busy ? `<p class="lbusy">Logging in…</p>` : ""}
+      ${L.busy ? `<p class="lbusy">${L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
       <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
   if ($("#lgo")) $("#lgo").onclick = () => next();
+  if ($("#llater")) $("#llater").onclick = () => { try { sessionStorage.setItem("tb-pin-later", "1"); } catch (_) { } L = null; start(); };
   if ($("#lswitch")) $("#lswitch").onclick = () => { if (L.last) { try { localStorage.removeItem(LAST_KEY); } catch (_) { } } L = { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null }; drawLogin(); };
 }
 function press(k) {
@@ -2061,6 +2069,14 @@ async function start() {
     return cantReach("Can't reach Tagbook. Check your internet and try again.");
   }
   if (!st || !st.active) { await sb.auth.signOut(); return showLogin("This login has been removed. Ask the shop owner."); }
+  // Accounts made before the PIN lockout still have the old password until the person types their PIN once.
+  // Ask them once (they can say "Not now"; we ask again next time they open Tagbook).
+  let later = false; try { later = sessionStorage.getItem("tb-pin-later") === "1"; } catch (_) { }
+  if (!later && !(L && L.confirm) && st.phone) {
+    const fresh = await sb.auth.getUser().catch(() => null);
+    const u = fresh && fresh.data && fresh.data.user;
+    if (u && !(u.app_metadata && u.app_metadata.pin_v2)) return confirmPin(st);
+  }
   me = st; role = st.role === "owner" ? "own" : "sec";
   try { const r = await sb.rpc("is_platform_admin"); isAdmin = r.data === true; } catch (_) { isAdmin = false; }
   try { const r = await sb.rpc("is_agent"); isAgent = !isAdmin && r.data === true; } catch (_) { isAgent = false; }

@@ -47,7 +47,7 @@ async function handle(route) {
     const user = { id: s.user_id, aud: "authenticated", role: "authenticated", email: body.email };
     return send(200, { access_token: "h.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwfQ.s", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: "r", user });
   }
-  if (p === "/auth/v1/user") { if (method === "PUT") return send(200, { id: current }); return send(200, { id: current, aud: "authenticated" }); }
+  if (p === "/auth/v1/user") { if (method === "PUT") return send(200, { id: current }); global.unswitched = global.unswitched || new Set(); return send(200, { id: current, aud: "authenticated", app_metadata: global.unswitched.has(current) ? {} : { pin_v2: true } }); }
   if (p === "/auth/v1/logout") { current = null; return send(204); }
   if (p === "/functions/v1/login") {
     // stand-in for the login function: 5 wrong PINs on a phone = locked 15 minutes
@@ -55,7 +55,7 @@ async function handle(route) {
     const s = db.staff.find(x => x.phone === body.phone);
     if ((global.fails[body.phone] || 0) >= 5) return send(429, { error: "LOCKED", wait: 900 });
     if (!s || body.pin !== "482915") { global.fails[body.phone] = (global.fails[body.phone] || 0) + 1; return global.fails[body.phone] >= 5 ? send(429, { error: "LOCKED", wait: 900 }) : send(401, { error: "BAD_LOGIN" }); }
-    global.fails[body.phone] = 0; current = s.user_id;
+    global.fails[body.phone] = 0; current = s.user_id; if (global.unswitched) global.unswitched.delete(s.user_id);
     return send(200, { access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.sig", refresh_token: "r" });
   }
   if (p === "/functions/v1/admin") {
@@ -156,6 +156,7 @@ async function handle(route) {
   await T('.lpriv a'); await page.waitForSelector("[data-back]"); await shot("01c-privacy");
   await page.click("a.back"); await page.waitForSelector(".lpriv a", { timeout: 8000 });
   console.log("back from privacy lands on login:", await page.isVisible(".lpriv a"));
+  global.confirmTest = true;
   global.fails["08120756325"] = 0;
 
   // SECRETARY logs an order for a new customer
@@ -189,6 +190,12 @@ async function handle(route) {
 
   // OWNER
   await login("08120756325"); await shot("07-owner-orders");
+  // an owner still on the old password is asked once to confirm their PIN
+  global.unswitched.add(db.staff.find(x => x.phone === "08120756325").user_id);
+  await page.reload(); await page.waitForSelector("#llater", { timeout: 8000 }); await shot("07a-confirm-pin");
+  console.log("confirm screen:", (await page.textContent(".lask")).slice(0, 60), "| not now button:", await page.isVisible("#llater"));
+  await page.keyboard.type("482915"); await page.waitForSelector("#tabs button", { timeout: 8000 });
+  console.log("after confirming PIN, app opens and no prompt again:", await page.isVisible("#tabs button") && !(await page.isVisible("#llater")));
   console.log("push banner for owner:", await page.isVisible("#pushon"), "(permission:", await page.evaluate(() => Notification.permission) + ")");
   if (await page.isVisible("#pushon")) { await page.click("#pushlater"); await page.waitForTimeout(200); console.log("banner gone after Not now:", !(await page.isVisible("#pushon"))); }
   await page.reload(); await page.waitForTimeout(800); console.log("still logged in after reload:", await page.isVisible("#tabs button"));
