@@ -1403,9 +1403,9 @@ const invNo = o => "INV-" + o.no;
 const billName = c => (c.inv_name || "").trim() || c.name;
 let btEdit = null; // id of the customer whose invoice name is being edited
 const billToLine = c => btEdit === c.id
-  ? `<label for="btn-in" class="wa-label" style="margin-top:10px">Name on the invoice</label><div class="row srow"><input id="btn-in" maxlength="60" value="${esc(billName(c))}" placeholder="e.g. Mr. Ezekiel" autocomplete="off"><button class="mini" id="btn-save">Save</button></div>
-     <p class="hint">Only changes the invoice. You'll still find them as ${esc(c.name)}.</p>`
-  : `<p class="billto">Bill to: <b>${esc(billName(c))}</b> <button data-bt>Change</button></p>${(c.inv_name || "").trim() ? "" : `<p class="billnote">Is “${esc(c.name)}” their real name? If not, tap Change and type it. Don't know their name? Send it as a text message instead.</p><button class="mini" data-btok>Yes, it's their real name</button>`}`;
+  ? `<label for="btn-in" class="wa-label" style="margin-top:10px">Name on the invoice</label><div class="row srow"><input id="btn-in" maxlength="60" value="${esc(billName(c))}" placeholder="e.g. Mrs. Adaeze Okafor" autocomplete="off"><button class="mini" id="btn-save">Save</button></div>
+     <p class="hint">Put Mr., Mrs., Miss or Dr. in front, the way you'd address them. This only changes the invoice. You'll still find them as ${esc(c.name)}.</p>`
+  : `<p class="billto">Bill to: <b>${esc(billName(c))}</b> <button data-bt>Change</button></p>${(c.inv_name || "").trim() ? "" : `<p class="billnote">Is “${esc(c.name)}” their real name? If not, tap Change and type their real name with Mr., Mrs., Miss or Dr. in front. Don't know their name? Send it as a text message instead.</p><button class="mini" data-btok>Yes, it's their real name</button>`}`;
 const PAY_WORD = { cash: "cash", transfer: "transfer", pos: "POS" };
 
 async function invoicePages(o, c = cust(o.cid)) {
