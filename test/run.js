@@ -207,12 +207,17 @@ async function handle(route) {
   if (process.env.CAPTURE_LEADS) { // design review: leads page with the call script
     db.outreach_leads = [
       { id: "l1", name: "K-kleen Laundry", area: "NDDC Rd, Oba Ile", city: "Akure", phone: "08036661786", status: "replied", notes: "Said he'd reach out. Price question answered.", created_at: new Date().toISOString() },
-      { id: "l2", name: "Washmenn Laundry", area: "Oda Rd", city: "Akure", phone: "08031112222", status: "new", notes: null, created_at: new Date().toISOString() }];
+      { id: "l2", name: "Washmenn Laundry", area: "Oda Rd", city: "Akure", phone: "08031112222", status: "new", notes: null, created_at: new Date().toISOString() },
+      { id: "l3", name: "Clean Plus Laundry", area: "Alagbaka", city: "Akure", phone: "08035556666", status: "nopick", notes: null, created_at: new Date().toISOString() }];
     db.outreach_log = [];
     await page.setViewportSize({ width: 390, height: 1700 });
     await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(800);
     await page.click('[data-av="leads"]').catch(() => {}); await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(process.env.CAPTURE_LEADS, "leads-closed.png") });
+    await page.click('.ochips button:has-text("Didn")').catch(e => console.log("chip", e.message)); await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(process.env.CAPTURE_LEADS, "leads-nopick.png") });
+    console.log("missed link:", decodeURIComponent((await page.getAttribute('[data-kind="missed"]', "href").catch(() => "")) || "none").slice(0, 200));
+    await page.click('.ochips button:has-text("To contact")').catch(() => {}); await page.waitForTimeout(300);
     await page.evaluate(() => { const a = document.querySelector('[data-call="l2"]'); a.removeAttribute("href"); a.click(); }); await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(process.env.CAPTURE_LEADS, "leads-open.png") });
     process.exit(0);
