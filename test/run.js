@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
-const db = {
+const db = { send_log: [],
   shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
@@ -28,7 +28,7 @@ function filterRows(rows, params) {
     if (op === "in") { const set = val.replace(/^\(|\)$/g, "").split(",").map(s => s.replace(/"/g, "")); rows = rows.filter(r => set.includes(String(r[k]))); } }
   return rows;
 }
-const pk = { orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
+const pk = { send_log: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
 const errors = [];
 async function handle(route) {
   const req = route.request(), u = new URL(req.url()), p = u.pathname, method = req.method();
@@ -338,6 +338,7 @@ async function handle(route) {
     await page.evaluate(() => document.querySelector("details.early").scrollIntoView({ block: "start" }));
     await page.screenshot({ path: path.join(out, "order-early.png") });
     const [dl3] = await Promise.all([page.waitForEvent("download"), page.click('[data-pdf="early"]')]); await dl3.saveAs(path.join(out, "order-early.pdf"));
+    await page.waitForTimeout(300); console.log("send log:", JSON.stringify(db.send_log.map(x => x.kind + "/" + x.stage)));
     process.exit(0);
   }
   if (process.env.CAPTURE) { // design review: every Settings section, phone and laptop, optional extra CSS
