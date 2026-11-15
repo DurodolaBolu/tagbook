@@ -236,6 +236,36 @@ const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
 let sendStats = [];
+// Bolu's goal: 1,000 active shops (an order in the last 30 days) by 31 May 2027. Per month: sign-ups, and active shops by month end.
+const GOAL = { total: 1000, by: "31 May 2027", months: {
+  "2026-11": [56, 41], "2026-12": [100, 101], "2027-01": [185, 211], "2027-02": [265, 371],
+  "2027-03": [315, 561], "2027-04": [350, 771], "2027-05": [385, 1001] } };
+function goalHtml(real) {
+  const now = new Date(Date.now() + 3600e3); // Lagos time
+  const y = now.getUTCFullYear(), m = now.getUTCMonth(), key = `${y}-${String(m + 1).padStart(2, "0")}`, t = GOAL.months[key];
+  const active = real.filter(r => r.last_order && Date.now() - Date.parse(r.last_order) < 30 * 864e5).length;
+  const pctAll = Math.min(100, Math.round(active / GOAL.total * 100));
+  if (!t) return `<section class="scard dgoal"><h3 class="stitle">Goal: ${GOAL.total.toLocaleString()} active shops by ${GOAL.by}</h3><p class="ssub"><b>${active}</b> active now</p></section>`;
+  const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), day = now.getUTCDate(), left = days - day;
+  const monthStart = Date.UTC(y, m, 1) - 3600e3;
+  const signups = real.filter(r => Date.parse(r.created_at) >= monthStart).length;
+  const prevKey = Object.keys(GOAL.months).filter(k => k < key).pop(), prevActive = prevKey ? GOAL.months[prevKey][1] : 16;
+  const signPace = Math.round(t[0] * day / days), actPace = Math.round(prevActive + (t[1] - prevActive) * day / days);
+  const line = (label, got, goal, pace) => { const diff = got - pace;
+    return `<div class="gline"><div class="gtop"><span>${label}</span><b>${got} <i>of ${goal}</i></b></div>
+      <div class="gbar"><span style="width:${Math.min(100, Math.round(got / goal * 100))}%"></span><em style="left:${Math.min(100, Math.round(pace / goal * 100))}%"></em></div>
+      <p class="${diff >= 0 ? "gok" : "glate"}">${diff >= 0 ? `On pace${diff ? `, ${diff} ahead` : ""}` : `Behind by ${-diff}. You should be at ${pace} today`}</p></div>`; };
+  const month = new Date(Date.UTC(y, m, 1)).toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
+  return `<section class="scard dgoal">
+    <h3 class="stitle">Goal: ${GOAL.total.toLocaleString()} active shops by ${GOAL.by}</h3>
+    <div class="gbar big"><span style="width:${Math.max(1, pctAll)}%"></span></div>
+    <p class="ssub"><b>${active}</b> active shops now (${pctAll}%). Active means an order in the last 30 days.</p>
+    <h4>${month}: ${left} day${left === 1 ? "" : "s"} left</h4>
+    ${line("Sign-ups this month", signups, t[0], signPace)}
+    ${line("Active shops by month end", active, t[1], actPace)}
+    <p class="hint">That's about ${Math.max(1, Math.ceil(Math.max(0, t[0] - signups) / Math.max(1, left)))} sign-up${Math.ceil(Math.max(0, t[0] - signups) / Math.max(1, left)) === 1 ? "" : "s"} a day for the rest of ${month}.</p>
+  </section>`;
+}
 let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = 1, teamPay = [], editFor = null, payOpen = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
@@ -672,6 +702,7 @@ function renderAdmin() {
     ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
     ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
+    ${goalHtml(real)}
     ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !r.push), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
       return real.length ? `<section class="scard dstates"><h3 class="stitle">App and alerts</h3>
         <p class="ssub"><span class="dstate"><b>${real.length - noApp.length}</b> of ${real.length} installed the app</span><span class="dstate"><b>${real.length - noPush.length}</b> of ${real.length} have alerts on</span></p>
