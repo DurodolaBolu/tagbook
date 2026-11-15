@@ -896,8 +896,9 @@ const refShareLink = () => "https://wa.me/?text=" + encodeURIComponent(
   `We now use Tagbook in our laundry to record customers' clothes, send bills on WhatsApp and see who still owes. It has made things easier for us.\n\nThe first month is free. Message them here and tell them ${shop.name} sent you:\nhttps://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hi, ${shop.name} referred me to Tagbook`)}`);
 const refLater = () => { try { return Date.now() - (+localStorage.getItem("tb-ref-later") || 0) < 30 * 864e5; } catch (_) { return false; } };
 const GIFT = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 1 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 1 1 0 5"/></svg>`;
-// Referral ask: owners who have logged at least 10 orders already know what Tagbook does for them.
-const refReady = () => own() && !!priv && orders.length >= 10;
+// Referral ask. The card shows from 5 orders (they've used the whole flow); the stronger monthly pop-up waits for 10.
+const REF_CARD_AT = 5, REF_POP_AT = 10;
+const refReady = (min = REF_CARD_AT) => own() && !!priv && orders.length >= min;
 function refLine() {
   if (!refReady() || refLater()) return "";
   return `<section class="scard refcard"><span class="gift">${GIFT}</span><div><h3>Know another laundry?</h3>
@@ -907,7 +908,7 @@ function refLine() {
 // Once a month (on any of the owner's phones), the same ask as a pop-up.
 const REF_POP_EVERY = 30 * 864e5;
 function maybeRefPopup() {
-  if (!refReady() || $("#refpop") || document.querySelector(".tplayer")) return;
+  if (!refReady(REF_POP_AT) || $("#refpop") || document.querySelector(".tplayer")) return;
   const last = +(setupState().ref_pop || 0);
   if (Date.now() - last < REF_POP_EVERY) return;
   let welcome = false; try { welcome = sessionStorage.getItem("tb-welcome") === "1"; } catch (_) { } if (welcome) return;
