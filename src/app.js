@@ -896,12 +896,40 @@ const refShareLink = () => "https://wa.me/?text=" + encodeURIComponent(
   `We now use Tagbook in our laundry to record customers' clothes, send bills on WhatsApp and see who still owes. It has made things easier for us.\n\nThe first month is free. Message them here and tell them ${shop.name} sent you:\nhttps://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hi, ${shop.name} referred me to Tagbook`)}`);
 const refLater = () => { try { return Date.now() - (+localStorage.getItem("tb-ref-later") || 0) < 30 * 864e5; } catch (_) { return false; } };
 const GIFT = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 1 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 1 1 0 5"/></svg>`;
+// Referral ask: owners who have logged at least 10 orders already know what Tagbook does for them.
+const refReady = () => own() && !!priv && orders.length >= 10;
 function refLine() {
-  if (!own() || !priv || !setupState().complete || orders.length < 10 || refLater()) return "";
-  return `<div class="refl"><span class="gift">${GIFT}</span><p><b>Know another laundry?</b> Refer them and get 1 month free.</p>
-    <a class="share" target="_blank" rel="noopener" href="${refShareLink()}">Share</a><button class="x" id="refx" aria-label="Hide for 30 days">✕</button></div>`;
+  if (!refReady() || refLater()) return "";
+  return `<section class="scard refcard"><span class="gift">${GIFT}</span><div><h3>Know another laundry?</h3>
+    <p>Tell them about Tagbook. When they start paying, you get 1 month free.</p>
+    <div class="row"><a class="btn btn-primary" target="_blank" rel="noopener" href="${refShareLink()}">Share on WhatsApp</a><button class="btn btn-ghost" id="refx">Not now</button></div></div></section>`;
 }
-function wireRefLine() { const x = $("#refx"); if (x) x.onclick = () => { try { localStorage.setItem("tb-ref-later", Date.now()); } catch (_) { } renderOrders(); }; }
+// Once a month (on any of the owner's phones), the same ask as a pop-up.
+const REF_POP_EVERY = 30 * 864e5;
+function maybeRefPopup() {
+  if (!refReady() || $("#refpop") || document.querySelector(".tplayer")) return;
+  const last = +(setupState().ref_pop || 0);
+  if (Date.now() - last < REF_POP_EVERY) return;
+  let welcome = false; try { welcome = sessionStorage.getItem("tb-welcome") === "1"; } catch (_) { } if (welcome) return;
+  markSetup("ref_pop", Date.now());
+  const d = document.createElement("div"); d.id = "refpop"; d.className = "popbg";
+  d.innerHTML = `<section class="popcard" role="dialog" aria-modal="true" aria-labelledby="refpop-t">
+    <span class="gift big">${GIFT}</span>
+    <h2 id="refpop-t">Know another laundry owner?</h2>
+    <p>You've logged ${orders.length} orders on Tagbook. Share it with another laundry. When they start paying, you get <b>1 month free</b>.</p>
+    <a class="btn btn-primary" id="refpop-go" target="_blank" rel="noopener" href="${refShareLink()}">Share on WhatsApp</a>
+    <button class="btn btn-ghost" id="refpop-x">Maybe later</button></section>`;
+  document.body.appendChild(d);
+  const close = () => d.remove();
+  $("#refpop-x").onclick = close; $("#refpop-go").addEventListener("click", () => setTimeout(close, 300));
+  d.onclick = e => { if (e.target === d) close(); };
+  document.addEventListener("keydown", function esc1(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc1); } });
+  $("#refpop-go").focus();
+}
+function wireRefLine() {
+  const x = $("#refx"); if (x) x.onclick = () => { try { localStorage.setItem("tb-ref-later", Date.now()); } catch (_) { } renderOrders(); };
+  if (!wireRefLine.t) wireRefLine.t = setTimeout(() => { wireRefLine.t = 0; if (tab === "orders") maybeRefPopup(); }, 1500);
+}
 
 /* ---------- Owner's setup checklist on the Orders screen ---------- */
 let instOpen = false;
@@ -1076,6 +1104,7 @@ function renderOrders() {
     ${setupHtml || installCard()}
     ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
+    ${setupHtml ? "" : refLine()}
     ${own() ? `<div class="stats">
       <button class="stat ${toList.length ? "hot" : ""}" data-go="new"><b>${toList.length}</b><span>Send list</span></button>
       <button class="stat ${notTold.length ? "hot" : ""}" data-go="ready"><b>${notTold.length}</b><span>Ready, not told</span></button>
@@ -1096,7 +1125,6 @@ function renderOrders() {
     ${pages > 1 ? `<div class="pager"><button class="mini" id="pgprev" ${page === 0 ? "disabled" : ""} aria-label="Newer orders">‹ Newer</button>
       <span>${page * PER_PAGE + 1}–${page * PER_PAGE + shown.length} of ${list.length}</span>
       <button class="mini" id="pgnext" ${page >= pages - 1 ? "disabled" : ""} aria-label="Older orders">Older ›</button></div>` : ""}
-    ${refLine()}
     <p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy">Privacy policy</a></p>`;
   const toTop = () => { const t = $("#q"), sc = mainScroll(); if (t) sc.scrollTo({ top: Math.max(0, t.getBoundingClientRect().top - (sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top) + sc.scrollTop - 12) }); };
   if ($("#pgprev")) $("#pgprev").onclick = () => { page--; renderOrders(); toTop(); };

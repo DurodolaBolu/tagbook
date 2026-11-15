@@ -570,3 +570,20 @@ details.early[open]>summary::after{content:" ▴"}
 .dfollow{margin:10px 0 0;font-size:14px;line-height:1.7;color:var(--muted)}
 .dfollow b{color:var(--fg);margin-right:4px}
 .dname{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:1px 10px;margin:2px 4px 2px 0;color:var(--fg);font-size:13px}
+/* Referral: a clear card near the top, and a monthly pop-up */
+.refcard{display:flex;gap:14px;align-items:flex-start;background:var(--accent-soft);border:1.5px solid var(--accent)}
+.refcard .gift,.popcard .gift{width:42px;height:42px;border-radius:50%;background:var(--card);color:var(--accent-deep);display:grid;place-items:center;flex:none}
+.refcard .gift svg,.popcard .gift svg{width:22px;height:22px}
+.refcard h3{margin:2px 0 4px;font-size:17px}
+.refcard p{margin:0;line-height:1.45}
+.refcard .row{margin-top:12px;gap:8px;flex-wrap:wrap}
+.refcard .btn{margin:0;width:auto;padding-left:16px;padding-right:16px}
+.popbg{position:fixed;inset:0;background:rgba(10,20,18,.55);display:grid;place-items:center;padding:16px;z-index:60;animation:fadein .2s ease}
+.popcard{background:var(--card);color:var(--fg);border-radius:18px;padding:26px 22px 18px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.popcard .gift.big{width:64px;height:64px;margin:0 auto 12px;background:var(--accent-soft)}
+.popcard .gift.big svg{width:32px;height:32px}
+.popcard h2{margin:0 0 8px;font-size:21px}
+.popcard p{margin:0 0 16px;line-height:1.5;color:var(--muted)}
+.popcard p b{color:var(--fg)}
+.popcard .btn{width:100%;margin-top:8px}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
