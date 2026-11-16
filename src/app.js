@@ -340,8 +340,8 @@ function callScriptHtml() {
     </div>` : ""}
   </section>`;
 }
-const O_STATUS = { new: "To contact", nopick: "Didn't pick up", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
-const O_PILL = { new: "p-new", nopick: "p-billed", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
+const O_STATUS = { new: "To contact", nopick: "Didn't pick up", unreachable: "Not reachable", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
+const O_PILL = { new: "p-new", nopick: "p-billed", unreachable: "p-owed", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
 const DAILY_SAFE = 3; // cold messages a day, sent from the router line; raise slowly once the line has a good history
 const lagosDay = t => new Date(new Date(t).getTime() + 3600e3).toISOString().slice(0, 10);
 async function loadLeads() {
@@ -530,7 +530,7 @@ function renderLeads() {
     const called = `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="called" href="${waLink(l.phone, leadMsg(l, "called"))}" target="_blank" rel="noopener">Called them? Send after-call message</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="called">Copy after-call message</button>` : ""}`;
     if (!l.phone) act = `<span class="hint">No phone yet</span>`;
     else if (l.status === "new") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="first" href="${waLink(l.phone, leadMsg(l, "first"))}" target="_blank" rel="noopener">Message on WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="first">Copy message instead</button>` : ""}` + called;
-    else if (l.status === "nopick") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="missed" href="${waLink(l.phone, leadMsg(l, "missed"))}" target="_blank" rel="noopener">Message: missed call</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="missed">Copy message instead</button>` : ""}`;
+    else if (l.status === "nopick" || l.status === "unreachable") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="missed" href="${waLink(l.phone, leadMsg(l, "missed"))}" target="_blank" rel="noopener">Message: missed call</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="missed">Copy message instead</button>` : ""}`;
     else if (l.status === "messaged") act = days !== null && days >= 2 ? `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="follow" href="${waLink(l.phone, leadMsg(l, "follow"))}" target="_blank" rel="noopener">Send follow-up</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="follow">Copy follow-up instead</button>` : ""}` : `<span class="hint">Messaged ${ago(new Date(last).toISOString())}</span>`
     else if (l.status !== "no") act = `<a class="btn btn-ghost" href="${waLink(l.phone)}" target="_blank" rel="noopener">Open chat</a>`;
     if (l.phone && l.status === "messaged") act += called;
@@ -558,7 +558,7 @@ function renderLeads() {
       <label for="ol-x">Note (optional)</label><input id="ol-x" autocomplete="off">
       <div class="row"><button class="btn btn-ghost" id="ol-no">Cancel</button><button class="btn btn-primary" id="ol-go">Save lead</button></div></section>` : ""}
     <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
-    <div class="chips ochips">${[["new", "To contact"], ["nopick", "Didn't pick up"], ["messaged", "Messaged"], ["replied", "Replied"], ["demo", "Demo booked"], ["joined", "Joined"], ["no", "Said no"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${oStatus === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
+    <div class="chips ochips">${[["new", "To contact"], ["nopick", "Didn't pick up"], ["unreachable", "Not reachable"], ["messaged", "Messaged"], ["replied", "Replied"], ["demo", "Demo booked"], ["joined", "Joined"], ["no", "Said no"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${oStatus === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
     <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
     ${groups.length ? groups.map(([c, ls]) => {
       // On "All" with no search, show a few per city so the page stays quick on a phone.
@@ -586,7 +586,7 @@ function renderLeads() {
   const markSent = (l, kind) => {
     olog.push({ lead_id: l.id, kind, sent_at: new Date().toISOString() });
     sb.from("outreach_log").insert({ lead_id: l.id, kind }).then(() => { });
-    if (l.status === "new" || l.status === "nopick") { l.status = "messaged"; sb.from("outreach_leads").update({ status: "messaged" }).eq("id", l.id).then(() => { }); }
+    if (l.status === "new" || l.status === "nopick" || l.status === "unreachable") { l.status = "messaged"; sb.from("outreach_leads").update({ status: "messaged" }).eq("id", l.id).then(() => { }); }
   };
   const copy = async text => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand("copy"); } catch (_) { } t.remove(); return ok; } };
   view.querySelectorAll("[data-wa]").forEach(a => a.addEventListener("click", () => {
