@@ -1208,7 +1208,7 @@ async function disablePush() {
 }
 // keep this phone's subscription saved (the address can change after updates)
 async function syncPush() {
-  if (!own() || !pushSupported() || Notification.permission !== "granted") return;
+  if (!(own() || newOpts()) || !pushSupported() || Notification.permission !== "granted") return;
   const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
   if (sub) saveSub(sub);
 }
@@ -1251,6 +1251,7 @@ function renderOrders() {
   view.innerHTML = `
     ${planBanner()}
     ${welcomeCard()}
+    ${dueCard()}
     ${setupHtml || installCard()}
     ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
@@ -2046,22 +2047,31 @@ function fixView(o) {
 const REMARK_PRESETS = ["Stain", "Torn or hole", "Missing button", "Colour fading", "Burn mark", "Broken zip", "Item found in pocket"];
 let shopRemarks = [], noteEdit = null, ne = null;
 const dayAt = n => { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + n); return t.getTime(); };
-const TIMES = [["10:00", "Morning"], ["14:00", "Afternoon"], ["17:00", "Evening"]];
-// The collection time picked from chips, or typed under "Exact time"
 function collectPicker(st, edit) {
   if (st.wait && !edit) return `<label>Collection</label><p class="cnote">Today. The customer is waiting for it.</p>`;
   if (st.express && !edit) return `<label>Ready in <span class="opt">(optional)</span></label>
     <div class="chips" style="margin:0">${[1, 2, 3].map(n => `<button class="chip" data-exd="${n}" aria-pressed="${st.expDays === n}">${n} day${n > 1 ? "s" : ""}</button>`).join("")}</div>
     ${st.expDays ? `<p class="cnote">Ready ${fmtDay(dayAt(st.expDays))}. It goes in the customer's list of clothes.</p>` : ""}`;
-  const days = [1, 2, 3, 4, 5, 6].map(n => localDate(dayAt(n)));
-  const otherOn = st.cOther || (st.cDate && !days.includes(st.cDate));
-  const timeOther = st.tOther || (st.cTime && !TIMES.some(t => t[0] === st.cTime));
-  return `<label>When will they collect? <span class="opt">(optional)</span></label>
-    <div class="chips cpick" style="margin:0">${days.map((v, i) => `<button class="chip" data-cday="${v}" aria-pressed="${st.cDate === v && !otherOn}">${i === 0 ? "Tomorrow" : new Date(dayAt(i + 1)).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" })}</button>`).join("")}<button class="chip" data-cday="other" aria-pressed="${otherOn}">Other date</button></div>
-    ${otherOn ? `<input type="date" id="cdt" min="${localDate(Date.now())}" value="${st.cDate}" aria-label="Collection date" style="margin-top:8px">` : ""}
-    ${st.cDate ? `<div class="chips cpick" style="margin:8px 0 0">${TIMES.map(([v, l]) => `<button class="chip" data-ctime="${v}" aria-pressed="${st.cTime === v && !timeOther}">${l}</button>`).join("")}<button class="chip" data-ctime="other" aria-pressed="${timeOther}">Exact time</button></div>
-      ${timeOther ? `<input type="time" id="ctm" value="${st.cTime}" aria-label="Collection time" style="margin-top:8px">` : ""}
-      <p class="cnote">Collect ${esc(fmtCollect(Date.parse(collectIso(st.cDate, st.cTime))))}</p>` : ""}`;
+  return `<label>When will they collect? <span class="opt">(optional)</span></label>${calendar(st)}
+    ${st.cDate ? `<div class="cpicked"><span>Collect ${esc(fmtDay(Date.parse(collectIso(st.cDate, ""))))}</span><button type="button" data-cclear>Clear</button></div>` : ""}`;
+}
+// Month calendar for the collection date: today ringed, past days greyed, the picked day filled.
+function calendar(st) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (st.calY == null) { const base = st.cDate ? new Date(st.cDate + "T00:00") : today; st.calY = base.getFullYear(); st.calM = base.getMonth(); }
+  const first = new Date(st.calY, st.calM, 1), lead = (first.getDay() + 6) % 7, dim = new Date(st.calY, st.calM + 1, 0).getDate();
+  const atStart = st.calY === today.getFullYear() && st.calM === today.getMonth();
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push(`<span></span>`);
+  for (let d = 1; d <= dim; d++) {
+    const dt = new Date(st.calY, st.calM, d), v = localDate(dt.getTime()), past = dt < today, isT = dt.getTime() === today.getTime();
+    cells.push(`<button type="button" class="cd${isT ? " today" : ""}${st.cDate === v ? " on" : ""}" data-cal="${v}" ${past ? "disabled" : ""} aria-label="${fmtDay(dt.getTime())}${isT ? ", today" : ""}" aria-pressed="${st.cDate === v}">${d}</button>`);
+  }
+  const chev = p => `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="${p}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<div class="cal"><div class="calhd"><button type="button" class="calnav" data-calm="-1" aria-label="Previous month" ${atStart ? "disabled" : ""}>${chev("M15 5l-7 7 7 7")}</button>
+    <b>${first.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</b>
+    <button type="button" class="calnav" data-calm="1" aria-label="Next month">${chev("M9 5l7 7-7 7")}</button></div>
+    <div class="calgrid">${["M", "T", "W", "T", "F", "S", "S"].map(w => `<span class="cdow">${w}</span>`).join("")}${cells.join("")}</div></div>`;
 }
 function collectWhen(st) {
   if (st.wait) return collectIso(localDate(Date.now()), "");
@@ -2070,16 +2080,9 @@ function collectWhen(st) {
 }
 function wireCollect(root, st, rr) {
   root.querySelectorAll("[data-exd]").forEach(b => b.onclick = () => { const n = +b.dataset.exd; st.expDays = st.expDays === n ? 0 : n; rr(); });
-  root.querySelectorAll("[data-cday]").forEach(b => b.onclick = () => {
-    const v = b.dataset.cday;
-    if (v === "other") { st.cOther = !st.cOther; if (!st.cOther) st.cDate = ""; }
-    else { st.cOther = false; st.cDate = st.cDate === v ? "" : v; }
-    if (!st.cDate) { st.cTime = ""; st.tOther = false; }
-    rr();
-  });
-  root.querySelectorAll("[data-ctime]").forEach(b => b.onclick = () => { const v = b.dataset.ctime; if (v === "other") { st.tOther = !st.tOther; if (!st.tOther) st.cTime = ""; } else { st.tOther = false; st.cTime = st.cTime === v ? "" : v; } rr(); });
-  const dt = root.querySelector("#cdt"); if (dt) dt.onchange = e => { st.cDate = e.target.value; rr(); };
-  const tm = root.querySelector("#ctm"); if (tm) tm.onchange = e => { st.cTime = e.target.value; rr(); };
+  root.querySelectorAll("[data-cal]").forEach(b => b.onclick = () => { const v = b.dataset.cal; st.cDate = st.cDate === v ? "" : v; st.cTime = ""; rr(); });
+  root.querySelectorAll("[data-calm]").forEach(b => b.onclick = () => { const d = new Date(st.calY, st.calM + +b.dataset.calm, 1); st.calY = d.getFullYear(); st.calM = d.getMonth(); rr(); });
+  const cc = root.querySelector("[data-cclear]"); if (cc) cc.onclick = () => { st.cDate = ""; st.cTime = ""; rr(); };
 }
 function remarkPicker(st) {
   const opts = [...new Set([...REMARK_PRESETS, ...shopRemarks, ...st.rm])];
@@ -2119,6 +2122,15 @@ function moneyPop(cur, done) {
   const no = p.querySelector("#mp-no"); if (no) no.onclick = () => close();
   const rm = p.querySelector("#mp-rm"); if (rm) rm.onclick = () => close(0);
   p.querySelector("#mp-ok").onclick = () => { const v = Math.min(num(digits(inp.value)), 10000000); if (!v) { toast("Type the amount found"); inp.focus(); return; } close(v); };
+}
+// Orders not marked ready that are late, due today or due tomorrow (same groups as the 8am reminder).
+function dueCard() {
+  const today = localDate(Date.now()), tom = localDate(dayAt(1));
+  const open = orders.filter(o => o.collect && !o.cancelled && (o.status === "new" || o.status === "listed"));
+  const groups = [["Late", open.filter(o => localDate(o.collect) < today), "late"], ["Due today", open.filter(o => localDate(o.collect) === today), "due"], ["Due tomorrow", open.filter(o => localDate(o.collect) === tom), ""]].filter(g => g[1].length);
+  if (!groups.length) return "";
+  return `<section class="scard duecard">${groups.map(([t, list, cls]) => `<div class="dueg"><div class="dueh"><b class="${cls}">${t}</b><span>${list.length} order${list.length > 1 ? "s" : ""}</span></div>
+    ${list.map(o => { const c = cust(o.cid); return `<button class="order duerow" data-no="${o.no}"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${calc(o).count} items${o.express ? " · express" : o.wait ? " · wait & get" : ""}${cls === "late" ? " · was due " + esc(fmtDay(o.collect)) : ""}</span></div></button>`; }).join("")}</div>`).join("")}</section>`;
 }
 function collectTag(o) {
   if (!o.collect || o.cancelled || o.status === "picked") return "";
@@ -2427,7 +2439,8 @@ function renderSettings() {
   const tabsList = isAdmin ? SET_TABS.concat([["shops", "Tagbook shops"]]) : SET_TABS;
   const nav = own() ? `<nav class="stabs" aria-label="Settings sections">${tabsList.map(([k, l]) => `<button data-st="${k}" aria-current="${setTab === k ? "page" : "false"}">${l}</button>`).join("")}</nav>` : "";
   let body = "";
-  if (setTab === "account") body = (!own() && shop.staff_prices ? staffPriceHtml() : "") + (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
+  if (setTab === "account") body = (!own() && shop.staff_prices ? staffPriceHtml() : "") + (own() ? card("Notifications", "Your phone buzzes when staff log clothes or mark them ready, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`)
+      : newOpts() ? card("Notifications", "Get a reminder when clothes are due tomorrow, due today or late, even when Tagbook is closed.", `<div id="pushbox"><p class="hint">Checking…</p></div>`) : "") + card("Change my PIN", "You'll use the new PIN next time you log in.",
       `<label for="np">New 6-digit PIN</label><input id="np" class="pin" ${pinAttrs}><button class="btn btn-ghost" id="npb">Save new PIN</button>`)
     + `<button class="logout" id="out"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>Log out</button>`;
   if (setTab === "business") { const p = sPriv(); body =

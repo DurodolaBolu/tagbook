@@ -318,7 +318,8 @@ async function handle(route) {
     await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300);
     await page.click("[data-pick]"); await page.waitForTimeout(200);
     await page.click("[data-add]"); await page.waitForTimeout(200);
-    await page.click("[data-cday]"); await page.waitForTimeout(150); await page.click('[data-ctime="14:00"]'); await page.waitForTimeout(150);
+    await page.click('[data-calm="1"]'); await page.waitForTimeout(150); await page.click('[data-cal]:not([disabled]) >> nth=2'); await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(out, "cal.png"), fullPage: true });
     await page.click('[data-rm="Stain"]'); await page.waitForTimeout(100); await page.click('[data-rm="Missing button"]'); await page.waitForTimeout(100);
     await page.click("[data-money]"); await page.waitForTimeout(200); await page.fill("#mp-in", "500"); await page.screenshot({ path: path.join(out, "money.png") }); await page.click("#mp-ok"); await page.waitForTimeout(200);
     await page.click("[data-rmo]"); await page.waitForTimeout(150); await page.fill("#rmo-in", "Faded collar"); await page.click("#rmo-add"); await page.waitForTimeout(300);
@@ -336,8 +337,12 @@ async function handle(route) {
     await page.click('[data-spd="wait"]'); await page.waitForTimeout(150); await page.screenshot({ path: path.join(out, "log-wait.png"), fullPage: true });
     await page.click("#save"); await page.waitForTimeout(1200);
     const o2 = db.orders[db.orders.length - 1]; console.log("wait order:", o2.wait_get, o2.express, o2.collect_at);
-    await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(800);
-    await page.screenshot({ path: path.join(out, "list.png") });
+    // a late, a due-today and a due-tomorrow order for the Due soon card
+    const dd = n => { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + n); return t.toISOString(); };
+    const lst = db.orders.filter(q => !q.cancelled_at).slice(-3); [-1, 0, 1].forEach((n, i) => { if (lst[i]) { lst[i].collect_at = dd(n); lst[i].status = "new"; } });
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);
+    console.log("due card:", await page.$$eval(".dueh b", e => e.map(x => x.textContent)));
+    await page.screenshot({ path: path.join(out, "list.png"), fullPage: true });
     process.exit(0);
   }
   if (process.env.CAPTURE_ORDERS) { // design review: order list under each filter, on a phone

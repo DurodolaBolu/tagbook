@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261116171728";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261116175432";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -792,6 +792,27 @@ textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12
 .cnote{margin:8px 0 0;font-size:14px;color:var(--accent-deep);font-weight:600}
 .rother{gap:8px;margin-top:8px}.rother input{flex:1;min-width:0;margin:0}.rother .btn{width:auto;flex:none;margin:0}
 .chips.cpick,.chips.rpick{flex-wrap:wrap;overflow:visible;padding-bottom:0}
+/* Collection calendar */
+.cal{background:var(--card);border-radius:16px;padding:12px 10px 10px;margin-top:6px;border:1px solid var(--line)}
+.calhd{display:flex;align-items:center;justify-content:space-between;padding:0 4px 8px}
+.calhd b{font-size:16px}
+.calnav{width:38px;height:38px;border-radius:19px;border:1px solid var(--line);background:var(--card);color:var(--fg);display:flex;align-items:center;justify-content:center;padding:0}
+.calnav:disabled{opacity:.35}
+.calgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
+.cdow{font-size:12px;font-weight:600;color:var(--muted);padding:4px 0}
+.cd{height:42px;width:42px;justify-self:center;border-radius:21px;border:0;background:transparent;color:var(--fg);font:inherit;font-size:15px;font-weight:500;padding:0}
+.cd:disabled{color:var(--muted);opacity:.4;cursor:default}
+.cd.today{border:2px solid var(--accent);color:var(--accent);font-weight:700}
+.cd.on{background:var(--accent);color:var(--accent-ink);border:0;font-weight:700}
+.cpicked{display:flex;justify-content:space-between;align-items:center;background:var(--accent-soft);color:var(--accent-deep);border-radius:10px;padding:8px 12px;margin-top:8px;font-size:14px;font-weight:600}
+.cpicked button{border:0;background:transparent;color:inherit;text-decoration:underline;font:inherit;font-size:13px;padding:6px}
+/* Due soon on Orders */
+.duecard{padding:12px 14px}
+.dueg+.dueg{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.dueh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.dueh b{font-size:15px}.dueh b.late{color:var(--owes)}.dueh b.due{color:var(--accent)}
+.dueh span{font-size:13px;color:var(--muted)}
+.duerow{background:transparent;box-shadow:none;padding:6px 0;margin:0}
 </style>
 </head><body>
 <div id="boot" class="loading washing" role="status"><div class="lart big"><svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
@@ -822,7 +843,7 @@ textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261116171728"></script>
+<script src="/app.js?v=20261116175432"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
