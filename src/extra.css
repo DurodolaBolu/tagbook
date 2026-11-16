@@ -602,3 +602,7 @@ details.early[open]>summary::after{content:" ▴"}
 .glate{color:var(--owes)}
 /* Static loader in index.html: shows on the first paint, before app.js runs; boot() removes it */
 #boot{position:fixed;inset:0;min-height:0;z-index:30;background:var(--bg)}
+/* Replies (admin): ready answers to copy */
+.qreply .ohead span{font-size:13px}
+.qans{margin:10px 0 0;white-space:pre-wrap;font-size:15px;line-height:1.45;color:var(--fg)}
+.aseg button{white-space:nowrap}

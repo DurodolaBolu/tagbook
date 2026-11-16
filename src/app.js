@@ -287,8 +287,72 @@ function shopFlags(r) {
   return f;
 }
 let adminView = (() => { try { return localStorage.getItem("tb-admin-view") || "shops"; } catch (_) { return "shops"; } })();
-const adminSeg = () => `<div class="aseg" role="tablist"><button data-av="shops" aria-pressed="${adminView === "shops"}">Shops</button><button data-av="leads" aria-pressed="${adminView === "leads"}">Leads</button></div>`;
+const adminSeg = () => `<div class="aseg" role="tablist"><button data-av="shops" aria-pressed="${adminView === "shops"}">Shops</button><button data-av="leads" aria-pressed="${adminView === "leads"}">Leads</button><button data-av="replies" aria-pressed="${adminView === "replies"}">Replies</button></div>`;
 function wireAdminSeg() { view.querySelectorAll("[data-av]").forEach(b => b.onclick = () => { adminView = b.dataset.av; try { localStorage.setItem("tb-admin-view", adminView); } catch (_) { } renderAdmin(); }); }
+
+/* ---------- Replies: ready answers to questions shops ask, one tap to copy (admin only; new ones can be added here or by SQL) ---------- */
+let qr = null, qrQ = "", qrTopic = "all", qrEdit = null, qrDel = null, qrBusy = false;
+async function loadReplies() {
+  if (qrBusy) return; qrBusy = true;
+  try { const r = await sb.from("quick_replies").select("*").order("sort").order("created_at"); if (!r.error) qr = r.data || []; else qr = qr || []; }
+  finally { qrBusy = false; }
+  if (tab === "admin" && adminView === "replies") keepTyped(renderAdmin);
+}
+function replyForm(r) {
+  const topics = [...new Set((qr || []).map(x => x.topic))];
+  return `<section class="scard dlead"><h3 class="stitle">${r ? "Edit reply" : "Add a reply"}</h3>
+    <label for="qr-q">Their question</label><input id="qr-q" maxlength="200" value="${r ? esc(r.question) : ""}" placeholder="e.g. Can I use it on 2 phones?" autocomplete="off">
+    <label for="qr-t">Topic</label><input id="qr-t" maxlength="40" list="qr-topics" value="${r ? esc(r.topic) : ""}" placeholder="e.g. How it works" autocomplete="off"><datalist id="qr-topics">${topics.map(t => `<option value="${esc(t)}">`).join("")}</datalist>
+    <label for="qr-a">Your answer</label><textarea id="qr-a" rows="7" maxlength="3000">${r ? esc(r.answer) : ""}</textarea>
+    <div class="row"><button class="btn btn-ghost" id="qr-no">Cancel</button><button class="btn btn-primary" id="qr-go">${r ? "Save changes" : "Save reply"}</button></div></section>`;
+}
+function renderReplies() {
+  if (qr === null) { loadReplies(); view.innerHTML = `${adminSeg()}<p class="hint">Loading replies…</p>`; wireAdminSeg(); return; }
+  const topics = [...new Set(qr.map(x => x.topic))];
+  if (qrTopic !== "all" && !topics.includes(qrTopic)) qrTopic = "all";
+  const q = qrQ.trim().toLowerCase();
+  const list = qr.filter(r => (qrTopic === "all" || r.topic === qrTopic) && (!q || (r.question + " " + r.answer + " " + r.topic).toLowerCase().includes(q)));
+  view.innerHTML = `${adminSeg()}
+    <div class="dtop"><div><h2 class="ptitle">Replies</h2><p class="hint">Answers to what shops ask. Tap Copy, then paste in WhatsApp.</p></div><div class="row"><button class="btn btn-ghost" id="qradd">+ Add a reply</button></div></div>
+    ${qrEdit === "new" ? replyForm(null) : ""}
+    <input id="qrq" class="search" placeholder="Search: price, staff, PIN…" value="${esc(qrQ)}" autocomplete="off">
+    <div class="chips ochips">${[["all", "All", qr.length]].concat(topics.map(t => [t, t, qr.filter(r => r.topic === t).length])).map(([k, v, n]) => `<button class="chip" data-qt="${esc(k)}" aria-pressed="${qrTopic === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
+    <div class="dlist">${list.map(r => qrEdit === r.id ? replyForm(r) : `<section class="olead qreply">
+      <div class="ohead"><div><b>${esc(r.question)}</b><span>${esc(r.topic)}</span></div></div>
+      <p class="qans">${esc(r.answer)}</p>
+      <div class="oact"><button class="btn btn-primary" data-qcopy="${r.id}">Copy</button><span class="row"><button class="mini" data-qedit="${r.id}">Edit</button><button class="mini danger" data-qdel="${r.id}">${qrDel === r.id ? "Delete?" : "Delete"}</button></span></div>
+    </section>`).join("") || `<p class="hint" style="margin-top:16px">${q ? "No reply matches that. Add it with + Add a reply." : "No replies yet."}</p>`}</div>`;
+  wireAdminSeg();
+  $("#qradd").onclick = () => { qrEdit = qrEdit === "new" ? null : "new"; renderAdmin(); if (qrEdit) $("#qr-q").focus(); };
+  $("#qrq").oninput = e => { qrQ = e.target.value; clearTimeout(window.__qrT); window.__qrT = setTimeout(() => { const pos = e.target.selectionStart; renderAdmin(); const el = $("#qrq"); el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) { } }, 250); };
+  view.querySelectorAll("[data-qt]").forEach(b => b.onclick = () => { qrTopic = b.dataset.qt; renderAdmin(); });
+  view.querySelectorAll("[data-qcopy]").forEach(b => b.onclick = async () => {
+    const r = qr.find(x => x.id === b.dataset.qcopy); if (!r) return;
+    if (!(await copyText(r.answer))) return toast("Couldn't copy. Try again.");
+    toast("Copied. Paste it in WhatsApp."); b.textContent = "Copied ✓"; setTimeout(() => { b.textContent = "Copy"; }, 2000);
+    r.uses = (r.uses || 0) + 1; sb.from("quick_replies").update({ uses: r.uses }).eq("id", r.id).then(() => { });
+  });
+  view.querySelectorAll("[data-qedit]").forEach(b => b.onclick = () => { qrEdit = b.dataset.qedit; qrDel = null; renderAdmin(); });
+  view.querySelectorAll("[data-qdel]").forEach(b => b.onclick = async () => {
+    if (qrDel !== b.dataset.qdel) { qrDel = b.dataset.qdel; return renderAdmin(); }
+    const { error } = await sb.from("quick_replies").delete().eq("id", qrDel);
+    if (error) return toast("Couldn't delete. Check your internet.");
+    qr = qr.filter(x => x.id !== qrDel); qrDel = null; toast("Reply deleted"); renderAdmin();
+  });
+  if ($("#qr-no")) $("#qr-no").onclick = () => { qrEdit = null; renderAdmin(); };
+  if ($("#qr-go")) $("#qr-go").onclick = async () => {
+    const row = { question: $("#qr-q").value.trim(), topic: $("#qr-t").value.trim() || "Other", answer: $("#qr-a").value.trim() };
+    if (!row.question) return toast("Type their question");
+    if (!row.answer) return toast("Type your answer");
+    $("#qr-go").disabled = true;
+    const res = qrEdit === "new"
+      ? await sb.from("quick_replies").insert({ ...row, sort: (qr.reduce((m, x) => Math.max(m, x.sort), 0) + 10) }).select().single()
+      : await sb.from("quick_replies").update(row).eq("id", qrEdit).select().single();
+    if (res.error) { $("#qr-go").disabled = false; return toast("Couldn't save. Check your internet."); }
+    if (qrEdit === "new") qr.push(res.data); else qr = qr.map(x => x.id === res.data.id ? res.data : x);
+    qrEdit = null; toast("Reply saved"); renderAdmin();
+  };
+}
 
 /* ---------- Leads: shops to reach, with one-tap WhatsApp messages ---------- */
 let oCopy = null; // iPhone + WhatsApp Business: Apple gives websites no way to open Business, so we copy the message instead
@@ -614,6 +678,7 @@ function renderLeads() {
 function renderAdmin() {
   if (!isAdmin) return go("orders");
   if (adminView === "leads") return renderLeads();
+  if (adminView === "replies") return renderReplies();
   if (dash === null || Date.now() - dashAt > 60e3) loadDash();
   if (dash === null) { view.innerHTML = `<h2 class="ptitle">Shops</h2><p class="hint">Loading…</p>`; return; }
   const real = dash.filter(r => !r.is_test), test = dash.filter(r => r.is_test);

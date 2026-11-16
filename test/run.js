@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
-const db = { send_log: [],
+const db = { send_log: [], quick_replies: [],
   shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
@@ -28,7 +28,7 @@ function filterRows(rows, params) {
     if (op === "in") { const set = val.replace(/^\(|\)$/g, "").split(",").map(s => s.replace(/"/g, "")); rows = rows.filter(r => set.includes(String(r[k]))); } }
   return rows;
 }
-const pk = { send_log: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
+const pk = { send_log: "id", quick_replies: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
 const errors = [];
 async function handle(route) {
   const req = route.request(), u = new URL(req.url()), p = u.pathname, method = req.method();
@@ -265,6 +265,22 @@ async function handle(route) {
   global.planFail = false; await T("#planretry"); await page.waitForTimeout(600);
   console.log("plan after Try again shows plans:", await page.isVisible("[data-plan]"));
   await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);
+  if (process.env.CAPTURE_REPLIES) { // design review: admin Replies tab
+    db.quick_replies = [
+      { id: "q1", topic: "Price and plans", question: "How much is the subscription?", answer: "Tagbook is \u20a63,000 a month for the whole shop.\n\nYour first month is free.", sort: 10, uses: 0, created_at: new Date().toISOString() },
+      { id: "q2", topic: "How it works", question: "How many devices can access an account?", answer: "There's no limit. You can use your account on your phone and your laptop at the same time.", sort: 20, uses: 0, created_at: new Date().toISOString() }];
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(800);
+    await page.click('[data-av="replies"]'); await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(process.env.CAPTURE_REPLIES, "replies.png") });
+    await page.fill("#qrq", "device"); await page.waitForTimeout(600);
+    console.log("search shows:", await page.$$eval(".qreply", e => e.length));
+    await page.fill("#qrq", ""); await page.waitForTimeout(600);
+    await page.click("#qradd"); await page.fill("#qr-q", "Test Q"); await page.fill("#qr-t", "Other"); await page.fill("#qr-a", "Test A"); await page.click("#qr-go"); await page.waitForTimeout(600);
+    console.log("after add:", db.quick_replies.length, "| shown:", await page.$$eval(".qreply", e => e.length));
+    await page.screenshot({ path: path.join(process.env.CAPTURE_REPLIES, "replies-added.png") });
+    process.exit(0);
+  }
   if (process.env.CAPTURE_LEADS) { // design review: leads page with the call script
     db.outreach_leads = [
       { id: "l1", name: "K-kleen Laundry", area: "NDDC Rd, Oba Ile", city: "Akure", phone: "08036661786", status: "replied", notes: "Said he'd reach out. Price question answered.", created_at: new Date().toISOString() },
