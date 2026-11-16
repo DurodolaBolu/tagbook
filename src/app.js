@@ -418,6 +418,7 @@ function renderReplies() {
 }
 
 /* ---------- Leads: shops to reach, with one-tap WhatsApp messages ---------- */
+let linkFor = null; // a called lead marked Joined: Bolu picks which shop it became, so the caller gets the caller fee
 let oCopy = null; // iPhone + WhatsApp Business: Apple gives websites no way to open Business, so we copy the message instead
 const iosBiz = () => isIOS && waApp === "business";
 let olead = null, olog = [], oleadBusy = false, oCity = "Akure", oStatus = "new", oQ = "", oAdd = false;
@@ -674,6 +675,10 @@ function renderLeads() {
     return `<section class="olead${l.status === "no" ? " is-no" : ""}">
       <div class="ohead"><div><b>${esc(l.name)}</b><span>${esc(l.area || "")}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}${l.called_by ? ` · called by ${esc(l.called_by)} ${fmtDay(Date.parse(l.called_at))}` : ""}</span></div><span class="pill ${O_PILL[l.status]}">${O_STATUS[l.status]}</span></div>
       ${l.notes ? `<p class="onote">${esc(l.notes)}</p>` : ""}
+      ${l.shop_id && dash ? `<p class="hint">Joined as <b>${esc((dash.find(r => r.id === l.shop_id) || {}).name || "a shop")}</b>${l.called_by && !/^bolu/i.test(l.called_by) ? ` · caller fee to ${esc(l.called_by.split(" ")[0])} once it has paid ₦6,000` : ""}</p>` : ""}
+      ${linkFor === l.id ? `<div class="ocopy"><p><b>Which shop did ${esc(l.name)} become?</b> ${esc(l.called_by.split(" ")[0])} called them, so they get the ₦1,500 caller fee once the shop has paid ₦6,000.</p>
+        ${dash ? `<select data-lshop aria-label="Shop"><option value="">Pick the shop</option>${dash.filter(r => !r.is_test).slice().sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}</select>` : `<p class="hint">Loading shops…</p>`}
+        <div class="row"><button class="btn btn-primary" data-lsave="${l.id}">Save</button><button class="btn btn-ghost" data-lnot>Not set up yet</button></div></div>` : ""}
       ${oCopy && oCopy.id === l.id ? `<div class="ocopy"><p><b>Message copied.</b> Now open <b>WhatsApp Business</b>, start a new chat with <b>${fmtPhone(l.phone)}</b> and paste the message.</p>
         <div class="row"><button class="btn btn-ghost" data-copynum="${l.id}">Copy number</button><button class="btn btn-ghost" data-recopy="${l.id}">Copy message again</button></div>
         <div class="row"><button class="btn btn-primary" data-sent="${l.id}">I've sent it</button><button class="btn btn-ghost" data-nocopy>Not now</button></div></div>` : ""}
@@ -742,9 +747,19 @@ function renderLeads() {
   view.querySelectorAll("[data-recopy]").forEach(b => b.onclick = async () => toast(await copy(oCopy.text) ? "Message copied" : "Couldn't copy"));
   view.querySelectorAll("[data-copynum]").forEach(b => b.onclick = async () => { const l = olead.find(x => x.id === b.dataset.copynum); toast(await copy("+234" + l.phone.slice(1)) ? "Number copied" : "Couldn't copy"); });
   view.querySelectorAll("[data-sent]").forEach(b => b.onclick = () => { const l = olead.find(x => x.id === b.dataset.sent); markSent(l, oCopy.kind); oCopy = null; toast(`${l.name}: marked as messaged`); renderAdmin(); });
+  view.querySelectorAll("[data-lsave]").forEach(b => b.onclick = async () => {
+    const l = olead.find(x => x.id === b.dataset.lsave), shop = (view.querySelector("[data-lshop]") || {}).value;
+    if (!shop) return toast("Pick the shop first");
+    b.disabled = true;
+    const { error } = await sb.rpc("admin_link_lead", { p_lead: l.id, p_shop: shop });
+    if (error) { b.disabled = false; return toast("Couldn't save. Check your internet."); }
+    l.shop_id = shop; l.status = "joined"; linkFor = null; toast(`${l.name}: linked. ${l.called_by.split(" ")[0]} gets the caller fee once it has paid ₦6,000.`); renderAdmin();
+  });
+  view.querySelectorAll("[data-lnot]").forEach(b => b.onclick = () => { linkFor = null; toast("OK. Set the status to Joined again once the shop is set up."); renderAdmin(); });
   view.querySelectorAll("[data-nocopy]").forEach(b => b.onclick = () => { oCopy = null; renderAdmin(); });
   view.querySelectorAll("[data-ost]").forEach(sel => sel.onchange = async () => {
     const l = olead.find(x => x.id === sel.dataset.ost); const status = sel.value;
+    if (status === "joined" && l.called_by && !/^bolu/i.test(l.called_by) && !l.shop_id) { linkFor = l.id; if (!dash) loadDash().then(() => tab === "admin" && renderAdmin()); }
     const { error } = await sb.from("outreach_leads").update({ status }).eq("id", l.id);
     if (error) return toast("Couldn't save. Check your internet.");
     l.status = status; toast(`${l.name}: ${O_STATUS[status]}`); renderAdmin();
