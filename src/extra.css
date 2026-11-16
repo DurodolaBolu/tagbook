@@ -611,7 +611,7 @@ details.early[open]>summary::after{content:" ▴"}
 .toggle input{flex:none}
 .cwhen{gap:8px}.cwhen input{flex:1;min-width:0;margin:0}
 label .opt{font-weight:400;color:var(--muted)}
-textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);resize:vertical}
+textarea#rmk,textarea#nrm,textarea#cnote{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);resize:vertical}
 .onotes{margin:6px 0 4px;font-size:15px}.onotes p{margin:2px 0}.onotes .mini{margin-top:6px}
 .onoteedit{margin-top:8px}
 .who .due{color:var(--accent)}.who .late{color:var(--owes)}

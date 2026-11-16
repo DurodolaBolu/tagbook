@@ -420,7 +420,7 @@ function msgTiming() {
   if (next) return { ok: false, text: `Owners are busy now. Next good time to message: ${fmt(next[0])} to ${fmt(next[1])}.` };
   return { ok: false, text: m >= 1260 || m < 480 ? "Too late to message strangers. Carry on tomorrow." : "Done for today. Carry on tomorrow." };
 }
-function callScriptHtml() {
+function callScriptHtml(who = "Bolu", caller = false) {
   const t = callTiming(), l = oCall && olead && olead.find(x => x.id === oCall), shop = l ? `<b>${esc(l.name)}</b>` : "[Shop name]";
   return `<section class="scard oscript">
     <button class="oscript-top" id="oscript" aria-expanded="${oScriptOpen}"><span><b>Call script</b><span class="otime ${t.ok ? "ok" : ""}">${t.text}</span></span><span aria-hidden="true">${oScriptOpen ? "▴" : "▾"}</span></button>
@@ -429,19 +429,19 @@ function callScriptHtml() {
       <ol>
         <li><b>Opening</b><p>"Good ${new Date().toLocaleString("en-US", { timeZone: "Africa/Lagos", hour: "numeric", hour12: false }) < 12 ? "morning" : "afternoon"}. Am I speaking with the owner of ${shop}?"</p><p class="hint">Not the owner? "Please, when is the best time to reach the owner?" Write it in the note and call back then.</p></li>
         <li><b>Check if they can talk</b><p>"Do you have 1 minute?"</p><p class="hint">Busy, driving or in the market? Skip to the video: "No problem, I'll be quick. Is this your WhatsApp number? We'll send you a short video of what we do." Then send the after-call message and the video. Most people won't call back, so don't wait for that.</p></li>
-        <li><b>Who you are, then ask</b><p>"My name is Bolu, from Tagbook. We work with laundry shops. Quick question: how do you keep track of your customers' clothes right now? Do you write them in a book, or use tags?"</p><p class="hint">End on the question, not on the pitch. If you explain first, they just say "okay" and the call stops there.</p></li>
+        <li><b>Who you are, then ask</b><p>"My name is ${esc(who)}, from Tagbook. We work with laundry shops. Quick question: how do you keep track of your customers' clothes right now? Do you write them in a book, or use tags?"</p><p class="hint">End on the question, not on the pitch. If you explain first, they just say "okay" and the call stops there.</p></li>
         <li><b>Listen, then connect</b><p>"Okay. We built a simple app that helps laundry shops track their customers' clothes, send bills on WhatsApp, and see who still owes."</p><p class="hint">Use their answer: "So no more searching through the book" or "So the tags and the record match".</p></li>
         <li><b>Offer the video</b><p>"Do you mind if we send you a 2-minute video on WhatsApp, so you can see how it works and decide if it's something you'd like to try? Is this your WhatsApp number?"</p><p class="hint">Show before you sell: no price yet, they haven't seen what they'd pay for. After the call, tap "Called them? Send after-call message" below and send the video right after it.</p></li>
         <li><b>If they ask the price</b><p>"The first month is free, then ₦3,000 a month, and you can stop anytime. Watch the video first, and if you like it we'll set it up for you."</p></li>
         <li><b>If they already use an app</b><p>"Nice. Which one? Does it also track each customer's clothes, or mostly the money?"</p><p class="hint">Most are accounting apps (sales and expenses). Tagbook is about the clothes: who brought what, what's ready, and the bill on WhatsApp. If theirs does all of that, thank them and ask if they know a shop still using a book.</p></li>
-        <li><b>When they reply to the video</b><p>If they like it, don't send a link. Offer to set it up: "Just send your shop name, your full name, your town and your state, and we'll set it up for you."</p></li>
+        ${caller ? "" : `        <li><b>When they reply to the video</b><p>If they like it, don't send a link. Offer to set it up: "Just send your shop name, your full name, your town and your state, and we'll set it up for you."</p></li>`}
       </ol>
-      <p class="hint">Keep it under 3 minutes. After the call, set the status below and add a one-line note.</p>
+      <p class="hint">Keep it under 3 minutes. ${caller ? "After the call, tap “Log call”, pick what happened and write what they said. Bolu sends the WhatsApp follow-up." : "After the call, set the status below and add a one-line note."}</p>
     </div>` : ""}
   </section>`;
 }
-const O_STATUS = { new: "To contact", nopick: "Didn't pick up", unreachable: "Not reachable", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
-const O_PILL = { new: "p-new", nopick: "p-billed", unreachable: "p-owed", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
+const O_STATUS = { new: "To contact", called: "Follow up", nopick: "Didn't pick up", unreachable: "Not reachable", messaged: "Messaged", replied: "Replied", demo: "Demo booked", joined: "Joined", no: "Said no" };
+const O_PILL = { new: "p-new", called: "p-ready", nopick: "p-billed", unreachable: "p-owed", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
 const DAILY_SAFE = 3; // cold messages a day, sent from the router line; raise slowly once the line has a good history
 const lagosDay = t => new Date(new Date(t).getTime() + 3600e3).toISOString().slice(0, 10);
 async function loadLeads() {
@@ -630,12 +630,13 @@ function renderLeads() {
     const called = `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="called" href="${waLink(l.phone, leadMsg(l, "called"))}" target="_blank" rel="noopener">Called them? Send after-call message</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="called">Copy after-call message</button>` : ""}`;
     if (!l.phone) act = `<span class="hint">No phone yet</span>`;
     else if (l.status === "new") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="first" href="${waLink(l.phone, leadMsg(l, "first"))}" target="_blank" rel="noopener">Message on WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="first">Copy message instead</button>` : ""}` + called;
+    else if (l.status === "called") act = called.replace('class="btn btn-ghost" data-wa', 'class="btn btn-primary" data-wa').replace("Called them? Send after-call message", "Send after-call message");
     else if (l.status === "nopick" || l.status === "unreachable") act = `<a class="btn btn-primary" data-wa="${l.id}" data-kind="missed" href="${waLink(l.phone, leadMsg(l, "missed"))}" target="_blank" rel="noopener">Message: missed call</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="missed">Copy message instead</button>` : ""}`;
     else if (l.status === "messaged") act = days !== null && days >= 2 ? `<a class="btn btn-ghost" data-wa="${l.id}" data-kind="follow" href="${waLink(l.phone, leadMsg(l, "follow"))}" target="_blank" rel="noopener">Send follow-up</a>${iosBiz() ? `<button class="btn btn-ghost" data-wacopy="${l.id}" data-kind="follow">Copy follow-up instead</button>` : ""}` : `<span class="hint">Messaged ${ago(new Date(last).toISOString())}</span>`
     else if (l.status !== "no") act = `<a class="btn btn-ghost" href="${waLink(l.phone)}" target="_blank" rel="noopener">Open chat</a>`;
     if (l.phone && l.status === "messaged") act += called;
     return `<section class="olead${l.status === "no" ? " is-no" : ""}">
-      <div class="ohead"><div><b>${esc(l.name)}</b><span>${esc(l.area || "")}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</span></div><span class="pill ${O_PILL[l.status]}">${O_STATUS[l.status]}</span></div>
+      <div class="ohead"><div><b>${esc(l.name)}</b><span>${esc(l.area || "")}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}${l.called_by ? ` · called by ${esc(l.called_by)} ${fmtDay(Date.parse(l.called_at))}` : ""}</span></div><span class="pill ${O_PILL[l.status]}">${O_STATUS[l.status]}</span></div>
       ${l.notes ? `<p class="onote">${esc(l.notes)}</p>` : ""}
       ${oCopy && oCopy.id === l.id ? `<div class="ocopy"><p><b>Message copied.</b> Now open <b>WhatsApp Business</b>, start a new chat with <b>${fmtPhone(l.phone)}</b> and paste the message.</p>
         <div class="row"><button class="btn btn-ghost" data-copynum="${l.id}">Copy number</button><button class="btn btn-ghost" data-recopy="${l.id}">Copy message again</button></div>
@@ -661,7 +662,7 @@ function renderLeads() {
       <label for="ol-x">Note (optional)</label><input id="ol-x" autocomplete="off">
       <div class="row"><button class="btn btn-ghost" id="ol-no">Cancel</button><button class="btn btn-primary" id="ol-go">Save lead</button></div></section>` : ""}
     <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
-    <div class="chips ochips">${[["new", "To contact"], ["nopick", "Didn't pick up"], ["unreachable", "Not reachable"], ["messaged", "Messaged"], ["replied", "Replied"], ["demo", "Demo booked"], ["joined", "Joined"], ["no", "Said no"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${oStatus === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
+    <div class="chips ochips">${[["new", "To contact"], ["called", "Follow up"], ["nopick", "Didn't pick up"], ["unreachable", "Not reachable"], ["messaged", "Messaged"], ["replied", "Replied"], ["demo", "Demo booked"], ["joined", "Joined"], ["no", "Said no"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${oStatus === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
     <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
     ${groups.length ? groups.map(([c, ls]) => {
       // On "All" with no search, show a few per city so the page stays quick on a phone.
@@ -690,7 +691,7 @@ function renderLeads() {
   const markSent = (l, kind) => {
     olog.push({ lead_id: l.id, kind, sent_at: new Date().toISOString() });
     sb.from("outreach_log").insert({ lead_id: l.id, kind }).then(() => { });
-    if (l.status === "new" || l.status === "nopick" || l.status === "unreachable") { l.status = "messaged"; sb.from("outreach_leads").update({ status: "messaged" }).eq("id", l.id).then(() => { }); }
+    if (["new", "nopick", "unreachable", "called"].includes(l.status)) { l.status = "messaged"; sb.from("outreach_leads").update({ status: "messaged" }).eq("id", l.id).then(() => { }); }
   };
   const copy = async text => { try { await navigator.clipboard.writeText(text); return true; } catch (_) { const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand("copy"); } catch (_) { } t.remove(); return ok; } };
   view.querySelectorAll("[data-wa]").forEach(a => a.addEventListener("click", () => {
@@ -2619,10 +2620,75 @@ function wireBank() {
     myEarn = { ...myEarn, bank: { bank, no, name } }; bankEdit = false; toast("Bank details saved"); renderAgent();
   };
 }
+/* ---------- Call shops (team members Bolu allows to call leads; they call only, Bolu follows up on WhatsApp) ---------- */
+let isCaller = false, agentView = "shops", cLog = null, cOut = "called", cNote = "", cBusy = false;
+async function loadCallerLeads() {
+  if (oleadBusy) return; oleadBusy = true;
+  try {
+    let rows = [];
+    for (let from = 0; ; from += 1000) { const r = await sb.rpc("caller_leads", { p_from: from }); if (r.error) break; rows = rows.concat(r.data || []); if (!r.data || r.data.length < 1000) break; }
+    olead = rows;
+  } finally { oleadBusy = false; }
+  if (tab === "agent" && agentView === "calls") keepTyped(renderAgent);
+}
+const agentSeg = () => isCaller ? `<div class="aseg" style="margin-bottom:12px"><button data-agv="shops" aria-pressed="${agentView === "shops"}">Set up shops</button><button data-agv="calls" aria-pressed="${agentView === "calls"}">Call shops</button></div>` : "";
+const wireAgentSeg = () => view.querySelectorAll("[data-agv]").forEach(b => b.onclick = () => { agentView = b.dataset.agv; renderAgent(); });
+const C_OUT = [["called", "Interested"], ["nopick", "Didn't pick up"], ["unreachable", "Not reachable"], ["no", "Not interested"]];
+function renderCalls() {
+  if (olead === null) { loadCallerLeads(); view.innerHTML = `${agentSeg()}<p class="hint">Loading leads…</p>`; wireAgentSeg(); return; }
+  const who = ((me && me.name) || "").split(" ")[0] || "me";
+  const cityOrder = ["Akure"].concat(ONDO_NEAR, ["Ado Ekiti", "Osogbo", "Ile-Ife", "Ibadan", "Ilorin", "Abeokuta", "Lagos", "Benin City", "Abuja", "Port Harcourt"]);
+  const cities = [...new Set(olead.map(l => l.city))].sort((a, b) => (cityOrder.indexOf(a) + 1 || 99) - (cityOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const inCity = olead.filter(l => oCity === "all" || l.city === oCity), q = oQ.trim().toLowerCase();
+  const st = ["new", "nopick", "unreachable", "called", "all"].includes(oStatus) ? oStatus : "new";
+  const list = inCity.filter(l => (st === "all" || l.status === st) && (!q || (l.name + " " + (l.area || "") + " " + (l.phone || "")).toLowerCase().includes(q)));
+  const byMe = l => (l.called_by || "").split(" ")[0].toLowerCase() === who.toLowerCase();
+  const mine = olead.filter(l => byMe(l) && l.called_at && lagosDay(l.called_at) === lagosDay(Date.now())).length;
+  const row = l => `<section class="olead${l.status === "no" ? " is-no" : ""}">
+      <div class="ohead"><div><b>${esc(l.name)}</b><span>${esc([l.area, l.city].filter(Boolean).join(", "))}${l.phone ? ` · ${fmtPhone(l.phone)}` : ""}</span></div><span class="pill ${O_PILL[l.status]}">${l.status === "called" ? "Interested" : l.status === "new" ? "To call" : O_STATUS[l.status]}</span></div>
+      ${l.notes ? `<p class="onote">${esc(l.notes)}</p>` : ""}
+      ${cLog === l.id ? `<div class="clog"><label style="margin-top:4px">What happened?</label><div class="chips rpick" style="margin:0">${C_OUT.map(([k, v]) => `<button class="chip" data-cout="${k}" aria-pressed="${cOut === k}">${v}</button>`).join("")}</div>
+        <label for="cnote">What did they say? <span class="opt">${cOut === "called" ? "(Bolu reads this before messaging them)" : "(optional)"}</span></label>
+        <textarea id="cnote" rows="3" maxlength="300" placeholder="${cOut === "called" ? "e.g. Owner is Mrs Ade. Uses a book. Wants the video. Best time is evening." : cOut === "no" ? "e.g. Already uses another app" : "e.g. Call again after 4pm"}">${esc(cNote)}</textarea>
+        <div class="row"><button class="btn btn-ghost" data-cno>Cancel</button><button class="btn btn-primary" data-cgo="${l.id}" ${cBusy ? "disabled" : ""}>Save</button></div></div>`
+      : `<div class="oact">${l.phone && l.status !== "no" ? `<a class="btn btn-primary ocall" data-call="${l.id}" href="tel:${l.phone}">Call</a>` : `<span class="hint">No phone</span>`}<button class="btn btn-ghost" data-clog="${l.id}">Log call</button></div>`}
+    </section>`;
+  view.innerHTML = `${agentSeg()}
+    <div class="dtop"><div><h2 class="ptitle">Call shops</h2><p class="hint">Call, then log what happened. When a shop is interested, Bolu gets your note and sends them the video on WhatsApp.</p></div></div>
+    <div class="stats lstats"><div class="stat"><b>${olead.filter(l => l.status === "new").length}</b><span>Left to call</span></div><div class="stat"><b>${mine}</b><span>You called today</span></div><div class="stat"><b>${olead.filter(l => l.status === "called" && byMe(l)).length}</b><span>Interested from you</span></div></div>
+    ${callScriptHtml(who, true)}
+    <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
+    <div class="chips ochips">${[["new", "To call"], ["nopick", "Didn't pick up"], ["unreachable", "Not reachable"], ["called", "Interested"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${st === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
+    <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
+    <div class="dlist">${list.slice(0, 40).map(row).join("") || `<p class="hint">No shops here.</p>`}${list.length > 40 ? `<p class="hint">Showing 40 of ${list.length}. Search or pick a city to see others.</p>` : ""}</div>`;
+  wireAgentSeg();
+  $("#oscript").onclick = () => { oScriptOpen = !oScriptOpen; try { localStorage.setItem("tb-script-open", oScriptOpen ? "1" : "0"); } catch (_) { } renderAgent(); };
+  view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAgent(); });
+  view.querySelectorAll("[data-os]").forEach(b => b.onclick = () => { oStatus = b.dataset.os; renderAgent(); });
+  $("#oq").oninput = e => { oQ = e.target.value; const p = e.target.selectionStart; renderAgent(); const n = $("#oq"); n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } };
+  view.querySelectorAll("[data-call]").forEach(a => a.onclick = () => { oCall = a.dataset.call; oScriptOpen = true; cLog = a.dataset.call; cOut = "called"; cNote = ""; setTimeout(() => renderAgent(), 300); });
+  view.querySelectorAll("[data-clog]").forEach(b => b.onclick = () => { cLog = b.dataset.clog; cOut = "called"; cNote = ""; renderAgent(); });
+  view.querySelectorAll("[data-cout]").forEach(b => b.onclick = () => { cNote = ($("#cnote") || {}).value || cNote; cOut = b.dataset.cout; renderAgent(); });
+  const cn = $("#cnote"); if (cn) cn.oninput = e => { cNote = e.target.value; };
+  view.querySelectorAll("[data-cno]").forEach(b => b.onclick = () => { cLog = null; renderAgent(); });
+  view.querySelectorAll("[data-cgo]").forEach(b => b.onclick = async () => {
+    const l = olead.find(x => x.id === b.dataset.cgo); if (!l) return;
+    const note = tidy(cNote);
+    if (cOut === "called" && !note) { toast("Write what they said, so Bolu knows how to follow up"); $("#cnote").focus(); return; }
+    cBusy = true; renderAgent();
+    const { error } = await sb.rpc("caller_log_call", { p_lead: l.id, p_status: cOut, p_note: note || null });
+    cBusy = false;
+    if (error) { toast("Couldn't save. Check your internet."); return renderAgent(); }
+    l.status = cOut; l.called_by = who; l.called_at = new Date().toISOString();
+    if (note) l.notes = (l.notes ? l.notes + "\n" : "") + `${who}: ${note}`;
+    cLog = null; oCall = null; toast(cOut === "called" ? "Saved. Bolu has been told." : "Saved"); renderAgent();
+  });
+}
 function renderAgent() {
   if (!isAgent) return go("orders");
+  if (isCaller && agentView === "calls") return renderCalls();
   if (!myEarnBusy) { myEarnBusy = true; sb.rpc("my_earnings").then(({ data, error }) => { myEarnBusy = false; if (!error && data && JSON.stringify(data) !== JSON.stringify(myEarn)) { myEarn = data; if (tab === "agent") keepTyped(renderAgent); } }).catch(() => { myEarnBusy = false; }); }
-  view.innerHTML = `<h2 class="ptitle">Set up shops</h2>${earningsHtml()}<p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops(); wireBank();
+  view.innerHTML = `${agentSeg()}<h2 class="ptitle">Set up shops</h2>${earningsHtml()}<p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops(); wireBank(); wireAgentSeg();
 }
 const isoDay = d => d.toISOString().slice(0, 10);
 function shopsHtml() {
@@ -3019,6 +3085,7 @@ async function start() {
   me = st; role = st.role === "owner" ? "own" : "sec";
   try { const r = await sb.rpc("is_platform_admin"); isAdmin = r.data === true; } catch (_) { isAdmin = false; }
   try { const r = await sb.rpc("is_agent"); isAgent = !isAdmin && r.data === true; } catch (_) { isAgent = false; }
+  if (isAgent) { try { const c = await sb.rpc("is_caller"); isCaller = c.data === true; } catch (_) { isCaller = false; } }
   $("#login").hidden = true; L = null;
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   saveLast({ phone: st.phone, name: st.name, shop: shop.name });

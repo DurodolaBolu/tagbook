@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261116184650";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261116200704";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -785,7 +785,7 @@ details.early[open]>summary::after{content:" ▴"}
 .toggle input{flex:none}
 .cwhen{gap:8px}.cwhen input{flex:1;min-width:0;margin:0}
 label .opt{font-weight:400;color:var(--muted)}
-textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);resize:vertical}
+textarea#rmk,textarea#nrm,textarea#cnote{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);resize:vertical}
 .onotes{margin:6px 0 4px;font-size:15px}.onotes p{margin:2px 0}.onotes .mini{margin-top:6px}
 .onoteedit{margin-top:8px}
 .who .due{color:var(--accent)}.who .late{color:var(--owes)}
@@ -854,7 +854,7 @@ label .opt{font-size:13px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261116184650"></script>
+<script src="/app.js?v=20261116200704"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

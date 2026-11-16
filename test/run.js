@@ -75,7 +75,13 @@ async function handle(route) {
   if (p === "/rest/v1/rpc/admin_dashboard" && global.dashRows) return send(200, global.dashRows);
   if (p === "/rest/v1/rpc/admin_send_stats" && global.dashRows) return send(200, [{ kind: "pdf", stage: "ready", sends: 7, shops: 3 }, { kind: "text", stage: "ready", sends: 2, shops: 1 }]);
   if (/^\/rest\/v1\/rpc\/(admin_dashboard|admin_agents|admin_shops|team_options|admin_team_pay)$/.test(p)) return send(200, []);
-  if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId);
+  if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId && !process.env.CAPTURE_CALLS);
+  if (process.env.CAPTURE_CALLS && p === "/rest/v1/rpc/is_agent") return send(200, true);
+  if (p === "/rest/v1/rpc/is_caller") return send(200, !!process.env.CAPTURE_CALLS);
+  if (p === "/rest/v1/rpc/caller_leads") return send(200, (body.p_from ? [] : (global.callLeads || [])));
+  if (p === "/rest/v1/rpc/caller_log_call") { const l = (global.callLeads || []).find(x => x.id === body.p_lead); l.status = body.p_status; l.notes = body.p_note; global.lastCall = body; return send(200, { ok: true }); }
+  if (p === "/rest/v1/rpc/my_earnings") return send(200, []);
+  if (p === "/rest/v1/rpc/agent_shops") return send(200, []);
   if (p === "/rest/v1/rpc/my_plan") { global.planCalls = (global.planCalls || 0) + 1; if (global.planFail) return send(500, { message: "down" }); }
   if (p === "/rest/v1/rpc/my_plan") return send(200, { state: "trial", until: "2099-01-01", grace_until: "2099-01-03", days_left: 9999, prices: { m1: 3000, m6: 15000, m12: 30000 } });
   if (p === "/rest/v1/rpc/admin_shops") return send(200, db.shops.map(s => ({ id: s.id, name: s.name, created_at: s.created_at, trial_ends: s.trial_ends || null, owner_name: "Bolu", owner_phone: "08120756325", staff: db.staff.length, orders: db.orders.length, last_order: new Date().toISOString(), referred_by: s.referred_by || null, referred_by_name: (db.shops.find(k => k.id === s.referred_by) || {}).name || null, referrals: db.shops.filter(k => k.referred_by === s.id).length })));
@@ -304,6 +310,20 @@ async function handle(route) {
     await page.click('.ochips button:has-text("To contact")').catch(() => {}); await page.waitForTimeout(300);
     await page.evaluate(() => { const a = document.querySelector('[data-call="l2"]'); a.removeAttribute("href"); a.click(); }); await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(process.env.CAPTURE_LEADS, "leads-open.png") });
+    process.exit(0);
+  }
+  if (process.env.CAPTURE_CALLS) { // a team member who calls leads
+    const out = process.env.CAPTURE_CALLS; global.callLeads = [
+      { id: "c1", name: "Wash & Shine Laundry", area: "Oba Ile", city: "Akure", phone: "07025317387", status: "new", notes: null, called_by: null, called_at: null },
+      { id: "c2", name: "Clean Plus", area: "Alagbaka", city: "Akure", phone: "08035556666", status: "new", notes: null, called_by: null, called_at: null },
+      { id: "c3", name: "Mag Laundry", area: "Ijapo", city: "Akure", phone: "08139674129", status: "nopick", notes: null, called_by: null, called_at: null }];
+    await page.setViewportSize({ width: 390, height: 1500 });
+    await page.goto("http://localhost:8787/#setup"); await page.reload(); await page.waitForTimeout(1000);
+    await page.click('[data-agv="calls"]'); await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(out, "calls.png"), fullPage: true });
+    await page.click('[data-clog="c1"]'); await page.waitForTimeout(200); await page.fill("#cnote", "Owner is Mrs Ade. Uses a book. Wants the video."); await page.screenshot({ path: path.join(out, "log.png"), fullPage: true });
+    await page.click('[data-cgo="c1"]'); await page.waitForTimeout(500);
+    console.log("logged:", JSON.stringify(global.lastCall), "| no WhatsApp buttons:", !(await page.$("[data-wa]")), "| script name:", (await page.textContent(".oscript")).includes("Tolu") || (await page.textContent(".oscript")).slice(0, 0));
     process.exit(0);
   }
   if (process.env.CAPTURE_OPTS) { // order options: collection date, wait & get, remarks, starch and iron
