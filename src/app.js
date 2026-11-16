@@ -1088,6 +1088,9 @@ function setupSteps() {
     { k: "prices", t: "Check your price list", d: "Change any price that's different in your shop. Bills are worked out from it.", go: "Open", done: !!st.prices },
     { k: "install", t: `Install Tagbook on this ${device()}`, d: "So it opens like an app and can notify you.", go: "Show me", done: !!st.installed || standalone() || (!isPhone() && !installEvt) },
     { k: "bank", t: "Add your bank details", d: "Your bill shows customers where to pay.", go: "Add", done: !!hasBank() },
+    // Steps for newer features: shops that already finished the checklist don't see them again.
+    { k: "invoice", t: "Add your logo to your invoice", d: "Customers get a neat PDF invoice with your logo and colours.", go: "Add", done: !!sPriv().inv_logo || !!st.invoice },
+    ...(newOpts() ? [{ k: "options", t: "Choose your order options", d: "Collection dates, Wait & get and Express charges. Turn on only what your shop uses.", go: "Choose", done: !!st.options }] : []),
     { k: "staff", t: "Add your staff", d: "Each staff gets their own login.", go: "Add", done: staffList.some(x => x.role !== "owner") || !!st.alone, alone: true },
     { k: "push", t: "Turn on notifications", d: "Get a buzz when staff log clothes.", go: "Turn on", done: pushSupported() && Notification.permission === "granted" },
     { k: "order", t: "Log your first customer's clothes", d: "Try it with the next customer who walks in.", go: "Log", done: orders.length > 0 },
@@ -1132,6 +1135,8 @@ function wireSetup() {
     if (k === "prices") { await markSetup("prices"); setTab = "prices"; return go("shop"); }
     if (k === "bank") { setTab = "business"; go("shop"); setTimeout(() => { const f = $("#an"); if (f) { f.scrollIntoView({ block: "center" }); f.focus(); } }, 250); return; }
     if (k === "staff") { setTab = "staff"; return go("shop"); }
+    if (k === "invoice") { await markSetup("invoice"); setTab = "invoice"; return go("shop"); }
+    if (k === "options") { await markSetup("options"); setTab = "business"; go("shop"); setTimeout(() => { const f = $("#oc"); if (f) f.scrollIntoView({ block: "center" }); }, 250); return; }
     if (k === "push") { if (!pushSupported()) { toast(isIOS ? "Install Tagbook first (the step above), then open it from your Home Screen." : "This browser can't show notifications."); return; } await enablePush(); return renderOrders(); }
     if (k === "order") return go("log");
   });
