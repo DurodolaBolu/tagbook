@@ -260,12 +260,14 @@ let sendStats = [];
 // Bolu's goal: 1,000 active shops (an order in the last 30 days) by 31 May 2027. Per month: sign-ups, and active shops by month end.
 // Reset 16 Nov 2026 to a pace 2 people can hold now, growing as agents, referrals and self sign-up add shops from February.
 // Each month: [sign-ups that month, active shops by month end]. About 6 in 10 sign-ups stay active.
-const GOAL = { total: 1000, by: "31 Dec 2027", start: 12, months: {
+const GOAL = { total: 1000, by: "31 Dec 2027", start: 0, months: {
   "2026-11": [45, 30], "2026-12": [70, 70], "2027-01": [70, 110], "2027-02": [85, 160], "2027-03": [100, 220], "2027-04": [120, 290],
   "2027-05": [135, 370], "2027-06": [135, 450], "2027-07": [150, 540], "2027-08": [150, 630], "2027-09": [170, 730], "2027-10": [170, 830],
   "2027-11": [150, 920], "2027-12": [135, 1000] } };
 // The 1,000 goal in steps of 100, each with the date to reach it (from the monthly plan above).
 const GOAL_STEPS = [[100, "2027-01-31"], [200, "2027-03-20"], [300, "2027-05-05"], [400, "2027-06-15"], [500, "2027-07-20"], [600, "2027-08-20"], [700, "2027-09-20"], [800, "2027-10-20"], [900, "2027-11-25"], [1000, "2027-12-31"]];
+// Weekly team target, set 16 Nov 2026: 8 new active shops a week (about 4 each for Bolu and Tolu) keeps us on track for 100 by 31 Jan.
+const WEEK_TARGET = 8, WEEK_CALLS = 8;
 const stepDay = d => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 // active = shops with an order in the last 30 days; signups = new shops this month. Shown to Bolu and the team.
 function goalHtml(g) {
@@ -280,7 +282,7 @@ function goalHtml(g) {
   let nextLine = "";
   if (next) {
     const daysLeft = Math.max(1, Math.round((Date.parse(next[1] + "T23:00:00Z") - Date.now()) / 864e5)), gap = next[0] - active;
-    const perWeek = Math.max(1, Math.ceil(gap / daysLeft * 7));
+    const perWeek = Math.max(1, Math.round(gap / daysLeft * 7));
     nextLine = `<div class="gnext"><span>Next stop</span><b>${next[0].toLocaleString()} active shops by ${stepDay(next[1])}</b><p>${gap} more to go in ${daysLeft} day${daysLeft === 1 ? "" : "s"}. That's about <b>${perWeek} new active shop${perWeek === 1 ? "" : "s"} a week</b>.</p></div>`;
   }
   let monthPart = "";
@@ -303,6 +305,10 @@ function goalHtml(g) {
     <h3 class="stitle">Our goal: ${GOAL.total.toLocaleString()} active shops by ${GOAL.by}</h3>
     <div class="gbar big"><span style="width:${Math.max(1, pctAll)}%"></span></div>
     <p class="ssub"><b>${active}</b> active shops now (${pctAll}%). Active means the shop logged clothes in the last 30 days.</p>
+    ${g.week_active != null ? (() => { const dow = (now.getUTCDay() + 6) % 7, daysLeft = 7 - dow, got = g.week_active;
+      return `<div class="gweek"><div class="gtop"><span>This week: new active shops</span><b>${got} <i>of ${WEEK_TARGET}</i></b></div>
+        <div class="gbar"><span style="width:${Math.min(100, Math.round(got / WEEK_TARGET * 100))}%"></span></div>
+        <p class="hint" style="margin:6px 0 0">${got >= WEEK_TARGET ? "Weekly target reached. Well done!" : `${WEEK_TARGET - got} more by Sunday (${daysLeft} day${daysLeft === 1 ? "" : "s"} left). That's about 4 each for Bolu and Tolu.`} ${g.week_signups} signed up this week; a shop counts once it logs its first clothes.</p></div>`; })() : ""}
     ${nextLine}
     <h4>The road to ${GOAL.total.toLocaleString()}, 100 at a time</h4>
     ${ladder}
@@ -842,7 +848,7 @@ function renderAdmin() {
     ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}${(st => st ? ` · messaged ${st.times}×, last ${ago(st.at)}` : "")(followState(r))}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" data-nwa="${r.id}" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     ${resting.length ? `<details class="scard drest"><summary><b>Messaged, waiting for a reply</b> <span class="hint">${resting.length} · they come back above when the next follow-up is due</span></summary>${resting.map(([r]) => { const st = followState(r); return `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Messaged ${st.times}×, last ${ago(st.at)} · next follow-up ${new Date(st.next).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span></div><button class="mini" data-nback="${r.id}">Follow up now</button></div>`; }).join("")}</details>` : ""}
-    ${goalHtml({ active: real.filter(r => r.last_order && Date.now() - Date.parse(r.last_order) < 30 * 864e5).length, signups: real.filter(r => Date.parse(r.created_at) >= Date.UTC(new Date(Date.now() + 3600e3).getUTCFullYear(), new Date(Date.now() + 3600e3).getUTCMonth(), 1) - 3600e3).length })}
+    ${teamGoalHtml()}
     ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !r.push), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
       return real.length ? `<section class="scard dstates"><h3 class="stitle">App and alerts</h3>
         <p class="ssub"><span class="dstate"><b>${real.length - noApp.length}</b> of ${real.length} installed the app</span><span class="dstate"><b>${real.length - noPush.length}</b> of ${real.length} have alerts on</span></p>
@@ -2653,7 +2659,7 @@ function wireBank() {
 /* ---------- Call shops (team members Bolu allows to call leads; they call only, Bolu follows up on WhatsApp) ---------- */
 let teamGoal = null, teamGoalAt = 0;
 function teamGoalHtml() {
-  if (Date.now() - teamGoalAt > 5 * 6e4) { teamGoalAt = Date.now(); sb.rpc("goal_progress").then(({ data, error }) => { if (!error && data && JSON.stringify(data) !== JSON.stringify(teamGoal)) { teamGoal = data; if (tab === "agent") keepTyped(renderAgent); } }); }
+  if (Date.now() - teamGoalAt > 5 * 6e4) { teamGoalAt = Date.now(); sb.rpc("goal_progress").then(({ data, error }) => { if (!error && data && JSON.stringify(data) !== JSON.stringify(teamGoal)) { teamGoal = data; if (tab === "agent") keepTyped(renderAgent); else if (tab === "admin" && adminView === "shops") keepTyped(renderAdmin); } }); }
   return teamGoal ? goalHtml(teamGoal) : "";
 }
 let isCaller = false, agentView = "shops", cLog = null, cOut = "called", cNote = "", cBusy = false;
@@ -2691,6 +2697,9 @@ function renderCalls() {
   view.innerHTML = `${agentSeg()}
     <div class="dtop"><div><h2 class="ptitle">Call shops</h2><p class="hint">Call, then log what happened. When a shop is interested, Bolu gets your note and sends them the video on WhatsApp.</p></div></div>
     ${teamGoalHtml()}
+    ${(() => { const wk = Date.parse(new Date(Date.UTC(new Date(Date.now() + 3600e3).getUTCFullYear(), new Date(Date.now() + 3600e3).getUTCMonth(), new Date(Date.now() + 3600e3).getUTCDate() - ((new Date(Date.now() + 3600e3).getUTCDay() + 6) % 7))).toISOString()) - 3600e3;
+      const n = olead.filter(l => l.status === "called" && byMe(l) && l.called_at && Date.parse(l.called_at) >= wk).length;
+      return `<section class="scard gweek"><div class="gtop"><span>Your week: interested shops from your calls</span><b>${n} <i>of ${WEEK_CALLS}</i></b></div><div class="gbar"><span style="width:${Math.min(100, Math.round(n / WEEK_CALLS * 100))}%"></span></div><p class="hint" style="margin:6px 0 0">About half of interested shops sign up, so ${WEEK_CALLS} interested a week is your 4 new shops.</p></section>`; })()}
     <div class="stats lstats"><div class="stat"><b>${olead.filter(l => l.status === "new").length}</b><span>Left to call</span></div><div class="stat"><b>${mine}</b><span>You called today</span></div><div class="stat"><b>${olead.filter(l => l.status === "called" && byMe(l)).length}</b><span>Interested from you</span></div></div>
     ${callScriptHtml(who, true)}
     <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>

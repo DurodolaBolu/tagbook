@@ -77,6 +77,7 @@ async function handle(route) {
   if (/^\/rest\/v1\/rpc\/(admin_dashboard|admin_agents|admin_shops|team_options|admin_team_pay)$/.test(p)) return send(200, []);
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId && !process.env.CAPTURE_CALLS);
   if (process.env.CAPTURE_CALLS && p === "/rest/v1/rpc/is_agent") return send(200, true);
+  if (p === "/rest/v1/rpc/goal_progress") return send(200, { active: 12, signups: 18, week_signups: 3, week_active: 2 });
   if (p === "/rest/v1/rpc/is_caller") return send(200, !!process.env.CAPTURE_CALLS);
   if (p === "/rest/v1/rpc/caller_leads") return send(200, (body.p_from ? [] : (global.callLeads || [])));
   if (p === "/rest/v1/rpc/caller_log_call") { const l = (global.callLeads || []).find(x => x.id === body.p_lead); l.status = body.p_status; l.notes = body.p_note; global.lastCall = body; return send(200, { ok: true }); }
