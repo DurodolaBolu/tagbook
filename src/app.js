@@ -1247,13 +1247,13 @@ function renderOrders() {
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE)); if (page >= pages) page = pages - 1; if (page < 0) page = 0;
   const shown = list.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const setupHtml = setupCard();
-  const askPush = !setupHtml.includes("setup") && own() && pushSupported() && pushNow === "off" && !pushDismissed();
+  const askPush = !setupHtml.includes("setup") && (own() || newOpts()) && pushSupported() && pushNow === "off" && !pushDismissed();
   view.innerHTML = `
     ${planBanner()}
     ${welcomeCard()}
     ${dueCard()}
     ${setupHtml || installCard()}
-    ${askPush ? `<div class="alert push"><span>Get a buzz when staff log clothes, even when Tagbook is closed.</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
+    ${askPush ? `<div class="alert push"><span>${own() ? "Get a buzz when staff log clothes, even when Tagbook is closed." : "Get a reminder when clothes are due tomorrow, due today or late, even when Tagbook is closed."}</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
     ${setupHtml ? "" : refLine()}
     ${own() ? `<div class="stats">
@@ -3019,7 +3019,7 @@ async function start() {
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   saveLast({ phone: st.phone, name: st.name, shop: shop.name });
   reset(); subscribe(); route(); syncPush(); checkPaystackReturn();
-  if (own()) pushState().then(st => { pushNow = st; if (st === "off" && tab === "orders") keepTyped(renderOrders); }).catch(() => { });
+  if (own() || newOpts()) pushState().then(st => { pushNow = st; if (st === "off" && tab === "orders") keepTyped(renderOrders); }).catch(() => { });
 }
 
 (async function boot() {
