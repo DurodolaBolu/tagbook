@@ -1,5 +1,6 @@
 /* Tagbook: the real app. Same screens as the approved demo, backed by Supabase. */
 import { createClient } from "@supabase/supabase-js";
+import MACHINE_SVG from "./machine.svg";
 
 const SB_URL = "https://uungxatdvelljmaugzuz.supabase.co";
 const SB_KEY = "sb_publishable_oE_-Yt6fovcOpIC01tnrpw_ueK-Zx7v";
@@ -2478,21 +2479,8 @@ function exampleExpress() { return `Example: a ${naira(5000)} order marked expre
 const LAST_KEY = "tb-last";
 const lastUser = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY) || "null"); } catch (_) { return null; } };
 const saveLast = v => { try { localStorage.setItem(LAST_KEY, JSON.stringify(v)); } catch (_) { } };
-const ART_MACHINE = `<svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
-  <circle cx="100" cy="104" r="92" fill="var(--accent-soft)"/>
-  <circle class="bub b1" cx="34" cy="70" r="7" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".5"/>
-  <circle class="bub b2" cx="170" cy="58" r="5" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".45"/>
-  <circle class="bub b3" cx="164" cy="150" r="8" fill="none" stroke="var(--accent)" stroke-width="2.5" opacity=".35"/>
-  <rect x="50" y="36" width="100" height="132" rx="14" fill="var(--card)" stroke="var(--accent-deep)" stroke-width="3.5"/>
-  <line x1="50" y1="62" x2="150" y2="62" stroke="var(--accent-deep)" stroke-width="3"/>
-  <circle cx="66" cy="49" r="4.5" fill="var(--accent)"/><circle cx="80" cy="49" r="4.5" fill="var(--accent-soft)" stroke="var(--accent-deep)" stroke-width="2"/>
-  <rect x="112" y="45" width="26" height="8" rx="4" fill="var(--accent-soft)" stroke="var(--accent-deep)" stroke-width="2"/>
-  <circle cx="100" cy="113" r="36" fill="var(--accent-soft)" stroke="var(--accent-deep)" stroke-width="3.5"/>
-  <g class="drum"><circle cx="100" cy="113" r="27" fill="var(--card)"/>
-    <path d="M73 118c9-7 18 7 27 0s18 7 27 0v6a27 27 0 0 1-54 0z" fill="var(--accent)" opacity=".85"/>
-    <path d="M86 98h10M104 92l7 5" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" opacity=".6"/></g>
-  <rect x="62" y="160" width="12" height="8" rx="3" fill="var(--accent-deep)"/><rect x="126" y="160" width="12" height="8" rx="3" fill="var(--accent-deep)"/>
-</svg>`;
+// The washing machine also shows in index.html before this script loads (build.sh inlines src/machine.svg)
+const ART_MACHINE = MACHINE_SVG;
 const loadingHtml = (msg) => `<div class="loading washing"><div class="lart big">${ART_MACHINE}</div><p>${msg}</p></div>`;
 let L = null;
 function confirmPin(st) {
@@ -2763,6 +2751,7 @@ async function start() {
 }
 
 (async function boot() {
+  const pre = document.getElementById("boot"); if (pre) pre.remove(); // the static loader from index.html
   $("#offline").hidden = navigator.onLine !== false;
   if (!hasSavedLogin()) return showLogin();
   await start();

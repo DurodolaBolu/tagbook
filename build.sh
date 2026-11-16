@@ -4,13 +4,21 @@ set -e
 cd "$(dirname "$0")"
 B=$(date -u +%Y%m%d%H%M%S)
 rm -rf site && mkdir -p site/font
-npx esbuild src/app.js --bundle --minify --format=iife --target=es2019 --outfile=site/app.js --log-level=warning
+npx esbuild src/app.js --bundle --minify --format=iife --target=es2019 --loader:.svg=text --outfile=site/app.js --log-level=warning
 node --check site/app.js
 cp src/font/*.woff2 src/font/plex.css site/font/
 cp icon-192.png icon-512.png apple-touch-icon.png robots.txt site/
 cp src/privacy.html site/privacy.html
 cp src/404.html site/404.html
 GEAR=$(cat src/gear.html)
+MACHINE=$(cat src/machine.svg)
+# iPhone launch screens (made by scripts/splash.js): shown by iOS while the app opens, instead of black
+mkdir -p site/splash && cp splash/*.png site/splash/ 2>/dev/null || true
+SPLASH=""
+while read -r W H R; do
+  SPLASH="$SPLASH<link rel=\"apple-touch-startup-image\" media=\"(device-width: ${W}px) and (device-height: ${H}px) and (-webkit-device-pixel-ratio: ${R}) and (orientation: portrait)\" href=\"/splash/${W}x${H}@${R}.png\">
+"
+done < splash/sizes.txt
 cat > site/index.html <<HTML
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><script>if(location.hostname==="tagbook.pages.dev")location.replace("https://tagbook.ordiventa.com/"+location.hash);</script>
@@ -21,17 +29,18 @@ cat > site/index.html <<HTML
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
+$SPLASH<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="$B";</script>
+<script>window.TB_BUILD="$B";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 $(cat src/style.css)
 $(cat src/extra.css)
 </style>
 </head><body>
+<div id="boot" class="loading washing" role="status"><div class="lart big">$MACHINE</div><p>Loading…</p></div>
 <div id="installbar" class="installbar" hidden></div>
 <div id="offline" class="offline" hidden>You're offline. Changes won't save until you're back online.</div>
 <div id="login" class="login" hidden></div>
