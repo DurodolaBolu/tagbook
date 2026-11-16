@@ -1152,11 +1152,12 @@ async function enablePush() {
   try { if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) }); }
   catch (_) { toast("Couldn't turn on notifications. Try again."); return false; }
   if (!await saveSub(sub)) { toast("Not saved. Check your internet and try again."); return false; }
-  toast("Notifications are on"); return true;
+  pushNow = "on"; toast("Notifications are on"); return true;
 }
 async function disablePush() {
   const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
   if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); try { await sub.unsubscribe(); } catch (_) { } }
+  pushNow = "off";
 }
 // keep this phone's subscription saved (the address can change after updates)
 async function syncPush() {
@@ -1164,7 +1165,10 @@ async function syncPush() {
   const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
   if (sub) saveSub(sub);
 }
-const pushDismissed = () => { try { return localStorage.getItem("tb-push-later") === "1"; } catch (_) { return false; } };
+// "Not now" hides the banner for 7 days, then it comes back until alerts are on (it used to hide it forever).
+const pushDismissed = () => { try { const v = +localStorage.getItem("tb-push-later") || 0; return v > 1 && Date.now() - v < 7 * 864e5; } catch (_) { return false; } };
+// Whether this phone is really getting alerts: checked once when the app opens.
+let pushNow = null;
 
 /* ---------- Orders ---------- */
 function renderOrders() {
@@ -1196,7 +1200,7 @@ function renderOrders() {
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE)); if (page >= pages) page = pages - 1; if (page < 0) page = 0;
   const shown = list.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const setupHtml = setupCard();
-  const askPush = !setupHtml.includes("setup") && own() && pushSupported() && Notification.permission === "default" && !pushDismissed();
+  const askPush = !setupHtml.includes("setup") && own() && pushSupported() && pushNow === "off" && !pushDismissed();
   view.innerHTML = `
     ${planBanner()}
     ${welcomeCard()}
@@ -1236,7 +1240,7 @@ function renderOrders() {
   if ($("#wlog")) $("#wlog").onclick = () => go("log");
   if ($("#wprices")) $("#wprices").onclick = async () => { await markSetup("prices"); setTab = "prices"; go("shop"); };
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
-  if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", "1"); } catch (_) { } renderOrders(); };
+  if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", String(Date.now())); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
     const ids = fresh.map(o => o.id); fresh.forEach(o => o.notified = true); filter = "new"; renderOrders();
     sb.from("orders").update({ notified: true }).in("id", ids).then(({ error }) => { if (error) { toast(failMsg(error)); refresh(); } });
@@ -2813,6 +2817,7 @@ async function start() {
   try { await load(); } catch (e) { return cantReach("Can't load your shop. Check your internet and try again."); }
   saveLast({ phone: st.phone, name: st.name, shop: shop.name });
   reset(); subscribe(); route(); syncPush(); checkPaystackReturn();
+  if (own()) pushState().then(st => { pushNow = st; if (st === "off" && tab === "orders") keepTyped(renderOrders); }).catch(() => { });
 }
 
 (async function boot() {
