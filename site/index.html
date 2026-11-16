@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261116175755";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261116180856";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -813,6 +813,11 @@ textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12
 .dueh b{font-size:15px}.dueh b.late{color:var(--owes)}.dueh b.due{color:var(--accent)}
 .dueh span{font-size:13px;color:var(--muted)}
 .duerow{background:transparent;box-shadow:none;padding:6px 0;margin:0}
+/* Form headings easy to see (Log clothes and everywhere): dark, a bit bigger, bold */
+label{font-size:15px;color:var(--fg);font-weight:700;letter-spacing:0;margin:20px 0 8px}
+label .opt{font-size:13px}
+.clabel{font-size:15px;color:var(--fg);font-weight:700;margin:16px 0 4px}
+.toggle,.ck{font-weight:500}
 </style>
 </head><body>
 <div id="boot" class="loading washing" role="status"><div class="lart big"><svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
@@ -843,7 +848,7 @@ textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261116175755"></script>
+<script src="/app.js?v=20261116180856"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
