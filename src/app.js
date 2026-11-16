@@ -258,11 +258,14 @@ const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
 /* ---------- Ordiventa dashboard (platform admin only) ---------- */
 let sendStats = [];
 // Bolu's goal: 1,000 active shops (an order in the last 30 days) by 31 May 2027. Per month: sign-ups, and active shops by month end.
-const GOAL = { total: 1000, by: "31 May 2027", months: {
-  "2026-11": [56, 41], "2026-12": [100, 101], "2027-01": [185, 211], "2027-02": [265, 371],
-  "2027-03": [315, 561], "2027-04": [350, 771], "2027-05": [385, 1001] } };
+// Reset 16 Nov 2026 to a pace 2 people can hold now, growing as agents, referrals and self sign-up add shops from February.
+// Each month: [sign-ups that month, active shops by month end]. About 6 in 10 sign-ups stay active.
+const GOAL = { total: 1000, by: "31 Dec 2027", start: 12, months: {
+  "2026-11": [45, 30], "2026-12": [70, 70], "2027-01": [70, 110], "2027-02": [85, 160], "2027-03": [100, 220], "2027-04": [120, 290],
+  "2027-05": [135, 370], "2027-06": [135, 450], "2027-07": [150, 540], "2027-08": [150, 630], "2027-09": [170, 730], "2027-10": [170, 830],
+  "2027-11": [150, 920], "2027-12": [135, 1000] } };
 // The 1,000 goal in steps of 100, each with the date to reach it (from the monthly plan above).
-const GOAL_STEPS = [[100, "2026-12-31"], [200, "2027-01-31"], [300, "2027-02-21"], [400, "2027-03-07"], [500, "2027-03-21"], [600, "2027-04-07"], [700, "2027-04-21"], [800, "2027-05-05"], [900, "2027-05-18"], [1000, "2027-05-31"]];
+const GOAL_STEPS = [[100, "2027-01-31"], [200, "2027-03-20"], [300, "2027-05-05"], [400, "2027-06-15"], [500, "2027-07-20"], [600, "2027-08-20"], [700, "2027-09-20"], [800, "2027-10-20"], [900, "2027-11-25"], [1000, "2027-12-31"]];
 const stepDay = d => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 // active = shops with an order in the last 30 days; signups = new shops this month. Shown to Bolu and the team.
 function goalHtml(g) {
@@ -283,7 +286,7 @@ function goalHtml(g) {
   let monthPart = "";
   if (t) {
     const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), day = now.getUTCDate(), left = days - day;
-    const prevKey = Object.keys(GOAL.months).filter(k => k < key).pop(), prevActive = prevKey ? GOAL.months[prevKey][1] : 16;
+    const prevKey = Object.keys(GOAL.months).filter(k => k < key).pop(), prevActive = prevKey ? GOAL.months[prevKey][1] : GOAL.start;
     const signPace = Math.round(t[0] * day / days), actPace = Math.round(prevActive + (t[1] - prevActive) * day / days);
     const line = (label, got, goal, pace) => { const diff = got - pace;
       return `<div class="gline"><div class="gtop"><span>${label}</span><b>${got} <i>of ${goal}</i></b></div>
