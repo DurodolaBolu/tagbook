@@ -106,7 +106,7 @@ async function handle(route) {
     else { const clash = db.customers.find(cc => cc.mark === x.mark); if (clash) return send(400, { message: "MARK_TAKEN:" + clash.name, code: "P0001" });
       c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, greet: (current === ownerId && x.greet) || null, greet_asked: current === ownerId && "greet" in x, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
     const no = db.shops[0].next_no++; const id = uid();
-    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, express: x.express, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
+    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, express: x.express, wait_get: !!x.wait_get, collect_at: x.collect_at || null, remarks: x.remarks || null, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
     let auto = !x.express && !x.pickup, unit = [], total = 0;
     for (const it of x.items) { const item = db.items.find(i => i.id === it.id); const pr = db.item_prices.find(p => p.item_id === it.id); const v = pr && pr.prices[it.svc]; if (!item || item.custom || v == null) { auto = false; unit.push(null); } else { unit.push(v); total += v * it.qty; } }
     let paid = x.paid || 0; if (auto && paid > total) paid = total;
@@ -306,6 +306,33 @@ async function handle(route) {
     await page.screenshot({ path: path.join(process.env.CAPTURE_LEADS, "leads-open.png") });
     process.exit(0);
   }
+  if (process.env.CAPTURE_OPTS) { // order options: collection date, wait & get, remarks, starch and iron
+    const out = process.env.CAPTURE_OPTS; await page.setViewportSize({ width: 390, height: 1900 });
+    await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(800);
+    await page.click('[data-st="business"]'); await page.waitForTimeout(400);
+    await page.check("#oc"); await page.check("#ow"); await page.waitForTimeout(400);
+    console.log("settings saved:", db.shops[0].collect_dates, db.shops[0].wait_get_on);
+    await page.screenshot({ path: path.join(out, "settings.png"), fullPage: true });
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    console.log("service chips:", await page.$$eval("[data-svc]", b => b.map(x => x.textContent)));
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300);
+    await page.click("[data-pick]"); await page.waitForTimeout(200);
+    await page.click("[data-add]"); await page.waitForTimeout(200);
+    await page.click('[data-spd="wait"]'); await page.waitForTimeout(200);
+    const tomorrow = new Date(Date.now() + 864e5); const ds = tomorrow.toISOString().slice(0, 10);
+    await page.fill("#cdt", ds); await page.dispatchEvent("#cdt", "change"); await page.fill("#ctm", "16:00"); await page.dispatchEvent("#ctm", "change");
+    await page.fill("#rmk", "Stain on the white shirt collar. N500 found in trouser pocket.");
+    await page.screenshot({ path: path.join(out, "log.png"), fullPage: true });
+    await page.click("#save"); await page.waitForTimeout(1200);
+    const o = db.orders[db.orders.length - 1]; console.log("saved order:", o.wait_get, o.express, o.collect_at, o.remarks);
+    await page.screenshot({ path: path.join(out, "order.png"), fullPage: true });
+    console.log("list msg:", JSON.stringify(await page.evaluate(() => { const e = document.querySelector("#wamsg-list"); return e && e.textContent; })));
+    await page.click("#nedit"); await page.waitForTimeout(300); await page.fill("#nrm", "Button missing on blue shirt."); await page.click("#ngo"); await page.waitForTimeout(600);
+    console.log("edited remarks:", db.orders[db.orders.length - 1].remarks);
+    await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(out, "list.png") });
+    process.exit(0);
+  }
   if (process.env.CAPTURE_ORDERS) { // design review: order list under each filter, on a phone
     await page.setViewportSize({ width: 390, height: 1400 });
     // sample orders in every state, like a real shop's day
@@ -343,9 +370,11 @@ async function handle(route) {
     db.customer_phones.push({ customer_id: "ci", shop_id: t0.shop_id, phone: "08031234567" });
     db.orders.push({ ...JSON.parse(JSON.stringify(t0)), id: "oi", no: 41, customer_id: "ci", branch_id: "b1", status: "ready", list_sent: true, notified: true, billed: true, settled: false, created_at: new Date(Date.now() - 2 * 864e5).toISOString() });
     const its = db.orders.find(o => o.id === "oi").items;
-    const unit = its.map(() => 800), total = its.reduce((s, it) => s + 800 * it.qty, 0);
+    const P = process.env.MSGS ? [700, 1000, 6000] : null; if (P) db.shops[0].name = "BrightWash Laundry";
+    const unit = its.map((_, i) => P ? P[i] || 800 : 800), total = its.reduce((s, it, i) => s + unit[i] * it.qty, 0);
     db.order_money.push({ order_id: "oi", shop_id: t0.shop_id, unit, custom: {}, delivery: 500, discount: 0, total: total + 500, billed_at: new Date().toISOString(), paid: 1000, payments: [{ amt: 1000, at: Date.now(), method: "cash" }], express_amt: 0 });
     Object.assign(db.shop_private[0], { inv_tagline: "Laundry and dry cleaning", inv_address: "12 Oba Adesida Road, Akure", inv_phone: "08120756325", inv_email: "hello@brightwash.ng", inv_terms: "Clothes not collected within 30 days may be given away. Please check your pockets before drop-off." });
+    if (process.env.MSGS) db.shop_private[0].inv_phone = "08030000000";
     await page.setViewportSize({ width: 390, height: 2400 });
     await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(800);
     await page.click('[data-st="invoice"]'); await page.waitForTimeout(1500);
@@ -368,6 +397,7 @@ async function handle(route) {
     console.log("invoice name saved:", db.customers.find(c => c.id === "ci").inv_name, "| saved name kept:", db.customers.find(c => c.id === "ci").name);
     await page.screenshot({ path: path.join(out, "order-send.png") });
     await page.click("details.wtext summary"); await page.waitForTimeout(300);
+    if (process.env.MSGS) console.log("READY_MSG<<" + await page.textContent("#wamsg-ready") + ">>");
     await page.screenshot({ path: path.join(out, "order-send-text-open.png") });
     const [dl2] = await Promise.all([page.waitForEvent("download"), page.click('[data-pdf="ready"]')]); await dl2.saveAs(path.join(out, "order.pdf"));
     // the same order while still being cleaned: the bill can go out early

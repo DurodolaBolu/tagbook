@@ -9,6 +9,11 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefr
 // and pauses a login after 5. The app never builds the real password itself.
 
 const SERVICES = { wi: "Wash and iron", wo: "Wash only", io: "Iron only", wsi: "Wash, starch and iron" };
+// TRY-OUT (16 Nov 2026): collection date, Wait & get, remarks and Starch and iron show only in Bolu's BrightWash
+// until they go live for every shop on 17 Nov. To go live: delete NEW_OPTS_SHOP and make newOpts() return true,
+// and move si into SERVICES above.
+const NEW_OPTS_SHOP = "eb2f4c6c-ad86-42b4-bb8d-2a88ecf9e9b0";
+const newOpts = () => !!shop && (shop.id === NEW_OPTS_SHOP || location.hostname === "localhost");
 const STEPS = [["new", "Logged"], ["listed", "List sent"], ["ready", "Ready"], ["told", "Told"], ["picked", "Picked up"]];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -18,6 +23,12 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const digits = v => String(v ?? "").replace(/\D/g, "");
 const num = v => +digits(v) || 0;
 const fmtDay = ts => new Date(ts).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+// Collection date (shops that turn it on): time is optional, stored as midnight when not given.
+const fmtCollect = ts => { const t = new Date(ts); return fmtDay(ts) + (t.getHours() || t.getMinutes() ? ", " + t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(":00", "") : ""); };
+const localDate = ts => { const t = new Date(ts); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; };
+const localTime = ts => { const t = new Date(ts); return t.getHours() || t.getMinutes() ? `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}` : ""; };
+const collectIso = (date, time) => date ? new Date(`${date}T${time || "00:00"}`).toISOString() : null;
+const speedLabel = o => o.wait ? "wait & get" : o.express ? "express delivery" : "";
 const moneyAttrs = 'type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"';
 function moneyInput(el, fn) { if (!el) return; el.addEventListener("input", () => { const c = digits(el.value); if (el.value !== c) el.value = c; fn(num(c)); }); }
 const $ = s => document.querySelector(s);
@@ -113,11 +124,11 @@ async function fetchAll(table, cols, orderBy) {
 
 async function load() {
   const base = await Promise.all([
-    sb.from("shops").select("id,name,created_at,is_test,staff_prices").single(),
+    sb.from("shops").select("id,name,created_at,is_test,staff_prices,collect_dates,wait_get_on").single(),
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
     fetchAll("customers", "id,name,mark,greet,greet_asked,inv_name"),
-    fetchAll("orders", "id,no,customer_id,branch_id,items,express,pickup,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
+    fetchAll("orders", "id,no,customer_id,branch_id,items,express,wait_get,pickup,collect_at,remarks,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
   ]);
   if (base[0].error) throw base[0].error;
   shop = base[0].data; BRANCHES = base[1]; customers = base[3];
@@ -141,10 +152,11 @@ async function load() {
   } else if (shop.staff_prices) {
     (await fetchAll("item_prices", "item_id,prices")).forEach(r => prices[r.item_id] = r.prices);
   }
+  if (newOpts()) SERVICES.si = "Starch and iron"; else delete SERVICES.si;
   PRICES = base[2].map(i => ({ ...i, p: prices[i.id] || {} }));
   customers.forEach(c => c.phone = phones[c.id] || "");
   const all = base[4].map(o => ({
-    id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, items: o.items || [], express: o.express, pickup: o.pickup,
+    id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, items: o.items || [], express: o.express, wait: !!o.wait_get, pickup: o.pickup, collect: o.collect_at ? Date.parse(o.collect_at) : 0, remarks: o.remarks || "",
     status: o.status, checking: o.checking, checked: o.checked || {}, notified: o.notified, billed: o.billed, settled: o.settled, list_sent: o.list_sent,
     at: Date.parse(o.created_at), m: { ...emptyMoney(), ...(money[o.id] || {}) }, again: {},
     cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "",
@@ -1243,7 +1255,7 @@ function renderOrders() {
       const c = cust(o.cid), k = calc(o); return `
       <button class="order" data-no="${o.no}">
         <div class="${markCls(c.mark)}">${esc(c.mark)}</div>
-        <div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${k.count} items${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}</span></div>
+        <div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${k.count} items${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${o.wait ? " · wait & get" : ""}${collectTag(o)}</span></div>
         <div class="right">${orderRight(o, filter === "all" || !!query)}</div>
       </button>`;
     }).join("") : `<div class="empty">${orders.length ? "No orders here. Change the filter or search." : "No orders yet. Tap “+ Log clothes” to add the first one."}</div>`}</div>
@@ -1271,7 +1283,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, pickup: false, askSpecial: false, specialName: "", specialPrice: 0, paid: 0, saving: false }; }
+function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, wait: false, pickup: false, cDate: "", cTime: "", remarks: "", askSpecial: false, specialName: "", specialPrice: 0, paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -1349,6 +1361,10 @@ function renderNew() {
   }
   if (!d.branch || !liveBranches().some(b => b.id === d.branch)) d.branch = (liveBranches()[0] || {}).id || null;
   const count = d.items.reduce((s, it) => s + it.qty, 0);
+  // Only show services the shop actually prices (Starch and iron is new, and not every shop offers it).
+  const offered = Object.keys(SERVICES).filter(k => PRICES.some(p => !p.hidden && (p.services || []).includes(k)));
+  const svcList = offered.length ? offered : Object.keys(SERVICES).filter(k => k !== "si");
+  if (!svcList.includes(d.svc)) d.svc = svcList[0];
   const pickable = PRICES.filter(p => !p.hidden && (p.custom || (p.services || []).includes(d.svc)));
   view.innerHTML = `
     ${backBtn("Orders")}
@@ -1358,7 +1374,7 @@ function renderNew() {
     ${liveBranches().length > 1 ? `<label for="br">Dropped at</label>
     <select id="br">${liveBranches().map(b => `<option value="${b.id}" ${d.branch === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</select>` : ""}
     <label>Service</label>
-    <div class="chips" style="margin:0">${Object.entries(SERVICES).map(([s, l]) => `<button class="chip" data-svc="${s}" aria-pressed="${d.svc === s}">${l}</button>`).join("")}</div>
+    <div class="chips" style="margin:0">${svcList.map(s => `<button class="chip" data-svc="${s}" aria-pressed="${d.svc === s}">${SERVICES[s]}</button>`).join("")}</div>
     <label>Tap to add clothes</label>
     <div class="picker">${pickable.map(p => `<button data-add="${p.id}">${esc(p.name)}${p.custom ? "<small>Wedding gown, curtain</small>" : ""}</button>`).join("")}</div>
     ${d.askSpecial ? `<div class="check" style="margin-top:8px"><label for="sp" style="margin-top:0">What is the special item?</label>
@@ -1369,8 +1385,11 @@ function renderNew() {
     <div class="items">${d.items.map((it, i) => `
       <div class="item"><span>${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>
       <div class="qty"><button data-dec="${i}" aria-label="Remove one">−</button><b style="min-width:22px;text-align:center">${it.qty}</b><button data-inc="${i}" aria-label="Add one">+</button></div></div>`).join("")}</div>
-    <label class="toggle"><span>Express delivery</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>
+    ${shop.wait_get_on ? `<label>How fast?</label><div class="chips" style="margin:0">${[["std", "Standard"], ["exp", "Express"], ["wait", "Wait & get"]].map(([k, l]) => `<button class="chip" data-spd="${k}" aria-pressed="${(k === "wait" && d.wait) || (k === "exp" && d.express && !d.wait) || (k === "std" && !d.express && !d.wait)}">${l}</button>`).join("")}</div>`
+      : `<label class="toggle"><span>Express delivery</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>`}
+    ${shop.collect_dates ? `<label for="cdt">When will they collect?</label><div class="row cwhen"><input type="date" id="cdt" min="${localDate(Date.now())}" value="${d.cDate}" aria-label="Collection date"><input type="time" id="ctm" value="${d.cTime}" aria-label="Collection time (optional)"></div><p class="hint">Time is optional. The date goes in the customer's list of clothes.</p>` : ""}
     <label class="toggle"><span>Pickup and delivery</span><input type="checkbox" id="pk" ${d.pickup ? "checked" : ""}></label>
+    ${newOpts() ? `<label for="rmk">Remarks <span class="opt">(optional)</span></label><textarea id="rmk" rows="2" maxlength="300" placeholder="e.g. Stain on the white shirt collar. ₦500 found in trouser pocket.">${esc(d.remarks)}</textarea>` : ""}
     <label for="pd">Paid now (₦)</label><input id="pd" ${moneyAttrs} placeholder="0" value="${d.paid || ""}">
     ${d.paid ? "" : `<p class="hint">Leave empty if the customer will pay later.</p>`}
     <div class="lines"><div><b>Clothes logged</b><b>${count}</b></div></div>
@@ -1409,7 +1428,11 @@ function renderNew() {
   const pd = $("#pd"); if (pd) pd.oninput = e => { const c = digits(e.target.value); const had = !!d.paid; d.paid = num(c); if (e.target.value !== c) e.target.value = c; if (had !== !!d.paid) { const p = e.target.selectionStart; renderNew(); const n = $("#pd"); n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } } };
   view.querySelectorAll("[data-dm]").forEach(b => b.onclick = () => { d.method = b.dataset.dm; renderNew(); });
   if ($("#br")) $("#br").onchange = e => d.branch = e.target.value;
-  $("#ex").onchange = e => { d.express = e.target.checked; };
+  if ($("#ex")) $("#ex").onchange = e => { d.express = e.target.checked; };
+  view.querySelectorAll("[data-spd]").forEach(b => b.onclick = () => { d.express = b.dataset.spd === "exp"; d.wait = b.dataset.spd === "wait"; renderNew(); });
+  if ($("#cdt")) $("#cdt").onchange = e => { d.cDate = e.target.value; };
+  if ($("#ctm")) $("#ctm").onchange = e => { d.cTime = e.target.value; };
+  if ($("#rmk")) $("#rmk").oninput = e => { d.remarks = e.target.value.slice(0, 300); };
   $("#pk").onchange = e => { d.pickup = e.target.checked; };
   view.querySelectorAll("[data-hm]").forEach(b => b.onclick = () => { d.hasMark = b.dataset.hm; renderNew(); });
   view.querySelectorAll("[data-svc]").forEach(b => b.onclick = () => { d.svc = b.dataset.svc; renderNew(); });
@@ -1450,7 +1473,9 @@ function renderNew() {
       : !d.items.length ? "Add at least one cloth to the order." : "";
     if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
     const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
-    const base = { branch_id: d.branch, items: d.items.map(i => ({ ...i })), express: d.express, pickup: d.pickup, paid: d.paid || 0, method: d.method };
+    if (shop.collect_dates && d.cTime && !d.cDate) { showErr("Choose the collection date too, or clear the time."); return; }
+    const base = { branch_id: d.branch, items: d.items.map(i => ({ ...i })), express: d.express && !d.wait, wait_get: !!(shop.wait_get_on && d.wait), pickup: d.pickup, paid: d.paid || 0, method: d.method,
+      collect_at: shop.collect_dates ? collectIso(d.cDate, d.cTime) : null, remarks: tidy(d.remarks) || null };
     const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark, ...(own() ? { greet: d.greet || null } : {}) };
     d.saving = true; renderNew();
     const { data, error } = await sb.rpc("log_order", { p });
@@ -1483,7 +1508,7 @@ function message(o, type) {
   const c = cust(o.cid), k = calc(o), hi = hello(c);
   if (type === "list") {
     const list = o.items.map(it => `${it.qty} x ${pname(it)} (${SERVICES[it.svc]})`).join("\n");
-    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items\n\n${list}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
+    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${o.wait ? "\nWait & get" : ""}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks}` : ""}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
   if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
@@ -1533,13 +1558,14 @@ function receiptHtml(o) {
   const bank = priced && due && hasBank() ? (() => { const b = sPriv(); return `<div class="rsep"></div><div class="rc">Pay by transfer to<br><b>${esc(b.bank_name.trim())}</b><br><b>${esc(b.acct_no)}</b><br>${esc(b.acct_name.trim())}</div>`; })() : "";
   return `<div class="rhead"><b>${esc(shop.name)}</b>${liveBranches().length > 1 ? `<span>${esc(branchName(o.branch))}</span>` : ""}</div>
     <div class="rsep"></div>
-    ${row("Receipt no.", "#" + o.no)}${row("Customer", esc(c.name))}${row("Tag mark", esc(c.mark))}${row("Dropped", fmtDay(o.at))}${row("Printed", fmtDay(Date.now()))}
+    ${row("Receipt no.", "#" + o.no)}${row("Customer", esc(c.name))}${row("Tag mark", esc(c.mark))}${row("Dropped", fmtDay(o.at))}${o.collect ? row("Collection", esc(fmtCollect(o.collect))) : ""}${o.wait ? row("Service", "Wait & get") : ""}${row("Printed", fmtDay(Date.now()))}
     <div class="rsep"></div>
     ${o.items.map((it, i) => `<div class="ri"><div class="rr"><span>${it.qty} × ${esc(pname(it))}</span><span>${priced ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div><small>${SERVICES[it.svc]}</small></div>`).join("")}
     <div class="rsep"></div>
     ${priced ? `${k.exp ? row("Express delivery", naira(k.exp)) : ""}${o.m.delivery ? row("Pickup / delivery", naira(o.m.delivery)) : ""}${o.m.discount ? row("Discount", "-" + naira(o.m.discount)) : ""}
       ${row("<b>TOTAL</b>", `<b>${naira(total)}</b>`, "rbig")}${row("Paid", naira(o.m.paid))}${row(due ? "<b>Balance</b>" : "Balance", due ? `<b>${naira(due)}</b>` : "Fully paid")}`
       : row("<b>Clothes</b>", `<b>${k.count}</b>`, "rbig") + `<div class="rc">${own() ? "Bill to follow when your clothes are ready." : "Keep this slip for pickup."}</div>`}
+    ${o.remarks ? `<div class="rsep"></div><div class="rc">Noted: ${esc(o.remarks)}</div>` : ""}
     ${bank}
     <div class="rsep"></div><div class="rc">Thank you for your patronage.</div>`;
 }
@@ -2006,6 +2032,41 @@ function fixView(o) {
 }
 
 /* ---------- Order detail ---------- */
+/* Collection date and remarks on an order: staff and owner can add or change them after logging. */
+let noteEdit = null;
+function collectTag(o) {
+  if (!o.collect || o.cancelled || o.status === "picked") return "";
+  const today = localDate(Date.now()), day = localDate(o.collect);
+  return day < today ? ` · <b class="late">collect was ${esc(fmtDay(o.collect))}</b>` : day === today ? ` · <b class="due">collect today</b>` : ` · collect ${esc(fmtCollect(o.collect))}`;
+}
+function noteBlock(o) {
+  if (!newOpts() && !o.remarks && !o.collect) return "";
+  if (o.cancelled) return o.remarks ? `<p class="onotes"><b>Remarks:</b> ${esc(o.remarks)}</p>` : "";
+  const showDate = shop.collect_dates || o.collect;
+  if (noteEdit === o.id) return `<div class="check onoteedit">
+    ${showDate ? `<label for="ncd" style="margin-top:0">Collection date</label><div class="row cwhen"><input type="date" id="ncd" value="${o.collect ? localDate(o.collect) : ""}" aria-label="Collection date"><input type="time" id="nct" value="${o.collect ? localTime(o.collect) : ""}" aria-label="Collection time (optional)"></div>` : ""}
+    <label for="nrm" ${showDate ? "" : `style="margin-top:0"`}>Remarks</label><textarea id="nrm" rows="2" maxlength="300" placeholder="e.g. Stain on the white shirt collar.">${esc(o.remarks)}</textarea>
+    <div class="row"><button class="btn btn-ghost" id="nno">Cancel</button><button class="btn btn-primary" id="ngo">Save</button></div></div>`;
+  const lines = [o.collect ? `<b>Collection:</b> ${esc(fmtCollect(o.collect))}` : "", o.remarks ? `<b>Remarks:</b> ${esc(o.remarks)}` : ""].filter(Boolean);
+  const add = !lines.length ? (showDate ? "Add collection date or remarks" : "Add remarks") : "Edit";
+  return `<div class="onotes">${lines.map(l => `<p>${l}</p>`).join("")}<button class="mini" id="nedit">${add}</button></div>`;
+}
+function wireNote(sh, o) {
+  const ed = sh.querySelector("#nedit"); if (ed) ed.onclick = () => { noteEdit = o.id; openOrder(o.no); const t = sh.querySelector("#nrm"); if (t) t.focus(); };
+  const no = sh.querySelector("#nno"); if (no) no.onclick = () => { noteEdit = null; openOrder(o.no); };
+  const go = sh.querySelector("#ngo"); if (!go) return;
+  go.onclick = async () => {
+    const dt = sh.querySelector("#ncd"), tm = sh.querySelector("#nct");
+    if (dt && tm && tm.value && !dt.value) { toast("Choose the collection date too, or clear the time."); return; }
+    const collect = dt ? collectIso(dt.value, tm && tm.value) : (o.collect ? new Date(o.collect).toISOString() : null);
+    const remarks = tidy(sh.querySelector("#nrm").value).slice(0, 300) || null;
+    go.disabled = true;
+    if (!(await put("orders", { id: o.id }, { collect_at: collect, remarks }))) { go.disabled = false; return; }
+    o.collect = collect ? Date.parse(collect) : 0; o.remarks = remarks || ""; noteEdit = null;
+    toast(o.list_sent && own() ? "Saved. Send the list of clothes again if the customer should know." : "Saved");
+    openOrder(o.no);
+  };
+}
 function openOrder(no) {
   const o = orders.find(x => x.no === no) || cancelledOrders.find(x => x.no === no); if (!o) { go("orders"); return; }
   if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; }
@@ -2075,13 +2136,14 @@ function openOrder(no) {
   sh.innerHTML = `<div class="app">
     ${orderTop(o)}
     <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b>
-      <span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${o.express ? " · express delivery" : ""}</span></div></div>
+      <span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${speedLabel(o) ? " · " + speedLabel(o) : ""}</span></div></div>
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
     <p class="hint">Dropped ${fmtDay(o.at)}</p>
+    ${noteBlock(o)}
     ${html}
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
-  wireBack(sh); wireFix(sh, o);
+  wireBack(sh); wireFix(sh, o); wireNote(sh, o);
   if ($("#prt")) $("#prt").onclick = () => printReceipt(o);
   sh.querySelectorAll("[data-paper]").forEach(b => b.onclick = () => { paper = b.dataset.paper; try { localStorage.setItem("tb-paper", paper); } catch (_) { } sh.querySelectorAll("[data-paper]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.paper === paper))); });
   const setGreet = async g => {
@@ -2265,7 +2327,7 @@ const wide = window.matchMedia("(min-width: 900px)");
 wide.addEventListener("change", () => { if (me && tab === "prices") renderSettings(); });
 const SET_TABS = [["business", "Business"], ["invoice", "Invoice"], ["plan", "Plan & billing"], ["prices", "Price list"], ["staff", "Staff"], ["branches", "Branches"], ["account", "My account"]];
 const card = (title, sub, body) => `<section class="scard"><h3 class="stitle">${title}</h3>${sub ? `<p class="hint" style="margin-top:-4px">${sub}</p>` : ""}${body}</section>`;
-const shortSvc = { wi: "Wash & iron", wo: "Wash", io: "Iron", wsi: "Starch" };
+const shortSvc = { wi: "Wash & iron", wo: "Wash", io: "Iron", wsi: "Wash & starch", si: "Starch & iron" };
 function renderSettings() {
   if (!own()) setTab = "account";
   const meLine = `<p class="who-me">Signed in as <b>${esc(me.name)}</b> (${own() ? "owner" : "staff"}) · ${fmtPhone(me.phone)}</p>`;
@@ -2286,7 +2348,10 @@ function renderSettings() {
     + card("Express delivery charge", "Added to the bill when an order is marked express delivery.",
       `<div class="chips" style="margin:0 0 4px"><button class="chip" data-et="manual" aria-pressed="${p.express_type === "manual"}">Type it each time</button><button class="chip" data-et="percent" aria-pressed="${p.express_type === "percent"}">Percentage extra</button><button class="chip" data-et="times" aria-pressed="${p.express_type === "times"}">Times the bill (2×)</button><button class="chip" data-et="fixed" aria-pressed="${p.express_type === "fixed"}">Fixed amount</button></div>
        ${p.express_type === "manual" ? `<p class="hint">You type the express amount on each order's bill, depending on the job.</p>` : `<label for="ev">${p.express_type === "percent" ? "Extra percentage (%)" : p.express_type === "times" ? "Multiply the bill by" : "Extra amount per order (₦)"}</label>
-       <input id="ev" ${moneyAttrs} value="${p.express_value}"><p class="hint" id="evx">${exampleExpress()}</p>`}`); }
+       <input id="ev" ${moneyAttrs} value="${p.express_value}"><p class="hint" id="evx">${exampleExpress()}</p>`}`)
+    + (!newOpts() ? "" : card("Order options", "Extra choices when logging clothes. Turn on only what your shop uses.",
+      `<label class="toggle"><span>Collection date and time<small>Ask when the customer will come back for their clothes. It goes in their list of clothes.</small></span><input type="checkbox" id="oc" ${shop.collect_dates ? "checked" : ""}></label>
+       <label class="toggle"><span>Wait &amp; get<small>For customers who wait at the shop. Logging then shows Standard, Express or Wait &amp; get.</small></span><input type="checkbox" id="ow" ${shop.wait_get_on ? "checked" : ""}></label>`)); }
   if (setTab === "branches") body = card("Branches", "Where customers drop clothes. With one branch, the app doesn't ask.",
       `${liveBranches().map(b => `<div class="row srow"><input data-bn="${b.id}" value="${esc(b.name)}" autocomplete="off" aria-label="Branch name">${liveBranches().length > 1 ? `<button class="mini danger" data-brm="${b.id}">Remove</button>` : ""}</div>`).join("")}
        <div class="row srow"><input id="nb" placeholder="New branch name" autocomplete="off" aria-label="New branch name"><button class="mini" id="nbb">Add</button></div>`);
@@ -2351,6 +2416,7 @@ function wireAccount() {
   $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } try { await disablePush(); } catch (_) { } await sb.auth.signOut(); location.hash = ""; location.reload(); };
 }
 function wireBusiness() {
+  [["#oc", "collect_dates"], ["#ow", "wait_get_on"]].forEach(([id, k]) => { const el = $(id); if (el) el.onchange = async e => { const v = e.target.checked; shop[k] = v; savedToast(await put("shops", { id: shop.id }, { [k]: v })); }; });
   const p = sPriv();
   $("#sn").onchange = async e => { const v = tidy(e.target.value).slice(0, NAME_MAX); if (!v) { e.target.value = shop.name; return; } shop.name = v; $("#shopname").textContent = shopName(); savedToast(await put("shops", { id: shop.id }, { name: v })); };
   const savePriv = async fields => { Object.assign(priv, fields); savedToast(await put("shop_private", { shop_id: shop.id }, fields)); };

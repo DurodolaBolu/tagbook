@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261116131540";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261116163523";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -780,6 +780,15 @@ details.early[open]>summary::after{content:" ▴"}
 .qreply .ohead span{font-size:13px}
 .qans{margin:10px 0 0;white-space:pre-wrap;font-size:15px;line-height:1.45;color:var(--fg)}
 .aseg button{white-space:nowrap}
+/* Order options: collection date, remarks, wait & get */
+.toggle span small{display:block;font-size:13px;color:var(--muted);margin-top:2px;line-height:1.35}
+.toggle input{flex:none}
+.cwhen{gap:8px}.cwhen input{flex:1;min-width:0;margin:0}
+label .opt{font-weight:400;color:var(--muted)}
+textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);resize:vertical}
+.onotes{margin:6px 0 4px;font-size:15px}.onotes p{margin:2px 0}.onotes .mini{margin-top:6px}
+.onoteedit{margin-top:8px}
+.who .due{color:var(--accent)}.who .late{color:var(--owes)}
 </style>
 </head><body>
 <div id="boot" class="loading washing" role="status"><div class="lart big"><svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
@@ -810,7 +819,7 @@ details.early[open]>summary::after{content:" ▴"}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261116131540"></script>
+<script src="/app.js?v=20261116163523"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

@@ -606,3 +606,12 @@ details.early[open]>summary::after{content:" ▴"}
 .qreply .ohead span{font-size:13px}
 .qans{margin:10px 0 0;white-space:pre-wrap;font-size:15px;line-height:1.45;color:var(--fg)}
 .aseg button{white-space:nowrap}
+/* Order options: collection date, remarks, wait & get */
+.toggle span small{display:block;font-size:13px;color:var(--muted);margin-top:2px;line-height:1.35}
+.toggle input{flex:none}
+.cwhen{gap:8px}.cwhen input{flex:1;min-width:0;margin:0}
+label .opt{font-weight:400;color:var(--muted)}
+textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);resize:vertical}
+.onotes{margin:6px 0 4px;font-size:15px}.onotes p{margin:2px 0}.onotes .mini{margin-top:6px}
+.onoteedit{margin-top:8px}
+.who .due{color:var(--accent)}.who .late{color:var(--owes)}
