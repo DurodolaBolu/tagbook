@@ -414,7 +414,7 @@ function callScriptHtml() {
         <li><b>Offer the video</b><p>"Do you mind if we send you a 2-minute video on WhatsApp, so you can see how it works and decide if it's something you'd like to try? Is this your WhatsApp number?"</p><p class="hint">Show before you sell: no price yet, they haven't seen what they'd pay for. After the call, tap "Called them? Send after-call message" below and send the video right after it.</p></li>
         <li><b>If they ask the price</b><p>"The first month is free, then ₦3,000 a month, and you can stop anytime. Watch the video first, and if you like it we'll set it up for you."</p></li>
         <li><b>If they already use an app</b><p>"Nice. Which one? Does it also track each customer's clothes, or mostly the money?"</p><p class="hint">Most are accounting apps (sales and expenses). Tagbook is about the clothes: who brought what, what's ready, and the bill on WhatsApp. If theirs does all of that, thank them and ask if they know a shop still using a book.</p></li>
-        <li><b>When they reply to the video</b><p>If they like it, don't send a link. Offer to set it up: "Just send your shop name, your full name and your town, and we'll set it up for you."</p></li>
+        <li><b>When they reply to the video</b><p>If they like it, don't send a link. Offer to set it up: "Just send your shop name, your full name, your town and your state, and we'll set it up for you."</p></li>
       </ol>
       <p class="hint">Keep it under 3 minutes. After the call, set the status below and add a one-line note.</p>
     </div>` : ""}
