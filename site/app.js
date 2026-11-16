@@ -50,11 +50,12 @@ Please send your payment receipt here.`:""},Bs=()=>Ce().express_type==="manual";
       <ol>
         <li><b>Opening</b><p>"Good ${new Date().toLocaleString("en-US",{timeZone:"Africa/Lagos",hour:"numeric",hour12:!1})<12?"morning":"afternoon"}. Am I speaking with the owner of ${s}?"</p><p class="hint">Not the owner? "Please, when is the best time to reach the owner?" Write it in the note and call back then.</p></li>
         <li><b>Check if they can talk</b><p>"Do you have 1 minute?"</p><p class="hint">Busy, driving or in the market? Skip to the video: "No problem, I'll be quick. Is this your WhatsApp number? We'll send you a short video of what we do." Then send the after-call message and the video. Most people won't call back, so don't wait for that.</p></li>
-        <li><b>Who you are, then ask</b><p>"My name is Bolu, from Tagbook. We work with laundry shops. Quick question: how do you keep track of your customers' clothes right now? A book, tags?"</p><p class="hint">End on the question, not on the pitch. If you explain first, they just say "okay" and the call stops there.</p></li>
-        <li><b>Listen, then connect</b><p>"Okay. Tagbook does that on your phone. It records every customer's clothes, sends the bill on WhatsApp, and shows you who still owes."</p><p class="hint">Use their answer: "So no more searching through the book" or "So the tags and the record match".</p></li>
-        <li><b>The offer</b><p>"The first month is free, then \u20A63,000 a month, and you can stop anytime. Can we set it up for you now? We just need your shop name and the number you'll log in with."</p></li>
+        <li><b>Who you are, then ask</b><p>"My name is Bolu, from Tagbook. We work with laundry shops. Quick question: how do you keep track of your customers' clothes right now? Do you write them in a book, or use tags?"</p><p class="hint">End on the question, not on the pitch. If you explain first, they just say "okay" and the call stops there.</p></li>
+        <li><b>Listen, then connect</b><p>"Okay. We built a simple app that helps laundry shops track their customers' clothes, send bills on WhatsApp, and see who still owes."</p><p class="hint">Use their answer: "So no more searching through the book" or "So the tags and the record match".</p></li>
+        <li><b>Offer the video</b><p>"Do you mind if we send you a 2-minute video on WhatsApp, so you can see how it works and decide if it's something you'd like to try? Is this your WhatsApp number?"</p><p class="hint">Show before you sell: no price yet, they haven't seen what they'd pay for. After the call, tap "Called them? Send after-call message" below and send the video right after it.</p></li>
+        <li><b>If they ask the price</b><p>"The first month is free, then \u20A63,000 a month, and you can stop anytime. Watch the video first, and if you like it we'll set it up for you."</p></li>
         <li><b>If they already use an app</b><p>"Nice. Which one? Does it also track each customer's clothes, or mostly the money?"</p><p class="hint">Most are accounting apps (sales and expenses). Tagbook is about the clothes: who brought what, what's ready, and the bill on WhatsApp. If theirs does all of that, thank them and ask if they know a shop still using a book.</p></li>
-        <li><b>If they hesitate</b><p>"No problem. Can we send you a short video on WhatsApp so you can see how it works?"</p><p class="hint">Then tap "Called them? Send after-call message" below and send the video right after it.</p></li>
+        <li><b>When they reply to the video</b><p>If they like it, don't send a link. Offer to set it up: "Just send your shop name, your full name and your town, and we'll set it up for you."</p></li>
       </ol>
       <p class="hint">Keep it under 3 minutes. After the call, set the status below and add a one-line note.</p>
     </div>`:""}
@@ -88,19 +89,19 @@ Bolu, Tagbook team`],nh=[t=>`${t}. Just checking if you saw our message about Ta
 
 Bolu, Tagbook team`,t=>`${t}. Following up on our message about Tagbook for your shop. Would a short video of how it works be helpful?`,t=>`${t}. Just checking in. Did you get a chance to see our message? We'd be happy to show you how Tagbook works for laundry shops.
 
-Bolu, Tagbook team`],rh=[(t,e,s)=>`${t}. This is Bolu from Tagbook. Thank you for taking our call earlier. This is our WhatsApp number, so you can save it.
+Bolu, Tagbook team`],rh=[(t,e,s)=>`${t}. This is Bolu from Tagbook. Thank you for your time on the phone earlier. We called from a different line, this is our WhatsApp number.
 
-Here's the short video we talked about. It shows how Tagbook records your customers' clothes, sends the bill on WhatsApp and shows who still owes.
+Here's the 2-minute video we talked about. It shows how a shop records customers' clothes, sends bills on WhatsApp and sees who still owes.
 
-Quick question: how do you keep track of your customers' clothes right now? A book, tags, or memory?${s}`,(t,e,s)=>`${t}. It's Bolu from Tagbook. We spoke on the phone earlier about ${e}. We called from a different line, this is our WhatsApp number.
+Let us know what you think after watching.`,(t,e,s)=>`${t}. It's Bolu from Tagbook. We spoke on the phone earlier about ${e}. This is our WhatsApp number.
 
-Here's the short video of how Tagbook works.
+As promised, here's the short video of how Tagbook works.
 
-While you watch: how are you keeping track of your customers' clothes at the moment?${s}`,(t,e,s)=>`${t}. Bolu here, from Tagbook, following up on our call earlier. This is the WhatsApp number we mentioned.
+Watch it when you have 2 minutes, and let us know what you think.`,(t,e,s)=>`${t}. Bolu here, from Tagbook, following up on our call earlier. Thank you for your time.
 
-Here's the video. Tagbook is a simple app for laundry shops: log customers' clothes, send bills on WhatsApp and see who hasn't paid. The first month is free.
+Here's the video you asked for. It shows how Tagbook helps a laundry keep track of every customer's clothes and payments.
 
-How do you track your customers' clothes right now?${s}`],ah=[(t,e,s)=>`${t}. This is Bolu from Tagbook. We tried to call you earlier about ${e}.
+We'd love to hear what you think after watching.`],ah=[(t,e,s)=>`${t}. This is Bolu from Tagbook. We tried to call you earlier about ${e}.
 
 We help laundry shops keep track of customers' clothes and payments from their phone, and send the bill on WhatsApp.
 
