@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
-const db = { send_log: [], quick_replies: [],
+const db = { send_log: [], quick_replies: [], shop_followups: [],
   shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
@@ -28,7 +28,7 @@ function filterRows(rows, params) {
     if (op === "in") { const set = val.replace(/^\(|\)$/g, "").split(",").map(s => s.replace(/"/g, "")); rows = rows.filter(r => set.includes(String(r[k]))); } }
   return rows;
 }
-const pk = { send_log: "id", quick_replies: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
+const pk = { send_log: "id", quick_replies: "id", shop_followups: "shop_id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
 const errors = [];
 async function handle(route) {
   const req = route.request(), u = new URL(req.url()), p = u.pathname, method = req.method();
@@ -162,11 +162,18 @@ async function handle(route) {
   if (process.env.CAPTURE_DASH) { // design review: Bolu's Shops page
     const C = process.env.CAPTURE_DASH, now = Date.now(), iso = d => new Date(now - d * 864e5).toISOString();
     const row = (name, o) => ({ id: "s-" + name, name, created_at: iso(5), trial_ends: new Date(now + 20 * 864e5).toISOString().slice(0, 10), paid_until: null, founding: true, is_test: false, owner_name: "Owner", owner_phone: "08030000000", owners: 1, staff: 1, push: 1, orders: 12, today: 1, week: 5, prev_week: 4, clothes_week: 30, clothes: 80, last_order: iso(0), last_active: iso(0), referrals: 0, paid_total: 0, free_months: 0, state: "Ondo", area: "Akure", installed: true, ...o });
-    global.dashRows = [row("SureClean Dry Cleaning", { installed: false }), row("Ksolo247 Laundry", { push: 0, self_signup: true, confirmed: false, area: "Oba Ile" }), row("Proclean", { state: "Lagos", area: "Lekki" }), row("MG Laundry", { installed: false, push: 0, state: "Ekiti", area: "Ado" })];
+    global.dashRows = [row("SureClean Dry Cleaning", { installed: false }), row("Ksolo247 Laundry", { push: 0, self_signup: true, confirmed: false, area: "Oba Ile" }), row("Proclean", { state: "Lagos", area: "Lekki", last_order: iso(5) }), row("Kennycare", { last_order: iso(4) }), row("MG Laundry", { installed: false, push: 0, state: "Ekiti", area: "Ado" })];
     await login("08120756325").catch(() => {});
     await page.setViewportSize({ width: 390, height: 2600 }); await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(1500);
     const errs = []; page.on("pageerror", e => errs.push(e.message));
     await page.screenshot({ path: path.join(C, "dash.png"), fullPage: true }); console.log("dash text has App and alerts:", (await page.textContent("#view")).includes("App and alerts"), errs);
+    if (process.env.FOLLOW) {
+      const before = await page.$$eval("[data-nwa]", e => e.length);
+      await page.evaluate(() => { const a = document.querySelector("[data-nwa]"); a.removeAttribute("href"); a.removeAttribute("target"); a.click(); }); await page.waitForTimeout(1000);
+      const after = await page.$$eval("[data-nwa]", e => e.length);
+      console.log("call list before/after messaging:", before, after, "| saved:", JSON.stringify(db.shop_followups.map(x => [x.shop_id, x.times])), "| waiting box:", !!(await page.$(".drest")), errs);
+      await page.evaluate(() => document.querySelector(".drest").open = true); await page.screenshot({ path: path.join(C, "dash-follow.png"), fullPage: true });
+    }
     process.exit(0);
   }
   if (process.env.CAPTURE_LOGIN) { // design review: phone box and PIN boxes

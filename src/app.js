@@ -270,7 +270,22 @@ function goalHtml(real) {
 let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = 1, teamPay = [], editFor = null, payOpen = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
-async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; try { const T = await sb.rpc("admin_team_pay"); if (!T.error) teamPay = T.data || []; } catch (_) { } try { const B = await sb.rpc("admin_send_stats", { p_days: 30 }); if (!B.error) sendStats = B.data || []; } catch (_) { } } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
+async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; try { const T = await sb.rpc("admin_team_pay"); if (!T.error) teamPay = T.data || []; } catch (_) { } try { const B = await sb.rpc("admin_send_stats", { p_days: 30 }); if (!B.error) sendStats = B.data || []; } catch (_) { } try { const F = await sb.from("shop_followups").select("*"); if (!F.error) follows = Object.fromEntries((F.data || []).map(x => [x.shop_id, x])); } catch (_) { } } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
+/* Quiet shops you've messaged leave "Call these shops" until the next follow-up is due:
+   3 days after the first message, 7 days after that. Logging clothes again clears it. */
+let follows = {};
+function followState(r) {
+  const f = follows[r.id]; if (!f) return null;
+  if (r.last_order && Date.parse(r.last_order) > Date.parse(f.at)) return null; // they're logging again: start fresh
+  const next = Date.parse(f.at) + (f.times >= 2 ? 7 : 3) * 864e5;
+  return { times: f.times, at: f.at, next, waiting: Date.now() < next };
+}
+function markFollow(id) {
+  const r = dash && dash.find(x => x.id === id); if (!r) return;
+  const st = followState(r), row = { shop_id: id, at: new Date().toISOString(), times: st ? st.times + 1 : 1 };
+  follows[id] = row;
+  sb.from("shop_followups").upsert(row).then(({ error }) => { if (error) toast("Couldn't save the follow-up. Check your internet."); });
+}
 const daysLeft = d => d ? Math.round((Date.parse(String(d).slice(0, 10) + "T00:00:00Z") - Date.parse(lagosDay(Date.now()) + "T00:00:00Z")) / 864e5) : null;
 const coveredUntil = r => [r.trial_ends, r.paid_until].filter(Boolean).sort().pop() || null;
 function shopFlags(r) {
@@ -684,7 +699,9 @@ function renderAdmin() {
   const real = dash.filter(r => !r.is_test), test = dash.filter(r => r.is_test);
   const sum = k => real.reduce((s, r) => s + (+r[k] || 0), 0);
   const active = real.filter(r => r.week > 0).length, trial = real.filter(r => daysTo(r.trial_ends) >= 0).length;
-  const need = real.map(r => [r, shopFlags(r).filter(f => f[1] === "owes")]).filter(x => x[1].length);
+  const needAll = real.map(r => [r, shopFlags(r).filter(f => f[1] === "owes")]).filter(x => x[1].length);
+  const need = needAll.filter(([r]) => { const st = followState(r); return !st || !st.waiting || nCopy === r.id; });
+  const resting = needAll.filter(([r]) => { const st = followState(r); return st && st.waiting && nCopy !== r.id; }).sort((a, b) => followState(a[0]).next - followState(b[0]).next);
   const wa = p => p ? "https://wa.me/234" + String(p).replace(/^0/, "") : "";
   const shopCard = r => {
     const left = daysTo(r.trial_ends), trend = r.prev_week ? Math.round((r.week - r.prev_week) / r.prev_week * 100) : null;
@@ -768,7 +785,8 @@ function renderAdmin() {
     </div>
     ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
     ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
-    ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
+    ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}${(st => st ? ` · messaged ${st.times}×, last ${ago(st.at)}` : "")(followState(r))}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" data-nwa="${r.id}" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
+    ${resting.length ? `<details class="scard drest"><summary><b>Messaged, waiting for a reply</b> <span class="hint">${resting.length} · they come back above when the next follow-up is due</span></summary>${resting.map(([r]) => { const st = followState(r); return `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Messaged ${st.times}×, last ${ago(st.at)} · next follow-up ${new Date(st.next).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span></div><button class="mini" data-nback="${r.id}">Follow up now</button></div>`; }).join("")}</details>` : ""}
     ${goalHtml(real)}
     ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !r.push), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
       return real.length ? `<section class="scard dstates"><h3 class="stitle">App and alerts</h3>
@@ -820,7 +838,7 @@ function renderAdmin() {
     if (error || !data || !data.ok) { toast("Not saved. Please try again."); return; }
     markFor = null; toast(`Saved. Paid until ${longDay(data.paid_until)}.`); dashAt = 0; loadDash();
   });
-  view.querySelectorAll("[data-ncopy]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.ncopy); if (await copyText(nudgeMsg(r))) { nCopy = r.id; renderAdmin(); } else toast("Couldn't copy"); });
+  view.querySelectorAll("[data-ncopy]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.ncopy); if (await copyText(nudgeMsg(r))) { nCopy = r.id; markFollow(r.id); renderAdmin(); } else toast("Couldn't copy"); });
   view.querySelectorAll("[data-sconf]").forEach(b => b.onclick = async () => {
     b.disabled = true; const { error } = await sb.rpc("admin_confirm_shop", { p_shop: b.dataset.sconf });
     if (error) { b.disabled = false; return toast("Couldn't save. Try again."); }
@@ -828,6 +846,8 @@ function renderAdmin() {
   });
   view.querySelectorAll("[data-nnum]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.nnum); toast(await copyText("+234" + String(r.owner_phone).replace(/^0/, "")) ? "Number copied" : "Couldn't copy"); });
   view.querySelectorAll("[data-nclose]").forEach(b => b.onclick = () => { nCopy = null; renderAdmin(); });
+  view.querySelectorAll("[data-nwa]").forEach(a => a.addEventListener("click", () => { markFollow(a.dataset.nwa); setTimeout(() => renderAdmin(), 600); }));
+  view.querySelectorAll("[data-nback]").forEach(b => b.onclick = () => { const f = follows[b.dataset.nback]; if (!f) return; f.at = new Date(Date.now() - 8 * 864e5).toISOString(); sb.from("shop_followups").update({ at: f.at }).eq("shop_id", f.shop_id).then(() => { }); renderAdmin(); });
   $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };
   const setLead = async (id, status) => { const { error } = await sb.from("ref_leads").update({ status }).eq("id", id); if (error) return toast("Couldn't save. Check your internet."); const l = leads.find(x => x.id === id); if (l) l.status = status; renderAdmin(); };
   view.querySelectorAll("[data-lj]").forEach(b => b.onclick = () => setLead(b.dataset.lj, "joined"));
@@ -1046,7 +1066,7 @@ function setupSteps() {
   return [
     { k: "login", t: "Log in", done: true },
     { k: "prices", t: "Check your price list", d: "Change any price that's different in your shop. Bills are worked out from it.", go: "Open", done: !!st.prices },
-    { k: "install", t: "Install Tagbook on this phone", d: "So it opens like an app and can notify you.", go: "Show me", done: !!st.installed || standalone() || (!isPhone() && !installEvt) },
+    { k: "install", t: `Install Tagbook on this ${device()}`, d: "So it opens like an app and can notify you.", go: "Show me", done: !!st.installed || standalone() || (!isPhone() && !installEvt) },
     { k: "bank", t: "Add your bank details", d: "Your bill shows customers where to pay.", go: "Add", done: !!hasBank() },
     { k: "staff", t: "Add your staff", d: "Each staff gets their own login.", go: "Add", done: staffList.some(x => x.role !== "owner") || !!st.alone, alone: true },
     { k: "push", t: "Turn on notifications", d: "Get a buzz when staff log clothes.", go: "Turn on", done: pushSupported() && Notification.permission === "granted" },
@@ -1102,11 +1122,13 @@ function wireSetup() {
 
 /* After login: a card on the main screen until Tagbook is installed on this phone */
 const isPhone = () => /Android|iPhone|iPod/i.test(navigator.userAgent);
+// What to call this device in messages: install and notifications aren't only on phones.
+const device = () => isPhone() ? "phone" : isIOS || /Android/i.test(navigator.userAgent) ? "tablet" : "laptop";
 const installCardLater = () => { try { return Date.now() - (+localStorage.getItem("tb-install-card") || 0) < 864e5; } catch (_) { return false; } };
 function installCard() {
   if (standalone() || installCardLater() || (!installEvt && !isPhone())) return "";
   const steps = installEvt ? "" : installSteps();
-  return `<section class="scard icard"><div class="ihead"><img src="/icon-192.png" alt=""><div><b>Install Tagbook on this phone</b><span>It opens like an app, stays logged in and can send you notifications.</span></div></div>
+  return `<section class="scard icard"><div class="ihead"><img src="/icon-192.png" alt=""><div><b>Install Tagbook on this ${device()}</b><span>It opens like an app, stays logged in and can send you notifications.</span></div></div>
     ${steps}<div class="row">${installEvt ? `<button class="btn btn-primary" id="icgo">Install</button>` : ""}<button class="btn btn-ghost" id="iclater">Later</button></div></section>`;
 }
 function installSteps() {
@@ -2304,16 +2326,16 @@ async function drawPushBox() {
   const box = $("#pushbox"); if (!box) return;
   const st = await pushState();
   const html = {
-    on: `<p class="pushon">On for this phone</p><button class="btn btn-ghost" id="pushoff">Turn off on this phone</button>`,
+    on: `<p class="pushon">On for this ${device()}</p><button class="btn btn-ghost" id="pushoff">Turn off on this ${device()}</button>`,
     off: `<button class="btn btn-primary" id="pushgo">Turn on notifications</button>`,
-    blocked: `<p class="hint">Notifications are blocked for Tagbook on this phone. Allow them in your phone's settings (Site settings → Notifications), then come back here.</p>`,
+    blocked: `<p class="hint">Notifications are blocked for Tagbook on this ${device()}. Allow them in your ${isPhone() ? "phone's" : "browser's"} settings (Site settings → Notifications), then come back here.</p>`,
     "ios-install": `<p class="hint">On iPhone: tap Share (or ⋯ then Share), then “Add to Home Screen”. Open Tagbook from the Home Screen and turn notifications on here.</p>`,
     unsupported: `<p class="hint">This browser can't show notifications. Use Chrome on your phone.</p>`,
   }[st];
   if (!$("#pushbox")) return;
   box.innerHTML = html;
   if ($("#pushgo")) $("#pushgo").onclick = async () => { $("#pushgo").disabled = true; await enablePush(); drawPushBox(); };
-  if ($("#pushoff")) $("#pushoff").onclick = async () => { await disablePush(); toast("Notifications off for this phone"); drawPushBox(); };
+  if ($("#pushoff")) $("#pushoff").onclick = async () => { await disablePush(); toast(`Notifications off for this ${device()}`); drawPushBox(); };
 }
 function wireAccount() {
   drawPushBox();
