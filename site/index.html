@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261116163600";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261116171138";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -789,6 +789,9 @@ textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12
 .onotes{margin:6px 0 4px;font-size:15px}.onotes p{margin:2px 0}.onotes .mini{margin-top:6px}
 .onoteedit{margin-top:8px}
 .who .due{color:var(--accent)}.who .late{color:var(--owes)}
+.cnote{margin:8px 0 0;font-size:14px;color:var(--accent-deep);font-weight:600}
+.rother{gap:8px;margin-top:8px}.rother input{flex:1;min-width:0;margin:0}.rother .btn{width:auto;flex:none;margin:0}
+.chips.cpick,.chips.rpick{flex-wrap:wrap;overflow:visible;padding-bottom:0}
 </style>
 </head><body>
 <div id="boot" class="loading washing" role="status"><div class="lart big"><svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
@@ -819,7 +822,7 @@ textarea#rmk,textarea#nrm{width:100%;font:inherit;font-size:16px;padding:10px 12
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261116163600"></script>
+<script src="/app.js?v=20261116171138"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

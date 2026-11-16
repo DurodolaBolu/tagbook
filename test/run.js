@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
-const db = { send_log: [], quick_replies: [], shop_followups: [],
+const db = { send_log: [], quick_replies: [], shop_followups: [], shop_remarks: [],
   shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
@@ -28,7 +28,7 @@ function filterRows(rows, params) {
     if (op === "in") { const set = val.replace(/^\(|\)$/g, "").split(",").map(s => s.replace(/"/g, "")); rows = rows.filter(r => set.includes(String(r[k]))); } }
   return rows;
 }
-const pk = { send_log: "id", quick_replies: "id", shop_followups: "shop_id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
+const pk = { send_log: "id", quick_replies: "id", shop_followups: "shop_id", shop_remarks: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
 const errors = [];
 async function handle(route) {
   const req = route.request(), u = new URL(req.url()), p = u.pathname, method = req.method();
@@ -106,7 +106,7 @@ async function handle(route) {
     else { const clash = db.customers.find(cc => cc.mark === x.mark); if (clash) return send(400, { message: "MARK_TAKEN:" + clash.name, code: "P0001" });
       c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, greet: (current === ownerId && x.greet) || null, greet_asked: current === ownerId && "greet" in x, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
     const no = db.shops[0].next_no++; const id = uid();
-    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, express: x.express, wait_get: !!x.wait_get, collect_at: x.collect_at || null, remarks: x.remarks || null, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
+    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, express: x.express, wait_get: !!x.wait_get, collect_at: x.collect_at || null, remarks: x.remarks || null, money_found: x.money_found || null, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
     let auto = !x.express && !x.pickup, unit = [], total = 0;
     for (const it of x.items) { const item = db.items.find(i => i.id === it.id); const pr = db.item_prices.find(p => p.item_id === it.id); const v = pr && pr.prices[it.svc]; if (!item || item.custom || v == null) { auto = false; unit.push(null); } else { unit.push(v); total += v * it.qty; } }
     let paid = x.paid || 0; if (auto && paid > total) paid = total;
@@ -318,17 +318,24 @@ async function handle(route) {
     await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300);
     await page.click("[data-pick]"); await page.waitForTimeout(200);
     await page.click("[data-add]"); await page.waitForTimeout(200);
-    await page.click('[data-spd="wait"]'); await page.waitForTimeout(200);
-    const tomorrow = new Date(Date.now() + 864e5); const ds = tomorrow.toISOString().slice(0, 10);
-    await page.fill("#cdt", ds); await page.dispatchEvent("#cdt", "change"); await page.fill("#ctm", "16:00"); await page.dispatchEvent("#ctm", "change");
-    await page.fill("#rmk", "Stain on the white shirt collar. N500 found in trouser pocket.");
-    await page.screenshot({ path: path.join(out, "log.png"), fullPage: true });
+    await page.click("[data-cday]"); await page.waitForTimeout(150); await page.click('[data-ctime="14:00"]'); await page.waitForTimeout(150);
+    await page.click('[data-rm="Stain"]'); await page.waitForTimeout(100); await page.click('[data-rm="Missing button"]'); await page.waitForTimeout(100);
+    await page.click("[data-money]"); await page.waitForTimeout(200); await page.fill("#mp-in", "500"); await page.screenshot({ path: path.join(out, "money.png") }); await page.click("#mp-ok"); await page.waitForTimeout(200);
+    await page.click("[data-rmo]"); await page.waitForTimeout(150); await page.fill("#rmo-in", "Faded collar"); await page.click("#rmo-add"); await page.waitForTimeout(300);
+    console.log("shop list saved:", JSON.stringify(db.shop_remarks || []));
     await page.click("#save"); await page.waitForTimeout(1200);
-    const o = db.orders[db.orders.length - 1]; console.log("saved order:", o.wait_get, o.express, o.collect_at, o.remarks);
+    const o = db.orders[db.orders.length - 1]; console.log("saved order:", o.wait_get, o.express, o.collect_at, o.remarks, o.money_found);
     await page.screenshot({ path: path.join(out, "order.png"), fullPage: true });
     console.log("list msg:", JSON.stringify(await page.evaluate(() => { const e = document.querySelector("#wamsg-list"); return e && e.textContent; })));
-    await page.click("#nedit"); await page.waitForTimeout(300); await page.fill("#nrm", "Button missing on blue shirt."); await page.click("#ngo"); await page.waitForTimeout(600);
+    await page.click("#nedit"); await page.waitForTimeout(300); await page.click('[data-rm="Burn mark"]'); await page.waitForTimeout(200); await page.screenshot({ path: path.join(out, "edit.png"), fullPage: true }); await page.click("#ngo"); await page.waitForTimeout(600);
     console.log("edited remarks:", db.orders[db.orders.length - 1].remarks);
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.click("[data-add]"); await page.waitForTimeout(150);
+    await page.click('[data-spd="exp"]'); await page.waitForTimeout(150); await page.click('[data-exd="2"]'); await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(out, "log-express.png"), fullPage: true });
+    await page.click('[data-spd="wait"]'); await page.waitForTimeout(150); await page.screenshot({ path: path.join(out, "log-wait.png"), fullPage: true });
+    await page.click("#save"); await page.waitForTimeout(1200);
+    const o2 = db.orders[db.orders.length - 1]; console.log("wait order:", o2.wait_get, o2.express, o2.collect_at);
     await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(out, "list.png") });
     process.exit(0);

@@ -128,10 +128,11 @@ async function load() {
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
     fetchAll("customers", "id,name,mark,greet,greet_asked,inv_name"),
-    fetchAll("orders", "id,no,customer_id,branch_id,items,express,wait_get,pickup,collect_at,remarks,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
+    fetchAll("orders", "id,no,customer_id,branch_id,items,express,wait_get,pickup,collect_at,remarks,money_found,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
   ]);
   if (base[0].error) throw base[0].error;
   shop = base[0].data; BRANCHES = base[1]; customers = base[3];
+  if (newOpts()) sb.from("shop_remarks").select("text").order("created_at").then(({ data }) => { if (data) shopRemarks = data.map(r => r.text); });
   loadPlan().then(() => { if (me && (tab === "orders" || tab === "new" || (tab === "prices" && setTab === "plan"))) render(); });
   let prices = {}, phones = {}, money = {};
   if (own()) {
@@ -156,7 +157,7 @@ async function load() {
   PRICES = base[2].map(i => ({ ...i, p: prices[i.id] || {} }));
   customers.forEach(c => c.phone = phones[c.id] || "");
   const all = base[4].map(o => ({
-    id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, items: o.items || [], express: o.express, wait: !!o.wait_get, pickup: o.pickup, collect: o.collect_at ? Date.parse(o.collect_at) : 0, remarks: o.remarks || "",
+    id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, items: o.items || [], express: o.express, wait: !!o.wait_get, pickup: o.pickup, collect: o.collect_at ? Date.parse(o.collect_at) : 0, remarks: o.remarks || "", money: o.money_found || 0,
     status: o.status, checking: o.checking, checked: o.checked || {}, notified: o.notified, billed: o.billed, settled: o.settled, list_sent: o.list_sent,
     at: Date.parse(o.created_at), m: { ...emptyMoney(), ...(money[o.id] || {}) }, again: {},
     cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "",
@@ -222,12 +223,19 @@ function subscribe() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && me) refresh(); });
 
 /* ---------- Money ---------- */
-const sPriv = () => priv || { express_type: "manual", express_value: 0, bank_name: "", acct_no: "", acct_name: "", inv_logo: "", inv_color: "", inv_tagline: "", inv_address: "", inv_phone: "", inv_email: "", inv_terms: "" };
+const sPriv = () => priv || { express_type: "manual", express_value: 0, wait_type: "manual", wait_value: 0, bank_name: "", acct_no: "", acct_name: "", inv_logo: "", inv_color: "", inv_tagline: "", inv_address: "", inv_phone: "", inv_email: "", inv_terms: "" };
 const hasBank = () => { const p = sPriv(); return p.bank_name.trim() && p.acct_no.length === 10 && p.acct_name.trim(); };
 const payTo = () => { const p = sPriv(); return hasBank() ? `\n\nPay by transfer to:\n${p.bank_name.trim()}\n${p.acct_no}\n${p.acct_name.trim()}\nPlease send your payment receipt here.` : ""; };
 const expManual = () => sPriv().express_type === "manual";
-function expressFor(sub) { const p = sPriv(); return p.express_type === "manual" ? 0 : p.express_type === "times" ? sub * Math.max(1, p.express_value) - sub : p.express_type === "percent" ? Math.round(sub * p.express_value / 100 / 50) * 50 : p.express_value; }
-const expressLabel = () => { const p = sPriv(); return p.express_type === "manual" ? "" : p.express_type === "times" ? ` (${p.express_value}× the bill)` : p.express_type === "percent" ? ` (+${p.express_value}%)` : ` (+${naira(p.express_value)})`; };
+// Express delivery and Wait & get each have their own charge setting; an order has one or the other, kept in express_amt.
+const chargeFor = (sub, type, v) => type === "manual" ? 0 : type === "times" ? sub * Math.max(1, v) - sub : type === "percent" ? Math.round(sub * v / 100 / 50) * 50 : v;
+const chargeLabel = (type, v) => type === "manual" ? "" : type === "times" ? ` (${v}× the bill)` : type === "percent" ? ` (+${v}%)` : ` (+${naira(v)})`;
+function expressFor(sub) { const p = sPriv(); return chargeFor(sub, p.express_type, p.express_value); }
+const expressLabel = () => { const p = sPriv(); return chargeLabel(p.express_type, p.express_value); };
+const spName = o => o.wait ? "Wait & get" : "Express delivery";
+const spManual = o => o.wait ? sPriv().wait_type === "manual" : expManual();
+const spFor = (o, sub) => { const p = sPriv(); return o.wait ? chargeFor(sub, p.wait_type, p.wait_value) : expressFor(sub); };
+const spLabel = o => { const p = sPriv(); return o.wait ? chargeLabel(p.wait_type, p.wait_value) : expressLabel(); };
 function unitPrice(o, it, i) {
   if (o.m.unit && o.m.unit[i] != null) return o.m.unit[i];
   const p = item(it.id) || {};
@@ -239,7 +247,7 @@ function calc(o) {
   const count = o.items.reduce((s, it) => s + it.qty, 0);
   if (!own()) return { sub: 0, exp: 0, total: 0, count };
   const sub = o.items.reduce((s, it, i) => s + unitPrice(o, it, i) * it.qty, 0);
-  const exp = o.express ? (expManual() || (o.billed && o.m.express_amt) ? (+o.m.express_amt || 0) : expressFor(sub)) : 0;
+  const exp = o.express || o.wait ? (spManual(o) || (o.billed && o.m.express_amt) ? (+o.m.express_amt || 0) : spFor(o, sub)) : 0;
   const total = Math.max(0, sub + exp + (+o.m.delivery || 0) - (+o.m.discount || 0));
   return { sub, exp, total, count };
 }
@@ -1283,7 +1291,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, wait: false, pickup: false, cDate: "", cTime: "", remarks: "", askSpecial: false, specialName: "", specialPrice: 0, paid: 0, saving: false }; }
+function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, wait: false, pickup: false, cDate: "", cTime: "", cOther: false, tOther: false, expDays: 0, rm: [], money: 0, rmOther: false, askSpecial: false, specialName: "", specialPrice: 0, paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -1387,9 +1395,9 @@ function renderNew() {
       <div class="qty"><button data-dec="${i}" aria-label="Remove one">−</button><b style="min-width:22px;text-align:center">${it.qty}</b><button data-inc="${i}" aria-label="Add one">+</button></div></div>`).join("")}</div>
     ${shop.wait_get_on ? `<label>How fast?</label><div class="chips" style="margin:0">${[["std", "Standard"], ["exp", "Express"], ["wait", "Wait & get"]].map(([k, l]) => `<button class="chip" data-spd="${k}" aria-pressed="${(k === "wait" && d.wait) || (k === "exp" && d.express && !d.wait) || (k === "std" && !d.express && !d.wait)}">${l}</button>`).join("")}</div>`
       : `<label class="toggle"><span>Express delivery</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>`}
-    ${shop.collect_dates ? `<label for="cdt">When will they collect?</label><div class="row cwhen"><input type="date" id="cdt" min="${localDate(Date.now())}" value="${d.cDate}" aria-label="Collection date"><input type="time" id="ctm" value="${d.cTime}" aria-label="Collection time (optional)"></div><p class="hint">Time is optional. The date goes in the customer's list of clothes.</p>` : ""}
+    ${shop.collect_dates ? collectPicker(d) : ""}
     <label class="toggle"><span>Pickup and delivery</span><input type="checkbox" id="pk" ${d.pickup ? "checked" : ""}></label>
-    ${newOpts() ? `<label for="rmk">Remarks <span class="opt">(optional)</span></label><textarea id="rmk" rows="2" maxlength="300" placeholder="e.g. Stain on the white shirt collar. ₦500 found in trouser pocket.">${esc(d.remarks)}</textarea>` : ""}
+    ${newOpts() ? remarkPicker(d) : ""}
     <label for="pd">Paid now (₦)</label><input id="pd" ${moneyAttrs} placeholder="0" value="${d.paid || ""}">
     ${d.paid ? "" : `<p class="hint">Leave empty if the customer will pay later.</p>`}
     <div class="lines"><div><b>Clothes logged</b><b>${count}</b></div></div>
@@ -1430,9 +1438,7 @@ function renderNew() {
   if ($("#br")) $("#br").onchange = e => d.branch = e.target.value;
   if ($("#ex")) $("#ex").onchange = e => { d.express = e.target.checked; };
   view.querySelectorAll("[data-spd]").forEach(b => b.onclick = () => { d.express = b.dataset.spd === "exp"; d.wait = b.dataset.spd === "wait"; renderNew(); });
-  if ($("#cdt")) $("#cdt").onchange = e => { d.cDate = e.target.value; };
-  if ($("#ctm")) $("#ctm").onchange = e => { d.cTime = e.target.value; };
-  if ($("#rmk")) $("#rmk").oninput = e => { d.remarks = e.target.value.slice(0, 300); };
+  wireCollect(view, d, renderNew); wireRemarks(view, d, renderNew);
   $("#pk").onchange = e => { d.pickup = e.target.checked; };
   view.querySelectorAll("[data-hm]").forEach(b => b.onclick = () => { d.hasMark = b.dataset.hm; renderNew(); });
   view.querySelectorAll("[data-svc]").forEach(b => b.onclick = () => { d.svc = b.dataset.svc; renderNew(); });
@@ -1473,9 +1479,8 @@ function renderNew() {
       : !d.items.length ? "Add at least one cloth to the order." : "";
     if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
     const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
-    if (shop.collect_dates && d.cTime && !d.cDate) { showErr("Choose the collection date too, or clear the time."); return; }
     const base = { branch_id: d.branch, items: d.items.map(i => ({ ...i })), express: d.express && !d.wait, wait_get: !!(shop.wait_get_on && d.wait), pickup: d.pickup, paid: d.paid || 0, method: d.method,
-      collect_at: shop.collect_dates ? collectIso(d.cDate, d.cTime) : null, remarks: tidy(d.remarks) || null };
+      collect_at: shop.collect_dates ? collectWhen(d) : null, remarks: newOpts() && d.rm.length ? d.rm.join("; ").slice(0, 300) : null, money_found: newOpts() && d.money ? d.money : null };
     const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark, ...(own() ? { greet: d.greet || null } : {}) };
     d.saving = true; renderNew();
     const { data, error } = await sb.rpc("log_order", { p });
@@ -1502,13 +1507,13 @@ const NAME_MAX = 50;
 function billLines(o) {
   const k = calc(o);
   return o.items.map((it, i) => `${it.qty} x ${pname(it)} ${naira(unitPrice(o, it, i) * it.qty)}`).join("\n")
-    + (k.exp ? `\nExpress delivery: ${naira(k.exp)}` : "") + (o.m.delivery ? `\nPickup/delivery: ${naira(o.m.delivery)}` : "") + (o.m.discount ? `\nDiscount: -${naira(o.m.discount)}` : "");
+    + (k.exp ? `\n${spName(o)}: ${naira(k.exp)}` : "") + (o.m.delivery ? `\nPickup/delivery: ${naira(o.m.delivery)}` : "") + (o.m.discount ? `\nDiscount: -${naira(o.m.discount)}` : "");
 }
 function message(o, type) {
   const c = cust(o.cid), k = calc(o), hi = hello(c);
   if (type === "list") {
     const list = o.items.map(it => `${it.qty} x ${pname(it)} (${SERVICES[it.svc]})`).join("\n");
-    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${o.wait ? "\nWait & get" : ""}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks}` : ""}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
+    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${o.wait ? "\nWait & get" : ""}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
   if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
@@ -1562,10 +1567,10 @@ function receiptHtml(o) {
     <div class="rsep"></div>
     ${o.items.map((it, i) => `<div class="ri"><div class="rr"><span>${it.qty} × ${esc(pname(it))}</span><span>${priced ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div><small>${SERVICES[it.svc]}</small></div>`).join("")}
     <div class="rsep"></div>
-    ${priced ? `${k.exp ? row("Express delivery", naira(k.exp)) : ""}${o.m.delivery ? row("Pickup / delivery", naira(o.m.delivery)) : ""}${o.m.discount ? row("Discount", "-" + naira(o.m.discount)) : ""}
+    ${priced ? `${k.exp ? row(spName(o), naira(k.exp)) : ""}${o.m.delivery ? row("Pickup / delivery", naira(o.m.delivery)) : ""}${o.m.discount ? row("Discount", "-" + naira(o.m.discount)) : ""}
       ${row("<b>TOTAL</b>", `<b>${naira(total)}</b>`, "rbig")}${row("Paid", naira(o.m.paid))}${row(due ? "<b>Balance</b>" : "Balance", due ? `<b>${naira(due)}</b>` : "Fully paid")}`
       : row("<b>Clothes</b>", `<b>${k.count}</b>`, "rbig") + `<div class="rc">${own() ? "Bill to follow when your clothes are ready." : "Keep this slip for pickup."}</div>`}
-    ${o.remarks ? `<div class="rsep"></div><div class="rc">Noted: ${esc(o.remarks)}</div>` : ""}
+    ${o.remarks || o.money ? `<div class="rsep"></div><div class="rc">${o.remarks ? `Noted: ${esc(o.remarks.split("; ").join(", "))}` : ""}${o.remarks && o.money ? "<br>" : ""}${o.money ? `Money found in pocket: ${naira(o.money)}` : ""}</div>` : ""}
     ${bank}
     <div class="rsep"></div><div class="rc">Thank you for your patronage.</div>`;
 }
@@ -1716,7 +1721,7 @@ async function invoicePages(o, c = cust(o.cid)) {
 
   // Totals, ending in the balance bar
   const rows = [["Subtotal", naira(k.sub)]];
-  if (k.exp) rows.push(["Express delivery", naira(k.exp)]);
+  if (k.exp) rows.push([spName(o), naira(k.exp)]);
   if (+o.m.delivery) rows.push(["Pickup / delivery", naira(o.m.delivery)]);
   if (+o.m.discount) rows.push(["Discount", "-" + naira(o.m.discount)]);
   const last = (o.m.payments || []).slice(-1)[0];
@@ -1930,7 +1935,7 @@ function fixView(o) {
       ${own() ? `<button class="btn btn-primary" id="fxrestore">Bring this order back</button>` : ""}`;
   } else if (oMode === "items") {
     const d = oDraft, n = draftToOrder(o, d);
-    const tmp = { ...o, items: n.items, m: { ...o.m, unit: o.billed ? n.unit : null, custom: n.custom, express_amt: expManual() ? o.m.express_amt : 0 }, billed: false };
+    const tmp = { ...o, items: n.items, m: { ...o.m, unit: o.billed ? n.unit : null, custom: n.custom, express_amt: spManual(o) ? o.m.express_amt : 0 }, billed: false };
     const now = calc(o).total, next = n.items.length ? calc(tmp).total : 0;
     const changed = JSON.stringify(n.items) !== JSON.stringify(o.items);
     const pick = PRICES.filter(p => !p.hidden), addIt = item(fxAdd && fxAdd.id) || pick[0] || {};
@@ -1997,7 +2002,7 @@ function fixView(o) {
       if (wasBilled) {
         o.m.unit = n.unit;
         if (n.missing) o.m.billed_at = null;
-        else { if (!expManual()) o.m.express_amt = 0; const kk = calc({ ...o, billed: false }); o.m.express_amt = kk.exp; o.m.total = kk.total; }
+        else { if (!spManual(o)) o.m.express_amt = 0; const kk = calc({ ...o, billed: false }); o.m.express_amt = kk.exp; o.m.total = kk.total; }
       }
       const ok = await put("orders", { id: o.id }, { items: o.items, checked: {}, checking: false }) && await saveMoney(o);
       if (!ok) return;
@@ -2032,39 +2037,121 @@ function fixView(o) {
 }
 
 /* ---------- Order detail ---------- */
-/* Collection date and remarks on an order: staff and owner can add or change them after logging. */
-let noteEdit = null;
+/* Collection date and remarks (try-out in BrightWash until 17 Nov). Staff and owner can add or change them after logging. */
+const REMARK_PRESETS = ["Stain", "Torn or hole", "Missing button", "Colour fading", "Burn mark", "Broken zip", "Item found in pocket"];
+let shopRemarks = [], noteEdit = null, ne = null;
+const dayAt = n => { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + n); return t.getTime(); };
+const TIMES = [["10:00", "Morning"], ["14:00", "Afternoon"], ["17:00", "Evening"]];
+// The collection time picked from chips, or typed under "Exact time"
+function collectPicker(st, edit) {
+  if (st.wait && !edit) return `<label>Collection</label><p class="cnote">Today. The customer is waiting for it.</p>`;
+  if (st.express && !edit) return `<label>Ready in <span class="opt">(optional)</span></label>
+    <div class="chips" style="margin:0">${[1, 2, 3].map(n => `<button class="chip" data-exd="${n}" aria-pressed="${st.expDays === n}">${n} day${n > 1 ? "s" : ""}</button>`).join("")}</div>
+    ${st.expDays ? `<p class="cnote">Ready ${fmtDay(dayAt(st.expDays))}. It goes in the customer's list of clothes.</p>` : ""}`;
+  const days = [1, 2, 3, 4, 5, 6].map(n => localDate(dayAt(n)));
+  const otherOn = st.cOther || (st.cDate && !days.includes(st.cDate));
+  const timeOther = st.tOther || (st.cTime && !TIMES.some(t => t[0] === st.cTime));
+  return `<label>When will they collect? <span class="opt">(optional)</span></label>
+    <div class="chips cpick" style="margin:0">${days.map((v, i) => `<button class="chip" data-cday="${v}" aria-pressed="${st.cDate === v && !otherOn}">${i === 0 ? "Tomorrow" : new Date(dayAt(i + 1)).toLocaleDateString("en-GB", { weekday: "short", day: "numeric" })}</button>`).join("")}<button class="chip" data-cday="other" aria-pressed="${otherOn}">Other date</button></div>
+    ${otherOn ? `<input type="date" id="cdt" min="${localDate(Date.now())}" value="${st.cDate}" aria-label="Collection date" style="margin-top:8px">` : ""}
+    ${st.cDate ? `<div class="chips cpick" style="margin:8px 0 0">${TIMES.map(([v, l]) => `<button class="chip" data-ctime="${v}" aria-pressed="${st.cTime === v && !timeOther}">${l}</button>`).join("")}<button class="chip" data-ctime="other" aria-pressed="${timeOther}">Exact time</button></div>
+      ${timeOther ? `<input type="time" id="ctm" value="${st.cTime}" aria-label="Collection time" style="margin-top:8px">` : ""}
+      <p class="cnote">Collect ${esc(fmtCollect(Date.parse(collectIso(st.cDate, st.cTime))))}</p>` : ""}`;
+}
+function collectWhen(st) {
+  if (st.wait) return collectIso(localDate(Date.now()), "");
+  if (st.express) return st.expDays ? collectIso(localDate(dayAt(st.expDays)), "") : null;
+  return collectIso(st.cDate, st.cTime);
+}
+function wireCollect(root, st, rr) {
+  root.querySelectorAll("[data-exd]").forEach(b => b.onclick = () => { const n = +b.dataset.exd; st.expDays = st.expDays === n ? 0 : n; rr(); });
+  root.querySelectorAll("[data-cday]").forEach(b => b.onclick = () => {
+    const v = b.dataset.cday;
+    if (v === "other") { st.cOther = !st.cOther; if (!st.cOther) st.cDate = ""; }
+    else { st.cOther = false; st.cDate = st.cDate === v ? "" : v; }
+    if (!st.cDate) { st.cTime = ""; st.tOther = false; }
+    rr();
+  });
+  root.querySelectorAll("[data-ctime]").forEach(b => b.onclick = () => { const v = b.dataset.ctime; if (v === "other") { st.tOther = !st.tOther; if (!st.tOther) st.cTime = ""; } else { st.tOther = false; st.cTime = st.cTime === v ? "" : v; } rr(); });
+  const dt = root.querySelector("#cdt"); if (dt) dt.onchange = e => { st.cDate = e.target.value; rr(); };
+  const tm = root.querySelector("#ctm"); if (tm) tm.onchange = e => { st.cTime = e.target.value; rr(); };
+}
+function remarkPicker(st) {
+  const opts = [...new Set([...REMARK_PRESETS, ...shopRemarks, ...st.rm])];
+  return `<label>Remarks <span class="opt">(optional: anything you noticed on the clothes)</span></label>
+    <div class="chips rpick" style="margin:0">${opts.map(r => `<button class="chip" data-rm="${esc(r)}" aria-pressed="${st.rm.includes(r)}">${esc(r)}</button>`).join("")}
+      <button class="chip" data-money aria-pressed="${!!st.money}">${st.money ? `Money found (${naira(st.money)})` : "Money found in pocket"}</button>
+      <button class="chip" data-rmo aria-pressed="${!!st.rmOther}">+ Other</button></div>
+    ${st.rmOther ? `<div class="row rother"><input id="rmo-in" maxlength="40" placeholder="What else did you notice?" autocomplete="off"><button class="btn btn-primary" id="rmo-add">Add</button></div><p class="hint">It's saved to your shop's list, so next time you just tap it.</p>` : ""}`;
+}
+function wireRemarks(root, st, rr) {
+  root.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { const r = b.dataset.rm; st.rm = st.rm.includes(r) ? st.rm.filter(x => x !== r) : [...st.rm, r]; rr(); });
+  const m = root.querySelector("[data-money]"); if (m) m.onclick = () => moneyPop(st.money, v => { st.money = v; rr(); });
+  const o = root.querySelector("[data-rmo]"); if (o) o.onclick = () => { st.rmOther = !st.rmOther; rr(); const i = document.querySelector("#rmo-in"); if (i) i.focus(); };
+  const add = root.querySelector("#rmo-add"), inp = root.querySelector("#rmo-in");
+  if (inp) inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); add.click(); } };
+  if (add) add.onclick = () => {
+    const t = tidy(inp.value).replace(/;/g, ",").slice(0, 40); if (!t) { inp.focus(); return; }
+    const known = [...REMARK_PRESETS, ...shopRemarks].find(x => x.toLowerCase() === t.toLowerCase());
+    const label = known || t;
+    if (!st.rm.includes(label)) st.rm = [...st.rm, label];
+    if (!known) { shopRemarks.push(t); sb.from("shop_remarks").insert({ shop_id: shop.id, text: t }).then(() => { }); }
+    st.rmOther = false; rr();
+  };
+}
+function moneyPop(cur, done) {
+  const p = document.createElement("div"); p.className = "popbg";
+  p.innerHTML = `<section class="popcard" role="dialog" aria-modal="true" aria-labelledby="mp-t">
+    <h3 id="mp-t" style="margin:0 0 6px">How much money did you find?</h3>
+    <p class="hint" style="margin-top:0">It's recorded on the order and goes in the customer's list of clothes.</p>
+    <input id="mp-in" ${moneyAttrs} placeholder="Amount in ₦" value="${cur || ""}" aria-label="Amount found">
+    <div class="row" style="margin-top:12px">${cur ? `<button class="btn btn-ghost" id="mp-rm">Remove</button>` : `<button class="btn btn-ghost" id="mp-no">Cancel</button>`}<button class="btn btn-primary" id="mp-ok">Save</button></div></section>`;
+  document.body.appendChild(p);
+  const inp = p.querySelector("#mp-in"); inp.focus();
+  inp.oninput = () => { const c = digits(inp.value); if (inp.value !== c) inp.value = c; };
+  const close = v => { p.remove(); if (v !== undefined) done(v); };
+  p.onclick = e => { if (e.target === p) close(); };
+  const no = p.querySelector("#mp-no"); if (no) no.onclick = () => close();
+  const rm = p.querySelector("#mp-rm"); if (rm) rm.onclick = () => close(0);
+  p.querySelector("#mp-ok").onclick = () => { const v = Math.min(num(digits(inp.value)), 10000000); if (!v) { toast("Type the amount found"); inp.focus(); return; } close(v); };
+}
 function collectTag(o) {
   if (!o.collect || o.cancelled || o.status === "picked") return "";
   const today = localDate(Date.now()), day = localDate(o.collect);
   return day < today ? ` · <b class="late">collect was ${esc(fmtDay(o.collect))}</b>` : day === today ? ` · <b class="due">collect today</b>` : ` · collect ${esc(fmtCollect(o.collect))}`;
 }
 function noteBlock(o) {
-  if (!newOpts() && !o.remarks && !o.collect) return "";
-  if (o.cancelled) return o.remarks ? `<p class="onotes"><b>Remarks:</b> ${esc(o.remarks)}</p>` : "";
-  const showDate = shop.collect_dates || o.collect;
-  if (noteEdit === o.id) return `<div class="check onoteedit">
-    ${showDate ? `<label for="ncd" style="margin-top:0">Collection date</label><div class="row cwhen"><input type="date" id="ncd" value="${o.collect ? localDate(o.collect) : ""}" aria-label="Collection date"><input type="time" id="nct" value="${o.collect ? localTime(o.collect) : ""}" aria-label="Collection time (optional)"></div>` : ""}
-    <label for="nrm" ${showDate ? "" : `style="margin-top:0"`}>Remarks</label><textarea id="nrm" rows="2" maxlength="300" placeholder="e.g. Stain on the white shirt collar.">${esc(o.remarks)}</textarea>
-    <div class="row"><button class="btn btn-ghost" id="nno">Cancel</button><button class="btn btn-primary" id="ngo">Save</button></div></div>`;
-  const lines = [o.collect ? `<b>Collection:</b> ${esc(fmtCollect(o.collect))}` : "", o.remarks ? `<b>Remarks:</b> ${esc(o.remarks)}` : ""].filter(Boolean);
+  if (!newOpts() && !o.remarks && !o.collect && !o.money) return "";
+  const lines = [o.collect ? `<b>Collection:</b> ${esc(fmtCollect(o.collect))}` : "", o.remarks ? `<b>Remarks:</b> ${esc(o.remarks.split("; ").join(", "))}` : "", o.money ? `<b>Money found in pocket:</b> ${naira(o.money)}` : ""].filter(Boolean);
+  if (o.cancelled) return lines.length ? `<div class="onotes">${lines.map(l => `<p>${l}</p>`).join("")}</div>` : "";
+  const showDate = (shop.collect_dates || o.collect) && !o.wait;
+  if (noteEdit === o.id && ne) return `<div class="check onoteedit">
+    ${showDate ? collectPicker(ne, true) : ""}
+    ${remarkPicker(ne)}
+    <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="nno">Cancel</button><button class="btn btn-primary" id="ngo">Save</button></div></div>`;
   const add = !lines.length ? (showDate ? "Add collection date or remarks" : "Add remarks") : "Edit";
   return `<div class="onotes">${lines.map(l => `<p>${l}</p>`).join("")}<button class="mini" id="nedit">${add}</button></div>`;
 }
 function wireNote(sh, o) {
-  const ed = sh.querySelector("#nedit"); if (ed) ed.onclick = () => { noteEdit = o.id; openOrder(o.no); const t = sh.querySelector("#nrm"); if (t) t.focus(); };
-  const no = sh.querySelector("#nno"); if (no) no.onclick = () => { noteEdit = null; openOrder(o.no); };
+  const again = () => openOrder(o.no);
+  const ed = sh.querySelector("#nedit"); if (ed) ed.onclick = () => {
+    noteEdit = o.id;
+    ne = { wait: false, express: false, cDate: o.collect ? localDate(o.collect) : "", cTime: o.collect ? localTime(o.collect) : "", cOther: false, tOther: false, expDays: 0, rm: o.remarks ? o.remarks.split("; ").filter(Boolean) : [], money: o.money || 0, rmOther: false };
+    again();
+  };
+  if (noteEdit !== o.id || !ne) return;
+  wireCollect(sh, ne, again); wireRemarks(sh, ne, again);
+  const no = sh.querySelector("#nno"); if (no) no.onclick = () => { noteEdit = null; ne = null; again(); };
   const go = sh.querySelector("#ngo"); if (!go) return;
   go.onclick = async () => {
-    const dt = sh.querySelector("#ncd"), tm = sh.querySelector("#nct");
-    if (dt && tm && tm.value && !dt.value) { toast("Choose the collection date too, or clear the time."); return; }
-    const collect = dt ? collectIso(dt.value, tm && tm.value) : (o.collect ? new Date(o.collect).toISOString() : null);
-    const remarks = tidy(sh.querySelector("#nrm").value).slice(0, 300) || null;
+    const showDate = (shop.collect_dates || o.collect) && !o.wait;
+    const collect = showDate ? collectIso(ne.cDate, ne.cTime) : (o.collect ? new Date(o.collect).toISOString() : null);
+    const remarks = ne.rm.length ? ne.rm.join("; ").slice(0, 300) : null, money = ne.money || null;
     go.disabled = true;
-    if (!(await put("orders", { id: o.id }, { collect_at: collect, remarks }))) { go.disabled = false; return; }
-    o.collect = collect ? Date.parse(collect) : 0; o.remarks = remarks || ""; noteEdit = null;
+    if (!(await put("orders", { id: o.id }, { collect_at: collect, remarks, money_found: money }))) { go.disabled = false; return; }
+    o.collect = collect ? Date.parse(collect) : 0; o.remarks = remarks || ""; o.money = money || 0; noteEdit = null; ne = null;
     toast(o.list_sent && own() ? "Saved. Send the list of clothes again if the customer should know." : "Saved");
-    openOrder(o.no);
+    again();
   };
 }
 function openOrder(no) {
@@ -2093,7 +2180,8 @@ function openOrder(no) {
     if (canEditBill) {
       html += `<div class="lines">
         ${o.items.map((it, i) => { const p = item(it.id) || {}; return `<div><span>${it.qty} × ${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>${p.custom ? `<input data-cp="${i}" ${moneyAttrs} placeholder="Set price" value="${o.m.custom[i] || ""}" aria-label="Price for ${esc(pname(it))}">` : `<span>${naira(unitPrice(o, it, i) * it.qty)}</span>`}</div>`; }).join("")}
-        <div><label class="ck" style="margin:0"><input type="checkbox" id="ex" ${o.express ? "checked" : ""}> Express delivery${expressLabel()}</label>${expManual() ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.express && o.m.express_amt ? o.m.express_amt : ""}" aria-label="Express delivery amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>
+        ${o.wait ? `<div><span>Wait &amp; get${spLabel(o)}</span>${spManual(o) ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.m.express_amt || ""}" aria-label="Wait and get amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`
+        : `<div><label class="ck" style="margin:0"><input type="checkbox" id="ex" ${o.express ? "checked" : ""}> Express delivery${expressLabel()}</label>${expManual() ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.express && o.m.express_amt ? o.m.express_amt : ""}" aria-label="Express delivery amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`}
         <div><span>Pickup / delivery${o.pickup ? "<br><small style='color:var(--muted)'>Customer asked for it</small>" : ""}</span><input id="dl" ${moneyAttrs} placeholder="0" value="${o.m.delivery || ""}" aria-label="Pickup or delivery cost"></div>
         <div><span>Discount</span><input id="dc" ${moneyAttrs} placeholder="0" value="${o.m.discount || ""}" aria-label="Discount"></div>
         <div><b>Total</b><b id="tot">${naira(k.total)}</b></div></div>
@@ -2105,7 +2193,7 @@ function openOrder(no) {
     } else {
       html += `<div class="lines">
         ${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it))}</span><span>${naira(unitPrice(o, it, i) * it.qty)}</span></div>`).join("")}
-        ${k.exp ? `<div><span>Express delivery</span><span>${naira(k.exp)}</span></div>` : ""}
+        ${k.exp ? `<div><span>${spName(o)}</span><span>${naira(k.exp)}</span></div>` : ""}
         ${o.m.delivery ? `<div><span>Pickup / delivery</span><span>${naira(o.m.delivery)}</span></div>` : ""}
         ${o.m.discount ? `<div><span>Discount</span><span>−${naira(o.m.discount)}</span></div>` : ""}
         <div><b>Total</b><b>${naira(o.billed ? o.m.total : k.total)}</b></div></div>`;
@@ -2187,11 +2275,11 @@ function openOrder(no) {
   moneyInput($("#dc"), v => { o.m.discount = v; live(); });
   moneyInput($("#pay"), () => { });
   if ($("#ex")) $("#ex").onchange = e => { o.express = e.target.checked; if (!expManual()) o.m.express_amt = 0; else if (o.express && $("#exa")) $("#exa").focus(); live(); };
-  if ($("#exa")) moneyInput($("#exa"), v => { o.m.express_amt = v; if (v && !o.express) { o.express = true; $("#ex").checked = true; } live(); });
+  if ($("#exa")) moneyInput($("#exa"), v => { o.m.express_amt = v; if (v && !o.express && !o.wait) { o.express = true; $("#ex").checked = true; } live(); });
   const bill = $("#bill"); if (bill) bill.onclick = async () => {
     const miss = o.items.find((it, i) => (item(it.id) || {}).custom && !o.m.custom[i]);
     if (miss) { toast(`Set a price for ${pname(miss)} first`); return; }
-    if (o.express && expManual() && !(+o.m.express_amt > 0)) { toast("Type the express delivery amount"); $("#exa").focus(); return; }
+    if ((o.express || o.wait) && spManual(o) && !(+o.m.express_amt > 0)) { toast(`Type the ${spName(o).toLowerCase()} amount`); $("#exa").focus(); return; }
     if (!o.billed) lockPrices(o);
     const kk = calc(o);
     o.m.express_amt = kk.exp; o.m.total = kk.total; o.m.billed_at = o.m.billed_at || new Date().toISOString();
@@ -2351,7 +2439,11 @@ function renderSettings() {
        <input id="ev" ${moneyAttrs} value="${p.express_value}"><p class="hint" id="evx">${exampleExpress()}</p>`}`)
     + (!newOpts() ? "" : card("Order options", "Extra choices when logging clothes. Turn on only what your shop uses.",
       `<label class="toggle"><span>Collection date and time<small>Ask when the customer will come back for their clothes. It goes in their list of clothes.</small></span><input type="checkbox" id="oc" ${shop.collect_dates ? "checked" : ""}></label>
-       <label class="toggle"><span>Wait &amp; get<small>For customers who wait at the shop. Logging then shows Standard, Express or Wait &amp; get.</small></span><input type="checkbox" id="ow" ${shop.wait_get_on ? "checked" : ""}></label>`)); }
+       <label class="toggle"><span>Wait &amp; get<small>For customers who wait at the shop. Logging then shows Standard, Express or Wait &amp; get.</small></span><input type="checkbox" id="ow" ${shop.wait_get_on ? "checked" : ""}></label>`))
+    + (!newOpts() || !shop.wait_get_on ? "" : card("Wait & get charge", "Added to the bill when a customer waits for their clothes.",
+      `<div class="chips" style="margin:0 0 4px">${[["manual", "Type it each time"], ["percent", "Percentage extra"], ["times", "Times the bill (2×)"], ["fixed", "Fixed amount"]].map(([k, l]) => `<button class="chip" data-wt="${k}" aria-pressed="${p.wait_type === k}">${l}</button>`).join("")}</div>
+       ${p.wait_type === "manual" ? `<p class="hint">You type the Wait &amp; get amount on each order's bill.</p>` : `<label for="wv">${p.wait_type === "percent" ? "Extra percentage (%)" : p.wait_type === "times" ? "Multiply the bill by" : "Extra amount per order (₦)"}</label>
+       <input id="wv" ${moneyAttrs} value="${p.wait_value}"><p class="hint" id="wvx">${exampleWait()}</p>`}`)); }
   if (setTab === "branches") body = card("Branches", "Where customers drop clothes. With one branch, the app doesn't ask.",
       `${liveBranches().map(b => `<div class="row srow"><input data-bn="${b.id}" value="${esc(b.name)}" autocomplete="off" aria-label="Branch name">${liveBranches().length > 1 ? `<button class="mini danger" data-brm="${b.id}">Remove</button>` : ""}</div>`).join("")}
        <div class="row srow"><input id="nb" placeholder="New branch name" autocomplete="off" aria-label="New branch name"><button class="mini" id="nbb">Add</button></div>`);
@@ -2416,7 +2508,10 @@ function wireAccount() {
   $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } try { await disablePush(); } catch (_) { } await sb.auth.signOut(); location.hash = ""; location.reload(); };
 }
 function wireBusiness() {
-  [["#oc", "collect_dates"], ["#ow", "wait_get_on"]].forEach(([id, k]) => { const el = $(id); if (el) el.onchange = async e => { const v = e.target.checked; shop[k] = v; savedToast(await put("shops", { id: shop.id }, { [k]: v })); }; });
+  [["#oc", "collect_dates"], ["#ow", "wait_get_on"]].forEach(([id, k]) => { const el = $(id); if (el) el.onchange = async e => { const v = e.target.checked; shop[k] = v; savedToast(await put("shops", { id: shop.id }, { [k]: v })); if (k === "wait_get_on") renderSettings(); }; });
+  view.querySelectorAll("[data-wt]").forEach(b => b.onclick = async () => { const t = b.dataset.wt; await savePriv({ wait_type: t, wait_value: t === "percent" ? 50 : t === "times" ? 2 : t === "fixed" ? 1000 : 0 }); renderSettings(); });
+  if ($("#wv")) { moneyInput($("#wv"), v => { const t = priv.wait_type; priv.wait_value = t === "percent" ? Math.min(v, 300) : t === "times" ? Math.min(Math.max(v, 1), 5) : v; $("#wvx").textContent = exampleWait(); });
+    $("#wv").onchange = () => savePriv({ wait_value: priv.wait_value }); }
   const p = sPriv();
   $("#sn").onchange = async e => { const v = tidy(e.target.value).slice(0, NAME_MAX); if (!v) { e.target.value = shop.name; return; } shop.name = v; $("#shopname").textContent = shopName(); savedToast(await put("shops", { id: shop.id }, { name: v })); };
   const savePriv = async fields => { Object.assign(priv, fields); savedToast(await put("shop_private", { shop_id: shop.id }, fields)); };
@@ -2630,6 +2725,7 @@ function wirePrices() {
     addOpen = false; await load(); renderSettings();
   };
 }
+function exampleWait() { const p = sPriv(); return `Example: a ${naira(5000)} Wait & get order costs ${naira(5000 + chargeFor(5000, p.wait_type, p.wait_value))}.`; }
 function exampleExpress() { return `Example: a ${naira(5000)} order marked express delivery costs ${naira(5000 + expressFor(5000))}.`; }
 
 /* ---------- Login: remembers who used this phone; number pad for phone and PIN ---------- */
