@@ -650,3 +650,18 @@ label .opt{font-size:13px}
 .scard label.toggle{font-size:16px}
 .wa-label{font-size:15px;font-weight:700;color:var(--fg);margin-top:20px}
 .ptable .ph,.price-row.head{color:var(--fg);font-weight:700;font-size:14px}
+/* Goal ladder: 1,000 in steps of 100 */
+.gnext{background:var(--accent-soft);color:var(--accent-deep);border-radius:12px;padding:12px 14px;margin:12px 0 4px}
+.gnext span{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.gnext > b{display:block;font-size:17px;margin-top:2px}
+.gnext p{margin:6px 0 0;font-size:14px;color:var(--fg)}
+.gsteps{list-style:none;margin:8px 0 4px;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.gsteps li{border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--card)}
+.gsteps li b{font-size:16px}
+.gsteps li span{font-size:12px;color:var(--muted)}
+.gsteps .gdot{width:18px;height:18px;border-radius:9px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--accent-ink)}
+.gsteps li.done{background:var(--accent-soft);border-color:var(--accent-soft)}
+.gsteps li.done .gdot{background:var(--accent);border-color:var(--accent)}
+.gsteps li.cur{border:2px solid var(--accent)}
+.gsteps li.cur .gdot{border-color:var(--accent)}
+.gsteps li.late span{color:var(--owes)}

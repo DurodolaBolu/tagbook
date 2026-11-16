@@ -261,30 +261,49 @@ let sendStats = [];
 const GOAL = { total: 1000, by: "31 May 2027", months: {
   "2026-11": [56, 41], "2026-12": [100, 101], "2027-01": [185, 211], "2027-02": [265, 371],
   "2027-03": [315, 561], "2027-04": [350, 771], "2027-05": [385, 1001] } };
-function goalHtml(real) {
+// The 1,000 goal in steps of 100, each with the date to reach it (from the monthly plan above).
+const GOAL_STEPS = [[100, "2026-12-31"], [200, "2027-01-31"], [300, "2027-02-21"], [400, "2027-03-07"], [500, "2027-03-21"], [600, "2027-04-07"], [700, "2027-04-21"], [800, "2027-05-05"], [900, "2027-05-18"], [1000, "2027-05-31"]];
+const stepDay = d => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+// active = shops with an order in the last 30 days; signups = new shops this month. Shown to Bolu and the team.
+function goalHtml(g) {
+  const active = g.active, signups = g.signups;
   const now = new Date(Date.now() + 3600e3); // Lagos time
   const y = now.getUTCFullYear(), m = now.getUTCMonth(), key = `${y}-${String(m + 1).padStart(2, "0")}`, t = GOAL.months[key];
-  const active = real.filter(r => r.last_order && Date.now() - Date.parse(r.last_order) < 30 * 864e5).length;
   const pctAll = Math.min(100, Math.round(active / GOAL.total * 100));
-  if (!t) return `<section class="scard dgoal"><h3 class="stitle">Goal: ${GOAL.total.toLocaleString()} active shops by ${GOAL.by}</h3><p class="ssub"><b>${active}</b> active now</p></section>`;
-  const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), day = now.getUTCDate(), left = days - day;
-  const monthStart = Date.UTC(y, m, 1) - 3600e3;
-  const signups = real.filter(r => Date.parse(r.created_at) >= monthStart).length;
-  const prevKey = Object.keys(GOAL.months).filter(k => k < key).pop(), prevActive = prevKey ? GOAL.months[prevKey][1] : 16;
-  const signPace = Math.round(t[0] * day / days), actPace = Math.round(prevActive + (t[1] - prevActive) * day / days);
-  const line = (label, got, goal, pace) => { const diff = got - pace;
-    return `<div class="gline"><div class="gtop"><span>${label}</span><b>${got} <i>of ${goal}</i></b></div>
-      <div class="gbar"><span style="width:${Math.min(100, Math.round(got / goal * 100))}%"></span><em style="left:${Math.min(100, Math.round(pace / goal * 100))}%"></em></div>
-      <p class="${diff >= 0 ? "gok" : "glate"}">${diff >= 0 ? `On pace${diff ? `, ${diff} ahead` : ""}` : `Behind by ${-diff}. You should be at ${pace} today`}</p></div>`; };
-  const month = new Date(Date.UTC(y, m, 1)).toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
+  const todayIso = now.toISOString().slice(0, 10);
+  const nextI = GOAL_STEPS.findIndex(([n]) => active < n), next = GOAL_STEPS[nextI];
+  const ladder = `<ol class="gsteps">${GOAL_STEPS.map(([n, d], i) => { const done = active >= n, cur = i === nextI, late = !done && d < todayIso;
+      return `<li class="${done ? "done" : cur ? "cur" : ""}${late ? " late" : ""}"><span class="gdot">${done ? TICK : ""}</span><b>${n.toLocaleString()}</b><span>${done ? "Reached" : `by ${stepDay(d)}`}</span></li>`; }).join("")}</ol>`;
+  let nextLine = "";
+  if (next) {
+    const daysLeft = Math.max(1, Math.round((Date.parse(next[1] + "T23:00:00Z") - Date.now()) / 864e5)), gap = next[0] - active;
+    const perWeek = Math.max(1, Math.ceil(gap / daysLeft * 7));
+    nextLine = `<div class="gnext"><span>Next stop</span><b>${next[0].toLocaleString()} active shops by ${stepDay(next[1])}</b><p>${gap} more to go in ${daysLeft} day${daysLeft === 1 ? "" : "s"}. That's about <b>${perWeek} new active shop${perWeek === 1 ? "" : "s"} a week</b>.</p></div>`;
+  }
+  let monthPart = "";
+  if (t) {
+    const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), day = now.getUTCDate(), left = days - day;
+    const prevKey = Object.keys(GOAL.months).filter(k => k < key).pop(), prevActive = prevKey ? GOAL.months[prevKey][1] : 16;
+    const signPace = Math.round(t[0] * day / days), actPace = Math.round(prevActive + (t[1] - prevActive) * day / days);
+    const line = (label, got, goal, pace) => { const diff = got - pace;
+      return `<div class="gline"><div class="gtop"><span>${label}</span><b>${got} <i>of ${goal}</i></b></div>
+        <div class="gbar"><span style="width:${Math.min(100, Math.round(got / goal * 100))}%"></span><em style="left:${Math.min(100, Math.round(pace / goal * 100))}%"></em></div>
+        <p class="${diff >= 0 ? "gok" : "glate"}">${diff >= 0 ? `On pace${diff ? `, ${diff} ahead` : ""}` : `Behind by ${-diff}. We should be at ${pace} today`}</p></div>`; };
+    const month = new Date(Date.UTC(y, m, 1)).toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
+    const perDay = Math.max(1, Math.ceil(Math.max(0, t[0] - signups) / Math.max(1, left)));
+    monthPart = `<h4>This month (${month}): ${left} day${left === 1 ? "" : "s"} left</h4>
+      ${line("New shops signed up", signups, t[0], signPace)}
+      ${line("Active shops by month end", active, t[1], actPace)}
+      <p class="hint">That's about ${perDay} sign-up${perDay === 1 ? "" : "s"} a day for the rest of ${month}.</p>`;
+  }
   return `<section class="scard dgoal">
-    <h3 class="stitle">Goal: ${GOAL.total.toLocaleString()} active shops by ${GOAL.by}</h3>
+    <h3 class="stitle">Our goal: ${GOAL.total.toLocaleString()} active shops by ${GOAL.by}</h3>
     <div class="gbar big"><span style="width:${Math.max(1, pctAll)}%"></span></div>
-    <p class="ssub"><b>${active}</b> active shops now (${pctAll}%). Active means an order in the last 30 days.</p>
-    <h4>${month}: ${left} day${left === 1 ? "" : "s"} left</h4>
-    ${line("Sign-ups this month", signups, t[0], signPace)}
-    ${line("Active shops by month end", active, t[1], actPace)}
-    <p class="hint">That's about ${Math.max(1, Math.ceil(Math.max(0, t[0] - signups) / Math.max(1, left)))} sign-up${Math.ceil(Math.max(0, t[0] - signups) / Math.max(1, left)) === 1 ? "" : "s"} a day for the rest of ${month}.</p>
+    <p class="ssub"><b>${active}</b> active shops now (${pctAll}%). Active means the shop logged clothes in the last 30 days.</p>
+    ${nextLine}
+    <h4>The road to ${GOAL.total.toLocaleString()}, 100 at a time</h4>
+    ${ladder}
+    ${monthPart}
   </section>`;
 }
 let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = 1, teamPay = [], editFor = null, payOpen = null;
@@ -820,7 +839,7 @@ function renderAdmin() {
     ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}${(st => st ? ` · messaged ${st.times}×, last ${ago(st.at)}` : "")(followState(r))}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" data-nwa="${r.id}" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     ${resting.length ? `<details class="scard drest"><summary><b>Messaged, waiting for a reply</b> <span class="hint">${resting.length} · they come back above when the next follow-up is due</span></summary>${resting.map(([r]) => { const st = followState(r); return `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Messaged ${st.times}×, last ${ago(st.at)} · next follow-up ${new Date(st.next).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span></div><button class="mini" data-nback="${r.id}">Follow up now</button></div>`; }).join("")}</details>` : ""}
-    ${goalHtml(real)}
+    ${goalHtml({ active: real.filter(r => r.last_order && Date.now() - Date.parse(r.last_order) < 30 * 864e5).length, signups: real.filter(r => Date.parse(r.created_at) >= Date.UTC(new Date(Date.now() + 3600e3).getUTCFullYear(), new Date(Date.now() + 3600e3).getUTCMonth(), 1) - 3600e3).length })}
     ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !r.push), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
       return real.length ? `<section class="scard dstates"><h3 class="stitle">App and alerts</h3>
         <p class="ssub"><span class="dstate"><b>${real.length - noApp.length}</b> of ${real.length} installed the app</span><span class="dstate"><b>${real.length - noPush.length}</b> of ${real.length} have alerts on</span></p>
@@ -2629,6 +2648,11 @@ function wireBank() {
   };
 }
 /* ---------- Call shops (team members Bolu allows to call leads; they call only, Bolu follows up on WhatsApp) ---------- */
+let teamGoal = null, teamGoalAt = 0;
+function teamGoalHtml() {
+  if (Date.now() - teamGoalAt > 5 * 6e4) { teamGoalAt = Date.now(); sb.rpc("goal_progress").then(({ data, error }) => { if (!error && data && JSON.stringify(data) !== JSON.stringify(teamGoal)) { teamGoal = data; if (tab === "agent") keepTyped(renderAgent); } }); }
+  return teamGoal ? goalHtml(teamGoal) : "";
+}
 let isCaller = false, agentView = "shops", cLog = null, cOut = "called", cNote = "", cBusy = false;
 async function loadCallerLeads() {
   if (oleadBusy) return; oleadBusy = true;
@@ -2663,6 +2687,7 @@ function renderCalls() {
     </section>`;
   view.innerHTML = `${agentSeg()}
     <div class="dtop"><div><h2 class="ptitle">Call shops</h2><p class="hint">Call, then log what happened. When a shop is interested, Bolu gets your note and sends them the video on WhatsApp.</p></div></div>
+    ${teamGoalHtml()}
     <div class="stats lstats"><div class="stat"><b>${olead.filter(l => l.status === "new").length}</b><span>Left to call</span></div><div class="stat"><b>${mine}</b><span>You called today</span></div><div class="stat"><b>${olead.filter(l => l.status === "called" && byMe(l)).length}</b><span>Interested from you</span></div></div>
     ${callScriptHtml(who, true)}
     <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
@@ -2696,7 +2721,7 @@ function renderAgent() {
   if (!isAgent) return go("orders");
   if (isCaller && agentView === "calls") return renderCalls();
   if (!myEarnBusy) { myEarnBusy = true; sb.rpc("my_earnings").then(({ data, error }) => { myEarnBusy = false; if (!error && data && JSON.stringify(data) !== JSON.stringify(myEarn)) { myEarn = data; if (tab === "agent") keepTyped(renderAgent); } }).catch(() => { myEarnBusy = false; }); }
-  view.innerHTML = `${agentSeg()}<h2 class="ptitle">Set up shops</h2>${earningsHtml()}<p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops(); wireBank(); wireAgentSeg();
+  view.innerHTML = `${agentSeg()}${teamGoalHtml()}<h2 class="ptitle">Set up shops</h2>${earningsHtml()}<p class="hint" style="margin-top:0">Shops you set up appear below. The free trial is 1 month.</p>` + shopsHtml(); wireShops(); wireBank(); wireAgentSeg();
 }
 const isoDay = d => d.toISOString().slice(0, 10);
 function shopsHtml() {
