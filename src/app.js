@@ -645,6 +645,9 @@ function renderLeads() {
   };
   view.innerHTML = `${adminSeg()}
     <div class="dtop"><div><h2 class="ptitle">Leads</h2><p class="hint">${olead.length} shops · tap a button to open WhatsApp with the message ready</p></div><div class="row"><button class="btn btn-ghost" id="oadd">+ Add a lead</button></div></div>
+    ${(() => { const left = olead.filter(l => l.status === "new").length, joined = olead.filter(l => l.status === "joined").length, talking = olead.filter(l => l.status === "replied").length;
+      return `<div class="stats lstats"><button class="stat ${left ? "hot" : ""}" data-lsum="new"><b>${left}</b><span>Left to contact</span></button><button class="stat" data-lsum="replied"><b>${talking}</b><span>Replied</span></button><button class="stat" data-lsum="joined"><b>${joined}</b><span>Joined</span></button></div>
+        <p class="hint" style="margin:6px 0 0">${olead.length - left} of ${olead.length} leads contacted so far${oCity !== "all" ? ` · ${inCity.filter(l => l.status === "new").length} left in ${esc(oCity)}` : ""}.</p>`; })()}
     <div class="owa"><span>Open chats in</span><div class="aseg"><button data-wapp="business" aria-pressed="${waApp === "business"}">WhatsApp Business</button><button data-wapp="normal" aria-pressed="${waApp === "normal"}">WhatsApp</button></div></div>
     <section class="scard osent"><div class="osent-top"><b>${sentToday} of ${DAILY_SAFE}</b><span>messages sent today</span></div><div class="obar"><i style="width:${pct}%" class="${sentToday >= DAILY_SAFE ? "full" : ""}"></i></div>
       <p class="hint" style="margin:8px 0 0">${sentToday >= DAILY_SAFE ? "That's today's safe limit. Carry on tomorrow so WhatsApp doesn't flag the router line." : `${DAILY_SAFE - sentToday} more today keeps the router line safe.`}</p>
@@ -672,6 +675,7 @@ function renderLeads() {
   view.querySelectorAll("[data-wapp]").forEach(b => b.onclick = () => { waApp = b.dataset.wapp; try { localStorage.setItem("tb-wa-app", waApp); } catch (_) { } renderAdmin(); });
   view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAdmin(); if (b.classList.contains("omore")) mainScroll().scrollTo(0, 0); });
   view.querySelectorAll("[data-os]").forEach(b => b.onclick = () => { oStatus = b.dataset.os; renderAdmin(); });
+  view.querySelectorAll("[data-lsum]").forEach(b => b.onclick = () => { oStatus = b.dataset.lsum; renderAdmin(); });
   $("#oq").oninput = e => { oQ = e.target.value; clearTimeout(window.__oqT); window.__oqT = setTimeout(() => { const pos = e.target.selectionStart; renderAdmin(); const el = $("#oq"); el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) { } }, 250); };
   $("#oadd").onclick = () => { oAdd = !oAdd; renderAdmin(); if (oAdd) $("#ol-n").focus(); };
   if ($("#ol-no")) $("#ol-no").onclick = () => { oAdd = false; renderAdmin(); };
