@@ -484,6 +484,12 @@ const LEAD_CALLED = [
   (g, n, visit) => `${g}. It's Bolu from Tagbook. We spoke on the phone earlier about ${n}. This is our WhatsApp number.\n\nAs promised, here's the short video of how Tagbook works.\n\nWatch it when you have 2 minutes, and let us know what you think.`,
   (g, n, visit) => `${g}. Bolu here, from Tagbook, following up on our call earlier. Thank you for your time.\n\nHere's the video you asked for. It shows how Tagbook helps a laundry keep track of every customer's clothes and payments.\n\nWe'd love to hear what you think after watching.`,
 ];
+// A team member (e.g. Tolu) made the call and Bolu takes over on WhatsApp.
+const LEAD_HANDOFF = [
+  (g, n, c) => `${g}. This is Bolu from the Tagbook team. My colleague ${c} spoke with you earlier today about ${n}, and I'll be your contact from here.\n\nAs promised, here's the 2-minute video. It shows how a shop records customers' clothes, sends bills on WhatsApp and sees who still owes.\n\nWatch it when you have a moment, and let me know what you think.`,
+  (g, n, c) => `${g}. It's Bolu from Tagbook. Thank you for your time on the phone with ${c} today. I'll be taking it from here, and this is our WhatsApp number.\n\nHere's the short video ${c} told you about. It shows how Tagbook helps a laundry keep track of every customer's clothes and payments.\n\nLet me know what you think after watching.`,
+  (g, n, c) => `${g}. Bolu here, I look after new shops at Tagbook. ${c} from our team called you earlier about ${n}. Thank you for your time.\n\nHere's the video we promised. It's 2 minutes and shows exactly how it works.\n\nI'm here for any questions, and I'd love to hear what you think.`,
+];
 // They didn't pick up: still cold, but it explains the missed call.
 const LEAD_MISSED = [
   (g, n, visit) => `${g}. This is Bolu from Tagbook. We tried to call you earlier about ${n}.\n\nWe help laundry shops keep track of customers' clothes and payments from their phone, and send the bill on WhatsApp.\n\nCan we send you a 2 minute video of how it works?${visit}`,
@@ -492,10 +498,12 @@ const LEAD_MISSED = [
 ];
 const leadPick = {}; let leadTurn = Math.floor(Math.random() * 15);
 function leadMsg(l, kind) {
-  const list = kind === "follow" ? LEAD_FOLLOW : kind === "called" ? LEAD_CALLED : kind === "missed" ? LEAD_MISSED : LEAD_FIRST, key = l.id + ":" + kind;
+  const handoff = kind === "called" && l.called_by && !/^bolu/i.test(l.called_by);
+  const list = kind === "follow" ? LEAD_FOLLOW : handoff ? LEAD_HANDOFF : kind === "called" ? LEAD_CALLED : kind === "missed" ? LEAD_MISSED : LEAD_FIRST, key = l.id + ":" + kind;
   if (leadPick[key] == null) leadPick[key] = leadTurn++ % list.length; // next version in turn, so neighbours never match
   if (kind === "follow") return list[leadPick[key]](greet());
   if (kind === "missed") return list[leadPick[key]](greet(), l.name, l.city === "Akure" ? "\n\nWe're here in Akure, so we can also come by and set it up for you." : "");
+  if (handoff) return list[leadPick[key]](greet(), l.name, l.called_by.split(" ")[0]);
   if (kind === "called") return list[leadPick[key]](greet(), l.name, l.city === "Akure" ? "\n\nWe can also come by and set it up for you." : "");
   const akure = l.city === "Akure", near = akure ? " We're based here in Akure." : ONDO_NEAR.includes(l.city) ? " We're in Akure, not far from you." : "";
   return list[leadPick[key]](greet(), l.name, near, akure ? "\n\nSince we're in Akure, we can also come by and set it up for you." : "");
