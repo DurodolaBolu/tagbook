@@ -1582,7 +1582,7 @@ function message(o, type) {
   const c = cust(o.cid), k = calc(o), hi = hello(c);
   if (type === "list") {
     const list = o.items.map(it => `${it.qty} x ${pname(it)} (${SERVICES[it.svc]})`).join("\n");
-    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${o.wait ? "\nWait & get" : ""}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
+    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${o.wait ? "\nWait & get" : ""}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
   if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
@@ -2210,6 +2210,7 @@ const photosOn = () => !!shop && (shop.id === PHOTO_SHOP || location.hostname ==
 const PHOTO_NOTES = ["Stain", "Torn", "Button missing", "Colour fading", "Costly item"];
 const CAM_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
 const photoCache = {}; // order id -> list of photos (null while loading)
+const photoBusy = {}; // order no -> photos still uploading after save
 let phAdd = null; // order screen: a photo being added { blob, url, item, notes }
 const photoThumbs = (urls, i) => `<div class="phrow">${urls.map((u, j) => `<div class="phth"><img src="${esc(u)}" alt="Photo ${j + 1}"><button class="phx" data-phdel="${i}:${j}" aria-label="Remove photo ${j + 1}">×</button></div>`).join("")}${urls.length < 2 ? `<button class="phplus" data-phmore="${i}" aria-label="Add another photo">+</button>` : ""}</div>`;
 async function shrinkPhoto(file) {
@@ -2234,7 +2235,9 @@ async function uploadPhoto(orderId, blob, item, notes) {
 }
 async function savePhotosLater(no, pend) {
   const o = orders.find(x => x.no === no); if (!o) return toast("Photos weren't saved. Open the order and add them again.");
+  photoBusy[no] = true; if (oFor === no && !$("#sheet").hidden) openOrder(no);
   let bad = 0; for (const p of pend) if (!(await uploadPhoto(o.id, p.blob, p.item, p.notes))) bad++;
+  delete photoBusy[no];
   toast(bad ? `${bad} photo${bad > 1 ? "s" : ""} didn't save. Open order #${no} and add ${bad > 1 ? "them" : "it"} again.` : `Photo${pend.length > 1 ? "s" : ""} saved with order #${no}`);
   if (oFor === no && !$("#sheet").hidden) openOrder(no);
 }
@@ -2251,9 +2254,18 @@ async function loadPhotos(o) {
   photoCache[o.id] = list;
   if (oFor === o.no && !$("#sheet").hidden) openOrder(o.no);
 }
+const photoSeen = list => list.map(p => p.notes ? `${p.notes.toLowerCase()} on the ${(p.item || "cloth").toLowerCase()}` : (p.item || "").toLowerCase()).filter((x, i, a) => x && a.indexOf(x) === i);
+const photoLink = list => `https://tagbook.ordiventa.com/photos?t=${list.token}`;
+// The list of clothes carries the photo link, so the customer gets one message at drop-off, not two.
+function listPhotoLine(o) {
+  const list = photosOn() && photoCache[o.id];
+  if (!list || !list.length || !list.token) return "";
+  const seen = photoSeen(list);
+  return `\n\nWe took photos of your clothes${seen.length ? ` (${seen.join("; ")})` : ""}. See them here:\n${photoLink(list)}`;
+}
 function photoMsg(o, list) {
-  const seen = list.map(p => p.notes ? `${p.notes.toLowerCase()} on the ${(p.item || "cloth").toLowerCase()}` : (p.item || "").toLowerCase()).filter((x, i, a) => x && a.indexOf(x) === i);
-  return `${hello(cust(o.cid))}, this is ${shopName()}.\nWhen you dropped your clothes on ${fmtDay(o.at)}, we took photos${seen.length ? ` and noted: ${seen.join("; ")}` : ""}.\n\nYou can see them here:\nhttps://tagbook.ordiventa.com/photos?t=${list.token}\n\n_Sent with Tagbook_`;
+  const seen = photoSeen(list);
+  return `${hello(cust(o.cid))}, this is ${shopName()}.\nWhen you dropped your clothes on ${fmtDay(o.at)}, we took photos${seen.length ? ` and noted: ${seen.join("; ")}` : ""}.\n\nYou can see them here:\n${photoLink(list)}\n\n_Sent with Tagbook_`;
 }
 function photoBlock(o) {
   if (!photosOn()) return "";
@@ -2271,7 +2283,9 @@ function photoBlock(o) {
     ${list.length ? `<div class="phlist">${list.map((p, j) => `<figure class="phfig"><a class="phbig" href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.url)}" alt="Photo ${j + 1}${p.item ? " of " + esc(p.item) : ""}"></a>
       <figcaption class="phcap"><b>${esc(p.item || "Cloth")}${p.notes ? ": " + esc(p.notes.toLowerCase()) : ""}</b><span>Taken ${taken(p)}</span></figcaption></figure>`).join("")}</div>` : (add ? "" : `<p class="hint">Take a photo of any stain, tear or costly cloth, so you can show the customer it was there before you washed it.</p>`)}
     ${add || (o.cancelled || list.length >= 6 ? "" : `<button class="btn btn-ghost" id="phadd">${CAM_SVG} Add photo</button>`)}
-    ${list.length && own() && list.token ? `<a class="btn btn-primary" id="phsend" href="${wa(o, photoMsg(o, list))}" target="_blank" rel="noopener">Send photos to ${esc(c.name.split(" ")[0])} on WhatsApp</a>` : ""}
+    ${list.length && own() && list.token && o.list_sent ? `<a class="btn btn-ghost" id="phsend" href="${wa(o, photoMsg(o, list))}" target="_blank" rel="noopener">Send photos to ${esc(c.name.split(" ")[0])} on WhatsApp</a>` : ""}
+    ${list.length && own() && !o.list_sent ? `<p class="hint">The photo link goes out with the list of clothes below.</p>` : ""}
+    ${photoBusy[o.no] ? `<p class="hint">Saving photos… wait a moment before you send the list of clothes.</p>` : ""}
     ${list.length ? `<p class="hint">Photos are deleted 7 days after the clothes are collected.</p>` : ""}</div>`;
 }
 function wirePhotos(sh, o) {

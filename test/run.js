@@ -351,6 +351,7 @@ async function handle(route) {
     await page.click("#save"); await page.waitForTimeout(1200);
     const o = db.orders[db.orders.length - 1]; console.log("saved order:", o.wait_get, o.express, o.collect_at, o.remarks, o.money_found);
     await page.screenshot({ path: path.join(out, "order.png"), fullPage: true });
+    if (await page.$("[data-og]")) { await page.click("[data-og] >> nth=0"); await page.waitForTimeout(800); }
     console.log("list msg:", JSON.stringify(await page.evaluate(() => { const e = document.querySelector("#wamsg-list"); return e && e.textContent; })));
     await page.click("#nedit"); await page.waitForTimeout(300); await page.click('[data-rm="Burn mark"]'); await page.waitForTimeout(200); await page.screenshot({ path: path.join(out, "edit.png"), fullPage: true }); await page.click("#ngo"); await page.waitForTimeout(600);
     console.log("edited remarks:", db.orders[db.orders.length - 1].remarks);
@@ -383,7 +384,9 @@ async function handle(route) {
     console.log("items saved clean:", JSON.stringify(db.orders[db.orders.length - 1].items));
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(out, "order.png"), fullPage: true });
-    console.log("send link:", await page.getAttribute("#phsend", "href").catch(() => null));
+    if (await page.$("[data-og]")) { await page.click("[data-og] >> nth=0"); await page.waitForTimeout(800); }
+    console.log("list msg:", JSON.stringify(await page.evaluate(() => { const e = document.querySelector("#wamsg-list"); return e && e.textContent; })));
+    console.log("separate send hidden before list sent:", !(await page.$("#phsend")));
     process.exit(0);
   }
   if (process.env.CAPTURE_VIDEO) { // phone-size frames for the "what's new" video
