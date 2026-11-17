@@ -686,3 +686,6 @@ label .opt{font-size:13px}
 .phfig{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
 .phcap{display:flex;flex-direction:column;font-size:13px}
 .phcap span{color:var(--muted)}
+/* Lead lists: size group headings (smaller shops first) */
+.osize{grid-column:1/-1;margin:10px 0 2px;font-size:14px;font-weight:700;color:var(--muted)}
+.osize .n{font-weight:600;margin-left:4px}

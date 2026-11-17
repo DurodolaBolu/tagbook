@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261117155552";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261117160118";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -860,6 +860,9 @@ label .opt{font-size:13px}
 .phfig{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
 .phcap{display:flex;flex-direction:column;font-size:13px}
 .phcap span{color:var(--muted)}
+/* Lead lists: size group headings (smaller shops first) */
+.osize{grid-column:1/-1;margin:10px 0 2px;font-size:14px;font-weight:700;color:var(--muted)}
+.osize .n{font-weight:600;margin-left:4px}
 </style>
 </head><body>
 <div id="boot" class="loading washing" role="status"><div class="lart big"><svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
@@ -890,7 +893,7 @@ label .opt{font-size:13px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261117155552"></script>
+<script src="/app.js?v=20261117160118"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

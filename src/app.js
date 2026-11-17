@@ -472,6 +472,9 @@ const lagosDay = t => new Date(new Date(t).getTime() + 3600e3).toISOString().sli
 // Under 30 reviews, then no count, then 30 to 99, then 100+. Within each group the order stays as added.
 const leadReviews = l => { const m = /(\d[\d,]*)\s+Google reviews?/i.exec(l.notes || ""); return m ? +m[1].replace(/,/g, "") : null; };
 const sizeRank = l => { const n = leadReviews(l); return n === null ? 1 : n < 30 ? 0 : n < 100 ? 2 : 3; };
+const SIZE_HEAD = ["Smaller shops (under 30 Google reviews): call these first", "Size not known", "Medium shops (30 to 99 reviews)", "Big laundries (100+ reviews): may already have a system"];
+// Lists already come smallest first, so a heading goes in wherever the size group changes.
+const bySize = (ls, cardFn) => ls.map((l, i) => { const r = sizeRank(l), head = i === 0 || sizeRank(ls[i - 1]) !== r; return `${head ? `<p class="osize">${SIZE_HEAD[r]} <span class="n">${ls.filter(x => sizeRank(x) === r).length}</span></p>` : ""}${cardFn(l)}`; }).join("");
 const smallFirst = rows => rows.map((l, i) => [sizeRank(l), i, l]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
 async function loadLeads() {
   if (oleadBusy) return; oleadBusy = true;
@@ -708,7 +711,7 @@ function renderLeads() {
     ${groups.length ? groups.map(([c, ls]) => {
       // On "All" with no search, show a few per city so the page stays quick on a phone.
       const cut = oCity === "all" && !q && ls.length > 6;
-      return `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${(cut ? ls.slice(0, 6) : ls).map(card).join("")}</div>${cut ? `<button class="btn btn-ghost omore" data-oc="${esc(c)}">See all ${ls.length} in ${esc(c)}</button>` : ""}`;
+      return `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${cut ? ls.slice(0, 6).map(card).join("") : bySize(ls, card)}</div>${cut ? `<button class="btn btn-ghost omore" data-oc="${esc(c)}">See all ${ls.length} in ${esc(c)}</button>` : ""}`;
     }).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
   wireAdminSeg();
   $("#oscript").onclick = () => { oScriptOpen = !oScriptOpen; try { localStorage.setItem("tb-script-open", oScriptOpen ? "1" : "0"); } catch (_) { } renderAdmin(); };
@@ -2841,7 +2844,7 @@ function renderCalls() {
     <div class="chips ochips">${[["all", "All", olead.length]].concat(cities.map(c => [c, c, olead.filter(l => l.city === c).length])).map(([k, v, n]) => `<button class="chip" data-oc="${esc(k)}" aria-pressed="${oCity === k}">${esc(v)} <span class="n">${n}</span></button>`).join("")}</div>
     <div class="chips ochips">${[["new", "To call"], ["nopick", "Didn't pick up"], ["unreachable", "Not reachable"], ["called", "Interested"], ["all", "All"]].map(([k, v]) => `<button class="chip" data-os="${k}" aria-pressed="${st === k}">${v} <span class="n">${k === "all" ? inCity.length : inCity.filter(l => l.status === k).length}</span></button>`).join("")}</div>
     <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
-    <div class="dlist">${list.slice(0, 40).map(row).join("") || `<p class="hint">No shops here.</p>`}${list.length > 40 ? `<p class="hint">Showing 40 of ${list.length}. Search or pick a city to see others.</p>` : ""}</div>`;
+    <div class="dlist">${bySize(list.slice(0, 40), row) || `<p class="hint">No shops here.</p>`}${list.length > 40 ? `<p class="hint">Showing 40 of ${list.length}. Search or pick a city to see others.</p>` : ""}</div>`;
   wireAgentSeg();
   $("#oscript").onclick = () => { oScriptOpen = !oScriptOpen; try { localStorage.setItem("tb-script-open", oScriptOpen ? "1" : "0"); } catch (_) { } renderAgent(); };
   view.querySelectorAll("[data-oc]").forEach(b => b.onclick = () => { oCity = b.dataset.oc; renderAgent(); });
