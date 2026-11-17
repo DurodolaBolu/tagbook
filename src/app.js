@@ -468,6 +468,11 @@ const O_STATUS = { new: "To contact", called: "Follow up", nopick: "Didn't pick 
 const O_PILL = { new: "p-new", called: "p-ready", nopick: "p-billed", unreachable: "p-owed", messaged: "p-billed", replied: "p-ready", demo: "p-ready", joined: "p-collected", no: "p-owed" };
 const DAILY_SAFE = 3; // cold messages a day, sent from the router line; raise slowly once the line has a good history
 const lagosDay = t => new Date(new Date(t).getTime() + 3600e3).toISOString().slice(0, 10);
+// Smaller shops first: big laundries (many Google reviews) usually already have their own system (17 Nov 2026).
+// Under 30 reviews, then no count, then 30 to 99, then 100+. Within each group the order stays as added.
+const leadReviews = l => { const m = /(\d[\d,]*)\s+Google reviews?/i.exec(l.notes || ""); return m ? +m[1].replace(/,/g, "") : null; };
+const sizeRank = l => { const n = leadReviews(l); return n === null ? 1 : n < 30 ? 0 : n < 100 ? 2 : 3; };
+const smallFirst = rows => rows.map((l, i) => [sizeRank(l), i, l]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
 async function loadLeads() {
   if (oleadBusy) return; oleadBusy = true;
   try {
@@ -482,7 +487,7 @@ async function loadLeads() {
       }
     };
     const [a, b] = await Promise.all([allLeads(), sb.from("outreach_log").select("lead_id,kind,sent_at").gte("sent_at", new Date(Date.now() - 60 * 864e5).toISOString())]);
-    if (!a.error) olead = a.data || []; if (!b.error) olog = b.data || [];
+    if (!a.error) olead = smallFirst(a.data || []); if (!b.error) olog = b.data || [];
   } finally { oleadBusy = false; }
   if (tab === "admin" && adminView === "leads") keepTyped(renderAdmin);
 }
@@ -2799,7 +2804,7 @@ async function loadCallerLeads() {
   try {
     let rows = [];
     for (let from = 0; ; from += 1000) { const r = await sb.rpc("caller_leads", { p_from: from }); if (r.error) break; rows = rows.concat(r.data || []); if (!r.data || r.data.length < 1000) break; }
-    olead = rows;
+    olead = smallFirst(rows);
   } finally { oleadBusy = false; }
   if (tab === "agent" && agentView === "calls") keepTyped(renderAgent);
 }
