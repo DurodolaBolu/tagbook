@@ -382,6 +382,7 @@ async function handle(route) {
     await page.click("#save"); await page.waitForTimeout(2500);
     console.log("uploads:", global.photoUploads, "rows:", JSON.stringify(db.order_photos.map(r => ({ item: r.item, notes: r.notes, order: !!r.order_id, path: r.path.split("/").length }))));
     console.log("items saved clean:", JSON.stringify(db.orders[db.orders.length - 1].items));
+    console.log("remarks saved:", db.orders[db.orders.length - 1].remarks);
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(out, "order.png"), fullPage: true });
     if (await page.$("[data-og]")) { await page.click("[data-og] >> nth=0"); await page.waitForTimeout(800); }

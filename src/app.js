@@ -1451,7 +1451,7 @@ function renderNew() {
       <div class="item"><span>${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>
       <div class="qty">${photosOn() ? `<button data-cam="${i}" class="cam${(it.photos || []).length ? " on" : ""}" aria-label="Add a photo of ${esc(pname(it))}">${CAM_SVG}</button>` : ""}<button data-dec="${i}" aria-label="Remove one">−</button><b style="min-width:22px;text-align:center">${it.qty}</b><button data-inc="${i}" aria-label="Add one">+</button></div>
       ${(it.photos || []).length ? `<div class="phedit">${photoThumbs(it.photos.map(b => b.url), i)}
-        <p class="phq">What did you notice?</p><div class="chips rpick" style="margin:0">${PHOTO_NOTES.map(n => `<button class="chip" data-pn="${i}" data-note="${n}" aria-pressed="${(it.pn || []).includes(n)}">${n}</button>`).join("")}</div></div>` : ""}</div>`).join("")}</div>
+        <p class="phq">What did you notice?</p><div class="chips rpick" style="margin:0">${photoNotes().map(n => `<button class="chip" data-pn="${i}" data-note="${esc(n)}" aria-pressed="${(it.pn || []).includes(n)}">${n}</button>`).join("")}</div></div>` : ""}</div>`).join("")}</div>
     ${shop.wait_get_on ? `<label>How fast?</label><div class="chips" style="margin:0">${[["std", "Standard"], ["exp", "Express"], ["wait", "Wait & get"]].map(([k, l]) => `<button class="chip" data-spd="${k}" aria-pressed="${(k === "wait" && d.wait) || (k === "exp" && d.express && !d.wait) || (k === "std" && !d.express && !d.wait)}">${l}</button>`).join("")}</div>`
       : `<label class="toggle"><span>Express delivery</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>`}
     ${shop.collect_dates ? collectPicker(d) : ""}
@@ -1521,7 +1521,12 @@ function renderNew() {
   };
   view.querySelectorAll("[data-cam],[data-phmore]").forEach(b => b.onclick = () => { const it = d.items[+(b.dataset.cam || b.dataset.phmore)]; if (b.dataset.cam && (it.photos || []).length) return; pickPhoto(blob => { it.photos = [...(it.photos || []), { blob, url: URL.createObjectURL(blob) }].slice(0, 2); renderNew(); }); });
   view.querySelectorAll("[data-phdel]").forEach(b => b.onclick = () => { const [i, j] = b.dataset.phdel.split(":").map(Number), it = d.items[i]; URL.revokeObjectURL(it.photos[j].url); it.photos.splice(j, 1); if (!it.photos.length) it.pn = []; renderNew(); });
-  view.querySelectorAll("[data-pn]").forEach(b => b.onclick = () => { const it = d.items[+b.dataset.pn], n = b.dataset.note; it.pn = (it.pn || []).includes(n) ? it.pn.filter(x => x !== n) : [...(it.pn || []), n]; renderNew(); });
+  view.querySelectorAll("[data-pn]").forEach(b => b.onclick = () => {
+    const it = d.items[+b.dataset.pn], n = b.dataset.note, on = !(it.pn || []).includes(n);
+    it.pn = on ? [...(it.pn || []), n] : it.pn.filter(x => x !== n);
+    if (syncsRemark(n)) { if (on && !d.rm.includes(n)) d.rm = [...d.rm, n]; if (!on && !d.items.some(x => (x.pn || []).includes(n))) d.rm = d.rm.filter(x => x !== n); }
+    renderNew();
+  });
   view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => { d.items[+b.dataset.inc].qty++; renderNew(); });
   view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => { const i = +b.dataset.dec; d.items[i].qty--; if (!d.items[i].qty) d.items.splice(i, 1); renderNew(); });
   $("#clr").onclick = () => { reset(); renderNew(); };
@@ -2201,8 +2206,11 @@ function collectTag(o) {
    gets a long random link to one order's photos. Deleted 7 days after the clothes are collected (or 60 days after drop-off).
    Try-out in BrightWash first. */
 const PHOTO_SHOP = "eb2f4c6c-ad86-42b4-bb8d-2a88ecf9e9b0";
-const photosOn = () => !!shop && (shop.id === PHOTO_SHOP || location.hostname === "localhost");
-const PHOTO_NOTES = ["Stain", "Torn", "Button missing", "Colour fading", "Costly item"];
+const PHOTO_LIVE = Date.parse("2026-11-19T08:00:00+01:00"); // every shop from 19 Nov, 8am
+const photosOn = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= PHOTO_LIVE || location.hostname === "localhost");
+// A photo's "What did you notice?" uses the same words as Remarks, and ticks the Remark too, so it's entered once.
+const photoNotes = () => [...new Set([...REMARK_PRESETS.filter(x => x !== "Item found in pocket"), ...shopRemarks, "Costly item"])];
+const syncsRemark = n => n !== "Costly item";
 const CAM_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
 const photoCache = {}; // order id -> list of photos (null while loading)
 const photoBusy = {}; // order no -> photos still uploading after save
@@ -2255,8 +2263,8 @@ const photoLink = list => `https://tagbook.ordiventa.com/photos?t=${list.token}`
 function listPhotoLine(o) {
   const list = photosOn() && photoCache[o.id];
   if (!list || !list.length || !list.token) return "";
-  const seen = photoSeen(list);
-  return `\n\nWe took photos of your clothes${seen.length ? ` (${seen.join("; ")})` : ""}. See them here:\n${photoLink(list)}`;
+  // What the photos show is already in "Noted on your clothes" (photo notes tick the Remarks), so just the link here.
+  return `\n\nWe took photos of your clothes when you dropped them. See them here:\n${photoLink(list)}`;
 }
 function photoMsg(o, list) {
   const seen = photoSeen(list);
@@ -2271,7 +2279,7 @@ function photoBlock(o) {
   const taken = p => { const at = p.created_at || new Date().toISOString(); return `${fmtDay(Date.parse(at))}, ${new Date(at).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit" })}${p.taken_by ? ` by ${esc(p.taken_by.split(" ")[0])}` : ""}`; };
   const add = phAdd && phAdd.no === o.no ? `<div class="phedit"><div class="phrow"><div class="phth"><img src="${esc(phAdd.url)}" alt="New photo"></div></div>
       <p class="phq">Which cloth?</p><div class="chips rpick" style="margin:0">${o.items.map(it => pname(it)).filter((x, i, a) => a.indexOf(x) === i).map(n => `<button class="chip" data-phi="${esc(n)}" aria-pressed="${phAdd.item === n}">${esc(n)}</button>`).join("")}</div>
-      <p class="phq">What did you notice?</p><div class="chips rpick" style="margin:0">${PHOTO_NOTES.map(n => `<button class="chip" data-phn="${n}" aria-pressed="${phAdd.notes.includes(n)}">${n}</button>`).join("")}</div>
+      <p class="phq">What did you notice?</p><div class="chips rpick" style="margin:0">${photoNotes().map(n => `<button class="chip" data-phn="${esc(n)}" aria-pressed="${phAdd.notes.includes(n)}">${n}</button>`).join("")}</div>
       <div class="row" style="margin-top:10px"><button class="btn btn-ghost" id="phcancel">Cancel</button><button class="btn btn-primary" id="phsave" ${phAdd.busy ? "disabled" : ""}>${phAdd.busy ? "Saving…" : "Save photo"}</button></div></div>` : "";
   const c = cust(o.cid);
   return `<div class="phblock"><b>Photos at drop-off</b>
@@ -2295,6 +2303,8 @@ function wirePhotos(sh, o) {
     phAdd.busy = true; again();
     const ok = await uploadPhoto(o.id, phAdd.blob, phAdd.item, phAdd.notes);
     if (!ok) { phAdd.busy = false; toast("Couldn't save the photo. Check your internet and try again."); return again(); }
+    const add = phAdd.notes.filter(n => syncsRemark(n) && !(o.remarks || "").split("; ").includes(n));
+    if (add.length) { const remarks = [...(o.remarks ? o.remarks.split("; ") : []), ...add].join("; ").slice(0, 300); const { error } = await sb.from("orders").update({ remarks }).eq("id", o.id); if (!error) o.remarks = remarks; }
     URL.revokeObjectURL(phAdd.url); phAdd = null; toast("Photo saved"); loadPhotos(o);
   };
 }
