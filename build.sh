@@ -10,6 +10,7 @@ cp src/font/*.woff2 src/font/plex.css site/font/
 cp icon-192.png icon-512.png apple-touch-icon.png robots.txt site/
 cp src/privacy.html site/privacy.html
 cp src/404.html site/404.html
+cp src/photos.html site/photos.html
 GEAR=$(cat src/gear.html)
 MACHINE=$(cat src/machine.svg)
 # iPhone launch screens (made by scripts/splash.js): shown by iOS while the app opens, instead of black

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Photos of your clothes</title>
+<style>
+:root{--bg:#F3F5F3;--card:#FFFFFF;--fg:#03191E;--muted:#55605F;--accent:#0F7B5F;--line:#DFE4E1}
+@media (prefers-color-scheme: dark){:root{--bg:#0B1513;--card:#13221F;--fg:#E8F0EE;--muted:#9AB0AA;--accent:#2BB38C;--line:#22332F}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:560px;margin:0 auto;padding:24px 16px 40px}
+h1{margin:0 0 4px;font-size:24px}
+.sub{margin:0 0 18px;color:var(--muted);font-size:15px}
+figure{margin:0 0 16px;background:var(--card);border-radius:14px;overflow:hidden}
+figure img{width:100%;display:block;background:var(--line)}
+figcaption{padding:12px 14px;display:flex;flex-direction:column;font-size:15px}
+figcaption span{color:var(--muted);font-size:14px}
+.msg{background:var(--card);border-radius:14px;padding:16px;font-size:16px}
+footer{margin-top:24px;color:var(--muted);font-size:13px;text-align:center}
+footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main id="m"><p class="sub">Loading the photos…</p></main>
+<script>
+(function () {
+  var m = document.getElementById("m");
+  var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var day = function (iso) { return new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); };
+  var time = function (iso) { return new Date(iso).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit" }); };
+  var foot = '<footer>Sent with <a href="https://tagbook.ordiventa.com">Tagbook</a></footer>';
+  var t = new URLSearchParams(location.search).get("t") || "";
+  if (!/^[0-9a-f]{36}$/.test(t)) { m.innerHTML = '<div class="msg">This link is not complete. Ask the laundry to send it again.</div>' + foot; return; }
+  fetch("https://uungxatdvelljmaugzuz.supabase.co/functions/v1/photos?t=" + t).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); }).then(function (r) {
+    var j = r.j;
+    if (r.s === 410) { m.innerHTML = '<div class="msg">These photos have been removed. ' + esc(j.shop || "The laundry") + ' keeps photos for 7 days after you collect your clothes.</div>' + foot; return; }
+    if (r.s !== 200) { m.innerHTML = '<div class="msg">We couldn’t find these photos. Ask the laundry to send the link again.</div>' + foot; return; }
+    document.title = "Photos from " + j.shop;
+    m.innerHTML = '<h1>' + esc(j.shop) + '</h1><p class="sub">Order #' + esc(j.no) + ' · clothes dropped ' + esc(day(j.dropped)) + '. These photos were taken when you dropped your clothes.</p>'
+      + j.photos.map(function (p, i) {
+        return '<figure><img src="' + esc(p.url) + '" alt="Photo ' + (i + 1) + '"><figcaption><b>' + esc(p.item || "Cloth") + (p.notes ? ": " + esc(p.notes.toLowerCase()) : "") + '</b><span>Taken ' + esc(day(p.at)) + ', ' + esc(time(p.at)) + '</span></figcaption></figure>';
+      }).join("") + foot;
+  }).catch(function () { m.innerHTML = '<div class="msg">Couldn’t load the photos. Check your internet and open the link again.</div>' + foot; });
+})();
+</script>
+</body>
+</html>

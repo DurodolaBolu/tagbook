@@ -1454,7 +1454,9 @@ function renderNew() {
       <div class="row"><button class="btn btn-ghost" id="spc">Cancel</button><button class="btn btn-primary" id="spa" ${d.specialName.trim() ? "" : "disabled"}>Add item</button></div></div>` : ""}
     <div class="items">${d.items.map((it, i) => `
       <div class="item"><span>${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>
-      <div class="qty"><button data-dec="${i}" aria-label="Remove one">−</button><b style="min-width:22px;text-align:center">${it.qty}</b><button data-inc="${i}" aria-label="Add one">+</button></div></div>`).join("")}</div>
+      <div class="qty">${photosOn() ? `<button data-cam="${i}" class="cam${(it.photos || []).length ? " on" : ""}" aria-label="Add a photo of ${esc(pname(it))}">${CAM_SVG}</button>` : ""}<button data-dec="${i}" aria-label="Remove one">−</button><b style="min-width:22px;text-align:center">${it.qty}</b><button data-inc="${i}" aria-label="Add one">+</button></div>
+      ${(it.photos || []).length ? `<div class="phedit">${photoThumbs(it.photos.map(b => b.url), i)}
+        <p class="phq">What did you notice?</p><div class="chips rpick" style="margin:0">${PHOTO_NOTES.map(n => `<button class="chip" data-pn="${i}" data-note="${n}" aria-pressed="${(it.pn || []).includes(n)}">${n}</button>`).join("")}</div></div>` : ""}</div>`).join("")}</div>
     ${shop.wait_get_on ? `<label>How fast?</label><div class="chips" style="margin:0">${[["std", "Standard"], ["exp", "Express"], ["wait", "Wait & get"]].map(([k, l]) => `<button class="chip" data-spd="${k}" aria-pressed="${(k === "wait" && d.wait) || (k === "exp" && d.express && !d.wait) || (k === "std" && !d.express && !d.wait)}">${l}</button>`).join("")}</div>`
       : `<label class="toggle"><span>Express delivery</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>`}
     ${shop.collect_dates ? collectPicker(d) : ""}
@@ -1522,6 +1524,9 @@ function renderNew() {
     d.items.push({ id, svc: d.svc, qty: 1 }); d.askSpecial = false; d.specialPrice = 0;
     toast(`${name} added to your price list at ${naira(price)}`); renderNew();
   };
+  view.querySelectorAll("[data-cam],[data-phmore]").forEach(b => b.onclick = () => { const it = d.items[+(b.dataset.cam || b.dataset.phmore)]; if (b.dataset.cam && (it.photos || []).length) return; pickPhoto(blob => { it.photos = [...(it.photos || []), { blob, url: URL.createObjectURL(blob) }].slice(0, 2); renderNew(); }); });
+  view.querySelectorAll("[data-phdel]").forEach(b => b.onclick = () => { const [i, j] = b.dataset.phdel.split(":").map(Number), it = d.items[i]; URL.revokeObjectURL(it.photos[j].url); it.photos.splice(j, 1); if (!it.photos.length) it.pn = []; renderNew(); });
+  view.querySelectorAll("[data-pn]").forEach(b => b.onclick = () => { const it = d.items[+b.dataset.pn], n = b.dataset.note; it.pn = (it.pn || []).includes(n) ? it.pn.filter(x => x !== n) : [...(it.pn || []), n]; renderNew(); });
   view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => { d.items[+b.dataset.inc].qty++; renderNew(); });
   view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => { const i = +b.dataset.dec; d.items[i].qty--; if (!d.items[i].qty) d.items.splice(i, 1); renderNew(); });
   $("#clr").onclick = () => { reset(); renderNew(); };
@@ -1541,7 +1546,7 @@ function renderNew() {
       : !d.items.length ? "Add at least one cloth to the order." : "";
     if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
     const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
-    const base = { branch_id: d.branch, items: d.items.map(i => ({ ...i })), express: d.express && !d.wait, wait_get: !!(shop.wait_get_on && d.wait), pickup: d.pickup, paid: d.paid || 0, method: d.method,
+    const base = { branch_id: d.branch, items: d.items.map(({ photos, pn, ...i }) => ({ ...i })), express: d.express && !d.wait, wait_get: !!(shop.wait_get_on && d.wait), pickup: d.pickup, paid: d.paid || 0, method: d.method,
       collect_at: shop.collect_dates ? collectWhen(d) : null, remarks: newOpts() && d.rm.length ? d.rm.join("; ").slice(0, 300) : null, money_found: newOpts() && d.money ? d.money : null };
     const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark, ...(own() ? { greet: d.greet || null } : {}) };
     d.saving = true; renderNew();
@@ -1553,8 +1558,10 @@ function renderNew() {
       else showErr(failMsg(error));
       renderNew(); return;
     }
+    const pend = d.items.flatMap(it => (it.photos || []).map(ph => ({ blob: ph.blob, item: pname(it), notes: it.pn || [] })));
     reset(); filter = "all";
     try { await load(); } catch (_) { }
+    if (pend.length) savePhotosLater(data.no, pend);
     if (own()) { go("order-" + data.no); toast(`Saved. Write ${data.mark} inside every cloth.`); }
     else { go("orders"); toast(`Saved. Write ${data.mark} inside every cloth. The owner has been told.`); }
   };
@@ -2193,6 +2200,95 @@ function collectTag(o) {
   const today = localDate(Date.now()), day = localDate(o.collect);
   return day < today ? ` · <b class="late">collect was ${esc(fmtDay(o.collect))}</b>` : day === today ? ` · <b class="due">collect today</b>` : ` · collect ${esc(fmtCollect(o.collect))}`;
 }
+/* ---------- Photos at drop-off ----------
+   A photo of a damaged or costly cloth, taken when it's logged, so the shop can show the stain was already there.
+   Shrunk on the phone (about 150 KB) before upload. Kept in a private store only that shop can open; the customer
+   gets a long random link to one order's photos. Deleted 7 days after the clothes are collected (or 60 days after drop-off).
+   Try-out in BrightWash first. */
+const PHOTO_SHOP = "eb2f4c6c-ad86-42b4-bb8d-2a88ecf9e9b0";
+const photosOn = () => !!shop && (shop.id === PHOTO_SHOP || location.hostname === "localhost");
+const PHOTO_NOTES = ["Stain", "Torn", "Button missing", "Colour fading", "Costly item"];
+const CAM_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
+const photoCache = {}; // order id -> list of photos (null while loading)
+let phAdd = null; // order screen: a photo being added { blob, url, item, notes }
+const photoThumbs = (urls, i) => `<div class="phrow">${urls.map((u, j) => `<div class="phth"><img src="${esc(u)}" alt="Photo ${j + 1}"><button class="phx" data-phdel="${i}:${j}" aria-label="Remove photo ${j + 1}">×</button></div>`).join("")}${urls.length < 2 ? `<button class="phplus" data-phmore="${i}" aria-label="Add another photo">+</button>` : ""}</div>`;
+async function shrinkPhoto(file) {
+  const img = await new Promise((ok, no) => { const u = URL.createObjectURL(file), i = new Image(); i.onload = () => { URL.revokeObjectURL(u); ok(i); }; i.onerror = () => { URL.revokeObjectURL(u); no(new Error("Couldn't read that photo. Try again.")); }; i.src = u; });
+  const s = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+  c.width = Math.round(img.width * s); c.height = Math.round(img.height * s); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  let q = 0.72, b; do { b = await new Promise(r => c.toBlob(r, "image/jpeg", q)); q -= 0.12; } while (b && b.size > 350e3 && q > 0.3);
+  if (!b) throw new Error("Couldn't read that photo. Try again."); return b;
+}
+function pickPhoto(cb) {
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
+  inp.onchange = async () => { const f = inp.files[0]; if (!f) return; try { cb(await shrinkPhoto(f)); } catch (e) { toast(e.message); } };
+  inp.click();
+}
+async function uploadPhoto(orderId, blob, item, notes) {
+  const path = `${shop.id}/${orderId}/${crypto.randomUUID()}.jpg`;
+  const up = await sb.storage.from("order-photos").upload(path, blob, { contentType: "image/jpeg" });
+  if (up.error) return false;
+  const { error } = await sb.from("order_photos").insert({ shop_id: shop.id, order_id: orderId, item: (item || "").slice(0, 60) || null, notes: notes && notes.length ? notes.join(", ").slice(0, 200) : null, path, taken_by: (me && me.name) || null });
+  if (error) { sb.storage.from("order-photos").remove([path]); return false; }
+  delete photoCache[orderId]; return true;
+}
+async function savePhotosLater(no, pend) {
+  const o = orders.find(x => x.no === no); if (!o) return toast("Photos weren't saved. Open the order and add them again.");
+  let bad = 0; for (const p of pend) if (!(await uploadPhoto(o.id, p.blob, p.item, p.notes))) bad++;
+  toast(bad ? `${bad} photo${bad > 1 ? "s" : ""} didn't save. Open order #${no} and add ${bad > 1 ? "them" : "it"} again.` : `Photo${pend.length > 1 ? "s" : ""} saved with order #${no}`);
+  if (oFor === no && !$("#sheet").hidden) openOrder(no);
+}
+async function loadPhotos(o) {
+  photoCache[o.id] = null;
+  const { data, error } = await sb.from("order_photos").select("*").eq("order_id", o.id).order("created_at");
+  if (error) { delete photoCache[o.id]; return; }
+  const list = data || [];
+  if (list.length) {
+    const s = await sb.storage.from("order-photos").createSignedUrls(list.map(p => p.path), 3600);
+    list.forEach((p, i) => p.url = (s.data && s.data[i] && s.data[i].signedUrl) || "");
+    if (own()) { const t = await sb.rpc("order_photo_link", { p_order: o.id }); list.token = t.data || null; }
+  }
+  photoCache[o.id] = list;
+  if (oFor === o.no && !$("#sheet").hidden) openOrder(o.no);
+}
+function photoMsg(o, list) {
+  const seen = list.map(p => p.notes ? `${p.notes.toLowerCase()} on the ${(p.item || "cloth").toLowerCase()}` : (p.item || "").toLowerCase()).filter((x, i, a) => x && a.indexOf(x) === i);
+  return `${hello(cust(o.cid))}, this is ${shopName()}.\nWhen you dropped your clothes on ${fmtDay(o.at)}, we took photos${seen.length ? ` and noted: ${seen.join("; ")}` : ""}.\n\nYou can see them here:\nhttps://tagbook.ordiventa.com/photos?t=${list.token}\n\n_Sent with Tagbook_`;
+}
+function photoBlock(o) {
+  if (!photosOn()) return "";
+  if (photoCache[o.id] === undefined) loadPhotos(o);
+  const list = photoCache[o.id];
+  if (list === null || list === undefined) return `<div class="phblock"><b>Photos at drop-off</b><p class="hint">Loading…</p></div>`;
+  if (!list.length && !phAdd && o.cancelled) return "";
+  const taken = p => { const at = p.created_at || new Date().toISOString(); return `${fmtDay(Date.parse(at))}, ${new Date(at).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit" })}${p.taken_by ? ` by ${esc(p.taken_by.split(" ")[0])}` : ""}`; };
+  const add = phAdd && phAdd.no === o.no ? `<div class="phedit"><div class="phrow"><div class="phth"><img src="${esc(phAdd.url)}" alt="New photo"></div></div>
+      <p class="phq">Which cloth?</p><div class="chips rpick" style="margin:0">${o.items.map(it => pname(it)).filter((x, i, a) => a.indexOf(x) === i).map(n => `<button class="chip" data-phi="${esc(n)}" aria-pressed="${phAdd.item === n}">${esc(n)}</button>`).join("")}</div>
+      <p class="phq">What did you notice?</p><div class="chips rpick" style="margin:0">${PHOTO_NOTES.map(n => `<button class="chip" data-phn="${n}" aria-pressed="${phAdd.notes.includes(n)}">${n}</button>`).join("")}</div>
+      <div class="row" style="margin-top:10px"><button class="btn btn-ghost" id="phcancel">Cancel</button><button class="btn btn-primary" id="phsave" ${phAdd.busy ? "disabled" : ""}>${phAdd.busy ? "Saving…" : "Save photo"}</button></div></div>` : "";
+  const c = cust(o.cid);
+  return `<div class="phblock"><b>Photos at drop-off</b>
+    ${list.length ? `<div class="phlist">${list.map((p, j) => `<figure class="phfig"><a class="phbig" href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.url)}" alt="Photo ${j + 1}${p.item ? " of " + esc(p.item) : ""}"></a>
+      <figcaption class="phcap"><b>${esc(p.item || "Cloth")}${p.notes ? ": " + esc(p.notes.toLowerCase()) : ""}</b><span>Taken ${taken(p)}</span></figcaption></figure>`).join("")}</div>` : (add ? "" : `<p class="hint">Take a photo of any stain, tear or costly cloth, so you can show the customer it was there before you washed it.</p>`)}
+    ${add || (o.cancelled || list.length >= 6 ? "" : `<button class="btn btn-ghost" id="phadd">${CAM_SVG} Add photo</button>`)}
+    ${list.length && own() && list.token ? `<a class="btn btn-primary" id="phsend" href="${wa(o, photoMsg(o, list))}" target="_blank" rel="noopener">Send photos to ${esc(c.name.split(" ")[0])} on WhatsApp</a>` : ""}
+    ${list.length ? `<p class="hint">Photos are deleted 7 days after the clothes are collected.</p>` : ""}</div>`;
+}
+function wirePhotos(sh, o) {
+  const again = () => openOrder(o.no);
+  const a = sh.querySelector("#phadd"); if (a) a.onclick = () => pickPhoto(blob => { phAdd = { no: o.no, blob, url: URL.createObjectURL(blob), item: o.items.length === 1 ? pname(o.items[0]) : "", notes: [] }; again(); });
+  if (!phAdd || phAdd.no !== o.no) return;
+  sh.querySelectorAll("[data-phi]").forEach(b => b.onclick = () => { phAdd.item = b.dataset.phi; again(); });
+  sh.querySelectorAll("[data-phn]").forEach(b => b.onclick = () => { const n = b.dataset.phn; phAdd.notes = phAdd.notes.includes(n) ? phAdd.notes.filter(x => x !== n) : [...phAdd.notes, n]; again(); });
+  const cx = sh.querySelector("#phcancel"); if (cx) cx.onclick = () => { URL.revokeObjectURL(phAdd.url); phAdd = null; again(); };
+  const sv = sh.querySelector("#phsave"); if (sv) sv.onclick = async () => {
+    if (!phAdd.item) return toast("Tap which cloth the photo is of");
+    phAdd.busy = true; again();
+    const ok = await uploadPhoto(o.id, phAdd.blob, phAdd.item, phAdd.notes);
+    if (!ok) { phAdd.busy = false; toast("Couldn't save the photo. Check your internet and try again."); return again(); }
+    URL.revokeObjectURL(phAdd.url); phAdd = null; toast("Photo saved"); loadPhotos(o);
+  };
+}
 function noteBlock(o) {
   if (!newOpts() && !o.remarks && !o.collect && !o.money) return "";
   const lines = [o.collect ? `<b>Collection:</b> ${esc(fmtCollect(o.collect))}` : "", o.remarks ? `<b>Remarks:</b> ${esc(o.remarks.split("; ").join(", "))}` : "", o.money ? `<b>Money found in pocket:</b> ${naira(o.money)}` : ""].filter(Boolean);
@@ -2229,7 +2325,7 @@ function wireNote(sh, o) {
 }
 function openOrder(no) {
   const o = orders.find(x => x.no === no) || cancelledOrders.find(x => x.no === no); if (!o) { go("orders"); return; }
-  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; }
+  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; if (phAdd) { URL.revokeObjectURL(phAdd.url); phAdd = null; } }
   if (o.cancelled || oMode) { fixView(o); return; }
   const c = cust(o.cid), k = calc(o), sh = $("#sheet");
   if (own() && !o.notified) { o.notified = true; put("orders", { id: o.id }, { notified: true }); }
@@ -2301,10 +2397,11 @@ function openOrder(no) {
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
     <p class="hint">Dropped ${fmtDay(o.at)}</p>
     ${noteBlock(o)}
+    ${photoBlock(o)}
     ${html}
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
-  wireBack(sh); wireFix(sh, o); wireNote(sh, o);
+  wireBack(sh); wireFix(sh, o); wireNote(sh, o); wirePhotos(sh, o);
   if ($("#prt")) $("#prt").onclick = () => printReceipt(o);
   sh.querySelectorAll("[data-paper]").forEach(b => b.onclick = () => { paper = b.dataset.paper; try { localStorage.setItem("tb-paper", paper); } catch (_) { } sh.querySelectorAll("[data-paper]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.paper === paper))); });
   const setGreet = async g => {

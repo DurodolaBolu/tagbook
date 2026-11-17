@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
-const db = { send_log: [], quick_replies: [], shop_followups: [], shop_remarks: [],
+const db = { order_photos: [], send_log: [], quick_replies: [], shop_followups: [], shop_remarks: [],
   shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
@@ -28,11 +28,11 @@ function filterRows(rows, params) {
     if (op === "in") { const set = val.replace(/^\(|\)$/g, "").split(",").map(s => s.replace(/"/g, "")); rows = rows.filter(r => set.includes(String(r[k]))); } }
   return rows;
 }
-const pk = { send_log: "id", quick_replies: "id", shop_followups: "shop_id", shop_remarks: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
+const pk = { order_photos: "id", send_log: "id", quick_replies: "id", shop_followups: "shop_id", shop_remarks: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
 const errors = [];
 async function handle(route) {
   const req = route.request(), u = new URL(req.url()), p = u.pathname, method = req.method();
-  const body = req.postData() ? JSON.parse(req.postData()) : null;
+  let body = null; try { body = req.postData() ? JSON.parse(req.postData()) : null; } catch (_) { body = null; }
   const send = (status, obj, headers = {}) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*", ...headers }, body: obj === undefined ? "" : JSON.stringify(obj) });
   if (method === "OPTIONS") return route.fulfill({ status: 200, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
   if (p === "/auth/v1/token" && u.searchParams.get("grant_type") === "refresh_token") {
@@ -77,6 +77,9 @@ async function handle(route) {
   if (/^\/rest\/v1\/rpc\/(admin_dashboard|admin_agents|admin_shops|team_options|admin_team_pay)$/.test(p)) return send(200, []);
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId && !process.env.CAPTURE_CALLS);
   if (process.env.CAPTURE_CALLS && p === "/rest/v1/rpc/is_agent") return send(200, true);
+  if (p.startsWith("/storage/v1/object/order-photos/") && method === "POST") { global.photoUploads = (global.photoUploads || 0) + 1; return send(200, { Key: p.slice(19) }); }
+  if (p === "/storage/v1/object/sign/order-photos") return send(200, (body.paths || []).map(x => ({ path: x, signedURL: "/object/sign/order-photos/" + x + "?token=t", error: null })));
+  if (p === "/rest/v1/rpc/order_photo_link") return send(200, "a".repeat(36));
   if (p === "/rest/v1/rpc/goal_progress") return send(200, { active: 12, signups: 18, week_signups: 3, week_active: 2 });
   if (p === "/rest/v1/rpc/is_caller") return send(200, !!process.env.CAPTURE_CALLS);
   if (p === "/rest/v1/rpc/caller_leads") return send(200, (body.p_from ? [] : (global.callLeads || [])));
@@ -155,7 +158,7 @@ async function handle(route) {
     if (!fs.existsSync(fp)) { s.statusCode = 404; return s.end(); } s.setHeader("content-type", { ".js": "text/javascript", ".html": "text/html", ".css": "text/css", ".json": "application/json", ".woff2": "font/woff2", ".png": "image/png" }[path.extname(fp)] || "text/plain"); s.end(fs.readFileSync(fp)); }).listen(8787);
   const browser = await chromium.launch();
   const out = path.join(__dirname, "shots"); fs.mkdirSync(out, { recursive: true });
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: "block" });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: +(process.env.DSF || 1), serviceWorkers: "block" });
   const page = await ctx.newPage();
   page.on("pageerror", e => errors.push("pageerror: " + e.message));
   page.on("console", m => { if (m.type() === "error" && !/websocket|realtime|ERR_|404/i.test(m.text())) errors.push("console: " + m.text()); });
@@ -364,6 +367,46 @@ async function handle(route) {
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);
     console.log("due card:", await page.$$eval(".dueh b", e => e.map(x => x.textContent)));
     await page.screenshot({ path: path.join(out, "list.png"), fullPage: true });
+    process.exit(0);
+  }
+  if (process.env.CAPTURE_PHOTOS) { // photos at drop-off: log screen and order screen
+    const out = process.env.CAPTURE_PHOTOS; await page.setViewportSize({ width: 390, height: 1700 });
+    const jpg = path.join(out, "_p.jpg"); fs.writeFileSync(jpg, Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAA//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AN//Z", "base64"));
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.waitForTimeout(200);
+    await page.click("[data-add]"); await page.waitForTimeout(200);
+    const [fc] = await Promise.all([page.waitForEvent("filechooser"), page.click('[data-cam="0"]')]); await fc.setFiles(jpg); await page.waitForTimeout(600);
+    await page.click('[data-pn="0"][data-note="Stain"]'); await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(out, "log.png"), fullPage: true });
+    await page.click("#save"); await page.waitForTimeout(2500);
+    console.log("uploads:", global.photoUploads, "rows:", JSON.stringify(db.order_photos.map(r => ({ item: r.item, notes: r.notes, order: !!r.order_id, path: r.path.split("/").length }))));
+    console.log("items saved clean:", JSON.stringify(db.orders[db.orders.length - 1].items));
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(out, "order.png"), fullPage: true });
+    console.log("send link:", await page.getAttribute("#phsend", "href").catch(() => null));
+    process.exit(0);
+  }
+  if (process.env.CAPTURE_VIDEO) { // phone-size frames for the "what's new" video
+    const out = process.env.CAPTURE_VIDEO; await page.setViewportSize({ width: 390, height: 844 });
+    const snap = async (n, sel) => { await page.addStyleTag({ content: ".toast,#supfab{display:none!important}" }); if (sel) await page.evaluate(q => { const e = document.querySelector(q); if (e) e.scrollIntoView({ block: "center" }); }, sel); await page.waitForTimeout(250); await page.screenshot({ path: path.join(out, n + ".jpg"), type: "jpeg", quality: 92 }); };
+    await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(800);
+    await page.click('[data-st="business"]'); await page.waitForTimeout(400);
+    await snap("01-settings-off", "#oc");
+    await page.check("#oc"); await page.check("#ow"); await page.waitForTimeout(400); await snap("02-settings-on", "#oc");
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.waitForTimeout(200); await page.click("[data-add]"); await page.waitForTimeout(200);
+    await snap("03-speed", '[data-spd="std"]');
+    await page.click('[data-calm="1"]'); await page.waitForTimeout(150); await page.click('[data-cal]:not([disabled]) >> nth=2'); await snap("04-calendar", ".cal");
+    await page.click('[data-spd="exp"]'); await page.waitForTimeout(150); await page.click('[data-exd="2"]'); await snap("05-express", '[data-exd="2"]');
+    await page.click('[data-spd="wait"]'); await snap("06-wait", '[data-spd="wait"]');
+    await page.click('[data-rm="Stain"]'); await page.waitForTimeout(100);
+    await page.click("[data-money]"); await page.waitForTimeout(200); await page.fill("#mp-in", "500"); await snap("07-money"); await page.click("#mp-ok"); await snap("08-remarks", "[data-money]");
+    await page.click('[data-spd="exp"]'); await page.waitForTimeout(150); await page.click('[data-exd="1"]'); await page.waitForTimeout(150);
+    await page.click("#save"); await page.waitForTimeout(1200);
+    const dd = n => { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + n); return t.toISOString(); };
+    const lst = db.orders.filter(q => !q.cancelled_at).slice(-3); [0, 1, 1].forEach((n, i) => { if (lst[i]) { lst[i].collect_at = dd(n); lst[i].status = "new"; } });
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);
+    await snap("09-due", ".duecard");
     process.exit(0);
   }
   if (process.env.CAPTURE_ORDERS) { // design review: order list under each filter, on a phone
