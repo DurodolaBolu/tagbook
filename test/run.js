@@ -78,6 +78,8 @@ async function handle(route) {
   if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId && !process.env.CAPTURE_CALLS);
   if (process.env.CAPTURE_CALLS && p === "/rest/v1/rpc/is_agent") return send(200, true);
   if (p.startsWith("/storage/v1/object/order-photos/") && method === "POST") { global.photoUploads = (global.photoUploads || 0) + 1; return send(200, { Key: p.slice(19) }); }
+  if (p.startsWith("/storage/v1/object/sign/order-photos/") && method === "GET" && process.env.PHOTO_FILE) return route.fulfill({ status: 200, contentType: "image/jpeg", headers: { "access-control-allow-origin": "*" }, body: fs.readFileSync(process.env.PHOTO_FILE) });
+  if (p === "/functions/v1/photos" && method === "GET") return send(200, { shop: "BrightWash Test", no: 2, dropped: new Date().toISOString(), photos: db.order_photos.map(r => ({ url: SB + "/storage/v1/object/sign/order-photos/" + r.path + "?token=t", item: r.item, notes: r.notes, at: new Date().toISOString() })) });
   if (p === "/storage/v1/object/sign/order-photos") return send(200, (body.paths || []).map(x => ({ path: x, signedURL: "/object/sign/order-photos/" + x + "?token=t", error: null })));
   if (p === "/rest/v1/rpc/order_photo_link") return send(200, "a".repeat(36));
   if (p === "/rest/v1/rpc/goal_progress") return send(200, { active: 12, signups: 18, week_signups: 3, week_active: 2 });
@@ -368,6 +370,27 @@ async function handle(route) {
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);
     console.log("due card:", await page.$$eval(".dueh b", e => e.map(x => x.textContent)));
     await page.screenshot({ path: path.join(out, "list.png"), fullPage: true });
+    process.exit(0);
+  }
+  if (process.env.CAPTURE_PHOTOVID) { // frames for the photos video
+    const out = process.env.CAPTURE_PHOTOVID, jpg = process.env.PHOTO_FILE; await page.setViewportSize({ width: 390, height: 844 });
+    const snap = async (n, sel, block = "center") => { await page.addStyleTag({ content: ".toast,#supfab{display:none!important}" }); if (sel) await page.evaluate(([q, b]) => { const e = document.querySelector(q); if (e) e.scrollIntoView({ block: b }); }, [sel, block]); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, n + ".jpg"), type: "jpeg", quality: 92 }); };
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.waitForTimeout(200);
+    await page.click("[data-add]"); await page.waitForTimeout(300);
+    await page.evaluate(() => { const b = document.querySelector('[data-cam="0"]'); b.style.outline = "3px solid #E8A33D"; b.style.outlineOffset = "2px"; });
+    await snap("01-camera", '[data-cam="0"]');
+    const [fc] = await Promise.all([page.waitForEvent("filechooser"), page.click('[data-cam="0"]')]); await fc.setFiles(jpg); await page.waitForTimeout(900);
+    await snap("02-photo", ".phedit");
+    await page.click('[data-pn="0"][data-note="Stain"]'); await page.waitForTimeout(300);
+    await snap("03-stain", ".phedit");
+    await snap("04-remarks", '[data-rm="Stain"]');
+    await page.click("#save"); await page.waitForTimeout(2500);
+    if (await page.$("[data-og]")) { await page.click("[data-og] >> nth=0"); await page.waitForTimeout(900); }
+    await snap("05-order", ".phblock", "start");
+    await snap("06-list", "#wamsg-list");
+    const tok = "a".repeat(36); await page.goto("http://localhost:8787/photos.html?t=" + tok); await page.waitForTimeout(1500);
+    await snap("07-customer");
     process.exit(0);
   }
   if (process.env.CAPTURE_PHOTOS) { // photos at drop-off: log screen and order screen
