@@ -8,12 +8,8 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefr
 // Logins are phone + 6-digit PIN, checked by the "login" server function, which counts wrong PINs
 // and pauses a login after 5. The app never builds the real password itself.
 
-const SERVICES = { wi: "Wash and iron", wo: "Wash only", io: "Iron only", wsi: "Wash, starch and iron" };
-// TRY-OUT (16 Nov 2026): collection date, Wait & get, remarks and Starch and iron show only in Bolu's BrightWash
-// until they go live for every shop on 17 Nov. To go live: delete NEW_OPTS_SHOP and make newOpts() return true,
-// and move si into SERVICES above.
-const NEW_OPTS_SHOP = "eb2f4c6c-ad86-42b4-bb8d-2a88ecf9e9b0";
-const newOpts = () => !!shop && (shop.id === NEW_OPTS_SHOP || location.hostname === "localhost");
+const SERVICES = { wi: "Wash and iron", wo: "Wash only", io: "Iron only", wsi: "Wash, starch and iron", si: "Starch and iron" };
+const newOpts = () => true; // order options are live for every shop (17 Nov 2026)
 const STEPS = [["new", "Logged"], ["listed", "List sent"], ["ready", "Ready"], ["told", "Told"], ["picked", "Picked up"]];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -153,7 +149,6 @@ async function load() {
   } else if (shop.staff_prices) {
     (await fetchAll("item_prices", "item_id,prices")).forEach(r => prices[r.item_id] = r.prices);
   }
-  if (newOpts()) SERVICES.si = "Starch and iron"; else delete SERVICES.si;
   PRICES = base[2].map(i => ({ ...i, p: prices[i.id] || {} }));
   customers.forEach(c => c.phone = phones[c.id] || "");
   const all = base[4].map(o => ({
