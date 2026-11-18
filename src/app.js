@@ -3086,7 +3086,7 @@ function drawSignup() {
         </form>
         <p class="lfoot">Already have Tagbook? <button class="llink" id="sback">Log in</button></p>
         <p class="lfoot">Rather we set it up for you? <a class="llink" href="${help}" target="_blank" rel="noopener">Message us on WhatsApp</a></p>`}
-      <p class="lpriv">By starting, you agree to our <a href="/privacy">Privacy policy</a>.</p>
+      <p class="lpriv">By starting, you agree to our <a href="/privacy">Privacy policy</a>.</p><p class="lpriv lco">Tagbook is a product of Ordiventa Technologies Limited (RC 10010214), No. 4, Aule Housing Estate, Aule Street, Akure, Ondo State, Nigeria · WhatsApp +234 812 075 6325</p>
     </main></div>`;
   const keep = () => { if (S.step !== "form") { S.code = digits(($("#su-code") || {}).value || "").slice(0, 6); return; }
     S.shop = $("#su-shop").value; S.name = $("#su-name").value; S.phone = digits($("#su-phone").value); S.area = $("#su-area").value; S.state = $("#su-state").value;
@@ -3151,7 +3151,7 @@ function drawLogin() {
         <p class="lask">What would you like to do?</p>
         <button class="lpick" id="pick-in"><b>Log in</b><span>I already use Tagbook, as a shop owner or staff</span></button>
         <button class="lpick" id="pick-new"><b>Start a new shop</b><span>I own a laundry and want to try Tagbook free for 1 month</span></button>
-        <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
+        <p class="lpriv"><a href="/privacy">Privacy policy</a></p><p class="lpriv lco">Tagbook is a product of Ordiventa Technologies Limited (RC 10010214), No. 4, Aule Housing Estate, Aule Street, Akure, Ondo State, Nigeria · WhatsApp +234 812 075 6325</p>
       </main></div>`;
     $("#pick-in").onclick = () => { L.choose = false; drawLogin(); };
     $("#pick-new").onclick = () => { L.choose = false; showSignup(); };
@@ -3183,7 +3183,7 @@ function drawLogin() {
         : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
       ${!L.confirm && !pinStep ? `<p class="lnew">New to Tagbook? <button class="llink" id="lnew">Start a new shop</button></p>` : ""}
       ${L.busy ? `<p class="lbusy">${L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
-      <p class="lpriv"><a href="/privacy">Privacy policy</a></p>
+      <p class="lpriv"><a href="/privacy">Privacy policy</a></p><p class="lpriv lco">Tagbook is a product of Ordiventa Technologies Limited (RC 10010214), No. 4, Aule Housing Estate, Aule Street, Akure, Ondo State, Nigeria · WhatsApp +234 812 075 6325</p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
