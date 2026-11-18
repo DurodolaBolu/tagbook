@@ -372,6 +372,27 @@ async function handle(route) {
     await page.screenshot({ path: path.join(out, "list.png"), fullPage: true });
     process.exit(0);
   }
+  if (process.env.CAPTURE_MAIN) { // frames for the main "how Tagbook works" video
+    const out = process.env.CAPTURE_MAIN; await page.setViewportSize({ width: 390, height: 844 });
+    const snap = async (n, sel, block = "center") => { await page.addStyleTag({ content: ".toast,#supfab{display:none!important}" }); if (sel) await page.evaluate(([q, b]) => { const e = document.querySelector(q); if (e) e.scrollIntoView({ block: b }); }, [sel, block]); else await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, n + ".jpg"), type: "jpeg", quality: 92 }); };
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.waitForTimeout(200);
+    for (let k = 0; k < 3; k++) { const bs = await page.$$("[data-add]"); if (bs[k]) { await bs[k].click(); await page.waitForTimeout(250); } }
+    await page.click("[data-inc='0']").catch(() => { }); await page.waitForTimeout(150);
+    await snap("m01-log", ".item");
+    await page.click("#save"); await page.waitForTimeout(2500);
+    if (await page.$("[data-og]")) { await page.click("[data-og] >> nth=0"); await page.waitForTimeout(900); }
+    await snap("m02-mark", null);
+    const amts = [[4500, 1000], [7200, 0], [3000, 1500], [5600, 2000]];
+    db.orders.filter(q => !q.cancelled_at).forEach((q, i) => { const [t, pd] = amts[i % amts.length]; q.status = "told"; q.billed = true; q.notified = true; const m = db.order_money.find(x => x.order_id === q.id); if (m) { m.total = t; m.paid = pd; m.billed_at = new Date().toISOString(); m.payments = pd ? [{ amt: pd, at: Date.now(), method: "transfer", by: "Bolu" }] : []; } });
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1200);
+    if (await page.$('[data-f="owed"]')) { await page.click('[data-f="owed"]'); await page.waitForTimeout(600); }
+    await snap("m03-owing", null);
+    await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(800);
+    await page.click('[data-st="staff"]'); await page.waitForTimeout(600);
+    await snap("m04-staff", null);
+    process.exit(0);
+  }
   if (process.env.CAPTURE_PHOTOVID) { // frames for the photos video
     const out = process.env.CAPTURE_PHOTOVID, jpg = process.env.PHOTO_FILE; await page.setViewportSize({ width: 390, height: 844 });
     const snap = async (n, sel, block = "center") => { await page.addStyleTag({ content: ".toast,#supfab{display:none!important}" }); if (sel) await page.evaluate(([q, b]) => { const e = document.querySelector(q); if (e) e.scrollIntoView({ block: b }); }, [sel, block]); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, n + ".jpg"), type: "jpeg", quality: 92 }); };
