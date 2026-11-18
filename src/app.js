@@ -3049,6 +3049,7 @@ const SIGN_ERR = {
   BUSY: "Lots of shops are signing up today. Message us on WhatsApp and we'll set you up.",
   BAD_CODE: "That code isn't right, or it has expired. Check the text message, or send a new code.",
   CODE_FAILED: "We couldn't send the code. Check the number, or message us on WhatsApp.",
+  NOT_VERIFIED: "We haven't got the code on WhatsApp yet. Tap \"Send code on WhatsApp\", send it from the WhatsApp on the number you typed, then tap the button again.",
 };
 function drawSignup() {
   const box = $("#login"); box.hidden = false;
@@ -3058,7 +3059,17 @@ function drawSignup() {
     <aside class="lside"><div class="lart">${ART_MACHINE}</div>
       <p class="lbrand">Tagbook</p><p class="ltag">Every cloth, accounted for.</p></aside>
     <main class="lmain lsign">
-      ${S.step === "code" ? `<h1 class="lname">Check your text messages</h1>
+      ${S.step === "wa" ? `<h1 class="lname">Confirm your number on WhatsApp</h1>
+        <p class="lask">Send this code to Tagbook from the WhatsApp on <b>${fmtPhone(S.phone)}</b>, so we know the number is yours.</p>
+        <p class="wacode">${esc(S.waCode)}</p>
+        <a class="btn btn-primary" id="swa" href="https://wa.me/${esc(S.waTo)}?text=${encodeURIComponent("Tagbook code " + S.waCode)}" target="_blank" rel="noopener">Send code on WhatsApp</a>
+        <form class="lform" id="sform" novalidate>
+          <p class="hint">WhatsApp opens with the code typed in. Tap send, then come back here.</p>
+          <p class="lerr" role="alert">${S.err}</p>
+          <button class="btn btn-ghost" id="sgo" ${S.busy ? "disabled" : ""}>${S.busy ? "Setting up your shop…" : "I've sent it. Finish sign-up"}</button>
+        </form>
+        <p class="lfoot"><button class="llink" id="sback">Change my details</button></p>`
+      : S.step === "code" ? `<h1 class="lname">Check your text messages</h1>
         <p class="lask">We sent a 6-digit code to ${fmtPhone(S.phone)}.</p>
         <form class="lform" id="sform" novalidate>
           ${f("su-code", "Code", S.code, `inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="pin"`)}
@@ -3088,15 +3099,18 @@ function drawSignup() {
         <p class="lfoot">Rather we set it up for you? <a class="llink" href="${help}" target="_blank" rel="noopener">Message us on WhatsApp</a></p>`}
       <p class="lpriv">By starting, you agree to our <a href="/privacy">Privacy policy</a>.</p><p class="lpriv lco">Tagbook is a product of Ordiventa Technologies Limited (RC 10010214), No. 4, Aule Housing Estate, Aule Street, Akure, Ondo State, Nigeria · WhatsApp +234 812 075 6325</p>
     </main></div>`;
-  const keep = () => { if (S.step !== "form") { S.code = digits(($("#su-code") || {}).value || "").slice(0, 6); return; }
+  const keep = () => { if (S.step === "wa") return; if (S.step !== "form") { S.code = digits(($("#su-code") || {}).value || "").slice(0, 6); return; }
     S.shop = $("#su-shop").value; S.name = $("#su-name").value; S.phone = digits($("#su-phone").value); S.area = $("#su-area").value; S.state = $("#su-state").value;
     S.pin = digits($("#su-pin").value).slice(0, 6); S.pin2 = digits($("#su-pin2").value).slice(0, 6); };
   $("#sform").onsubmit = e => { e.preventDefault(); keep(); submitSignup(); };
-  $("#sback").onclick = () => { keep(); if (S.step === "code") { S.step = "form"; S.err = ""; return drawSignup(); } S = null; showLogin(); L.choose = false; drawLogin(); };
+  $("#sback").onclick = () => { keep(); if (S.step === "code" || S.step === "wa") { S.step = "form"; S.err = ""; S.checkId = ""; return drawSignup(); } S = null; showLogin(); L.choose = false; drawLogin(); };
   if ($("#sresend")) $("#sresend").onclick = () => { S.pinId = ""; S.code = ""; submitSignup(); };
   if (TURNSTILE_SITE && $("#sbot")) loadTurnstile().then(() => { try { window.turnstile.render("#sbot", { sitekey: TURNSTILE_SITE, callback: t => { S.bot = t; } }); } catch (_) { } });
   const first = S.step === "code" ? $("#su-code") : null; if (first) first.focus();
+  if ($("#swa")) $("#swa").onclick = () => { S.waSent = true; };
 }
+// Back from WhatsApp after sending the code: try to finish straight away (once), so they don't have to tap again.
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S && S.step === "wa" && S.waSent && !S.busy && !S.autoTried) { S.autoTried = true; setTimeout(() => { if (S && S.step === "wa" && !S.busy) submitSignup(); }, 2500); } });
 let tsLoading = null;
 const loadTurnstile = () => tsLoading || (tsLoading = new Promise(ok => { const sc = document.createElement("script"); sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; sc.async = true; sc.onload = ok; sc.onerror = ok; document.head.appendChild(sc); }));
 async function signupCall(body) {
@@ -3107,7 +3121,7 @@ async function signupCall(body) {
 }
 async function submitSignup() {
   const shopName = tidy(S.shop), name = tidy(S.name);
-  const err = S.step === "code" ? (S.code.length !== 6 ? "Type the 6-digit code from the text message." : "")
+  const err = S.step === "wa" ? "" : S.step === "code" ? (S.code.length !== 6 ? "Type the 6-digit code from the text message." : "")
     : !shopName ? "Type your shop name." : shopName.length > NAME_MAX ? SIGN_ERR.NAME_TOO_LONG : !name ? "Type your name."
     : !/^0\d{10}$/.test(S.phone) ? SIGN_ERR.BAD_PHONE : !S.state ? SIGN_ERR.BAD_STATE : !tidy(S.area) ? SIGN_ERR.MISSING_TOWN : S.pin.length !== 6 ? "Choose a 6-digit PIN." : S.pin !== S.pin2 ? "The two PINs don't match. Type them again." : "";
   if (err) { S.err = esc(err); return drawSignup(); }
@@ -3117,9 +3131,10 @@ async function submitSignup() {
   if (S.step === "form") {
     const c = await signupCall({ action: "signup_code", ...base });
     if (c.pin_id) { S.pinId = c.pin_id; S.step = "code"; S.busy = false; return drawSignup(); }
+    if (c.check_id) { S.checkId = c.check_id; S.waTo = c.wa_to; S.waCode = c.wa_code; S.waSent = false; S.autoTried = false; S.step = "wa"; S.busy = false; return drawSignup(); }
     if (c.error !== "CODES_OFF") return signupFailed(c.error);
   }
-  const r = await signupCall({ action: "self_signup", ...base, shop: shopName, name, area: tidy(S.area), state: S.state, pin: S.pin, ms: Date.now() - S.t0, pin_id: S.pinId, code: S.code });
+  const r = await signupCall({ action: "self_signup", ...base, shop: shopName, name, area: tidy(S.area), state: S.state, pin: S.pin, ms: Date.now() - S.t0, pin_id: S.pinId, code: S.code, check_id: S.checkId || "" });
   if (r.error) return signupFailed(r.error);
   // Created: log straight in and land on a welcome card that points at the first customer.
   try { sessionStorage.setItem("tb-welcome", "1"); } catch (_) { }

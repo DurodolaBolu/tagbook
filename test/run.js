@@ -59,7 +59,8 @@ async function handle(route) {
     return send(200, { access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.sig", refresh_token: "r" });
   }
   if (p === "/functions/v1/admin" && (body.action === "signup_code" || body.action === "self_signup")) {
-    if (body.action === "signup_code") return send(400, { error: "CODES_OFF" });
+    if (body.action === "signup_code") return global.waMode ? send(200, { ok: true, wa_to: "2347000000000", wa_code: "482913", check_id: "11111111-1111-1111-1111-111111111111" }) : send(400, { error: "CODES_OFF" });
+    if (global.waMode && !global.waOk) return send(400, { error: "NOT_VERIFIED" });
     global.signups = (global.signups || []).concat([body]);
     if (body.website) return send(400, { error: "BAD_FORM" });
     if (db.staff.some(s => s.phone === body.phone)) return send(409, { error: "PHONE_IN_USE" });
@@ -370,6 +371,21 @@ async function handle(route) {
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);
     console.log("due card:", await page.$$eval(".dueh b", e => e.map(x => x.textContent)));
     await page.screenshot({ path: path.join(out, "list.png"), fullPage: true });
+    process.exit(0);
+  }
+  if (process.env.WA_TEST) { // sign-up with the WhatsApp number check
+    const out = process.env.WA_TEST; global.waMode = true; await page.setViewportSize({ width: 390, height: 900 });
+    await page.evaluate(() => { try { localStorage.clear(); sessionStorage.clear(); } catch (_) { } });
+    await page.goto("http://localhost:8787/?start=1"); await page.waitForSelector("#sform");
+    await page.fill("#su-shop", "Ksolo247 Laundry"); await page.fill("#su-name", "Egwu Solomon"); await page.fill("#su-phone", "08144737700");
+    await page.selectOption("#su-state", "Ondo"); await page.fill("#su-area", "Oba Ile"); await page.fill("#su-pin", "482915"); await page.fill("#su-pin2", "482915"); await page.waitForTimeout(4100);
+    await page.click("#sgo"); await page.waitForTimeout(800);
+    console.log("wa step shown:", !!(await page.$("#swa")), "| link:", await page.getAttribute("#swa", "href"));
+    await page.screenshot({ path: path.join(out, "wa-step.png"), fullPage: true });
+    await page.click("#sgo"); await page.waitForTimeout(800);
+    console.log("not verified message:", (await page.textContent(".lerr")).slice(0, 60));
+    global.waOk = true; await page.click("#sgo"); await page.waitForTimeout(2500);
+    console.log("finished, check_id sent:", global.signups.slice(-1)[0].check_id);
     process.exit(0);
   }
   if (process.env.CAPTURE_MAIN) { // frames for the main "how Tagbook works" video

@@ -690,3 +690,4 @@ label .opt{font-size:13px}
 .osize{grid-column:1/-1;margin:10px 0 2px;font-size:14px;font-weight:700;color:var(--muted)}
 .osize .n{font-weight:600;margin-left:4px}
 .lco{font-size:12px;opacity:.8;margin-top:4px}
+.wacode{font-size:34px;font-weight:700;letter-spacing:6px;text-align:center;margin:8px 0 14px;font-variant-numeric:tabular-nums}
