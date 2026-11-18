@@ -46,7 +46,7 @@ const busy = () => { const a = document.activeElement; return !!(a && /INPUT|TEX
 
 /* ---------- State, loaded from the database ---------- */
 let me = null, role = "sec", shop = null, priv = null, isAdmin = false, isAgent = false;
-let BRANCHES = [], PRICES = [], customers = [], orders = [], cancelledOrders = [], staffList = [];
+let BRANCHES = [], PRICES = [], customers = [], orders = [], cancelledOrders = [], staffList = [], expenses = [];
 let tab = "orders", filter = "all", query = "", openNo = null, page = 0;
 const PER_PAGE = 20;
 const own = () => role === "own";
@@ -146,6 +146,7 @@ async function load() {
     ip.forEach(r => prices[r.item_id] = r.prices);
     ph.forEach(r => phones[r.customer_id] = r.phone);
     om.forEach(r => money[r.order_id] = r);
+    if (expOn()) { try { expenses = await fetchAll("expenses", "id,amount,kind,note,spent_on,created_by,created_at", "spent_on"); } catch (_) { expenses = []; } }
   } else if (shop.staff_prices) {
     (await fetchAll("item_prices", "item_id,prices")).forEach(r => prices[r.item_id] = r.prices);
   }
@@ -2519,9 +2520,18 @@ function openOrder(no) {
 }
 
 /* ---------- Reports (owner) ---------- */
+// Expenses (owner only): money spent on the shop, so Reports can show what is left. BrightWash first, every shop from 19 Nov, 6pm.
+const EXP_LIVE = Date.parse("2026-11-19T18:00:00+01:00");
+const expOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || Date.now() >= EXP_LIVE || location.hostname === "localhost");
+const EXP_KINDS = [["soap", "Soap"], ["chemicals", "Stain remover and chemicals"], ["fuel", "Fuel"], ["staff", "Staff pay"], ["electricity", "Electricity bill"], ["rent", "Rent"], ["nylon", "Packing nylon"], ["starch", "Starch"], ["maintenance", "Generator, machine and repairs"], ["other", "Other"]];
+const expKind = k => (EXP_KINDS.find(x => x[0] === k) || EXP_KINDS[EXP_KINDS.length - 1])[1];
+const expDay = d => { const [y, mo, dd] = String(d).split("-").map(Number); return new Date(y, mo - 1, dd); };
+const ymd = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+let expAdd = null;
 function dkey(x) { return x.getFullYear() + "-" + (x.getMonth() + 1) + "-" + x.getDate(); }
 function liveByDay() {
-  const m = {}; const add = (ts, f, v) => { const k = dkey(new Date(ts)); (m[k] = m[k] || { orders: 0, clothes: 0, billed: 0, received: 0 })[f] += v; };
+  const m = {}; const add = (ts, f, v) => { const k = dkey(new Date(ts)); (m[k] = m[k] || { orders: 0, clothes: 0, billed: 0, received: 0, spent: 0 })[f] += v; };
+  if (expOn()) expenses.forEach(x => add(expDay(x.spent_on).getTime(), "spent", x.amount));
   orders.forEach(o => {
     add(o.at, "orders", 1); add(o.at, "clothes", calc(o).count);
     if (o.billed && o.m.billed_at) add(Date.parse(o.m.billed_at), "billed", o.m.total);
@@ -2547,7 +2557,7 @@ function periodLabel(type, k, { s, e }) {
   return (k === 0 ? "This year · " : "") + s.getFullYear();
 }
 function sumRange(s, e, live) {
-  const tot = { orders: 0, clothes: 0, billed: 0, received: 0 }; const x = new Date(s); const now = new Date(); now.setHours(23, 59, 59, 999);
+  const tot = { orders: 0, clothes: 0, billed: 0, received: 0, spent: 0 }; const x = new Date(s); const now = new Date(); now.setHours(23, 59, 59, 999);
   while (x < e && x <= now) { const v = live[dkey(x)]; if (v) for (const f in tot) tot[f] += v[f]; x.setDate(x.getDate() + 1); }
   return tot;
 }
@@ -2584,12 +2594,67 @@ function renderReports() {
       <div class="stat"><b>${cur.clothes}</b><span>Clothes</span></div>
     </div>
     <div class="lines"><div><span>Owed to you right now</span><b style="color:${owingNow ? "var(--owes)" : "inherit"}">${naira(owingNow)}</b></div></div>
+    ${expOn() ? expHtml(R, cur, partial) : ""}
     <p class="hint">Money received counts payments on the day they came in. Billed counts bills on the day they were made, paid or not.</p>`;
   wireBack(view);
-  view.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => { rep = { type: b.dataset.rt, k: 0, sel: null }; renderReports(); });
-  $("#rprev").onclick = () => { rep.k--; rep.sel = null; renderReports(); };
-  $("#rnext").onclick = () => { rep.k++; rep.sel = null; renderReports(); };
+  if (expOn()) wireExp(R);
+  view.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => { rep = { type: b.dataset.rt, k: 0, sel: null }; expAdd = null; renderReports(); });
+  $("#rprev").onclick = () => { rep.k--; rep.sel = null; expAdd = null; renderReports(); };
+  $("#rnext").onclick = () => { rep.k++; rep.sel = null; expAdd = null; renderReports(); };
   view.querySelectorAll("[data-bi]").forEach(b => b.onclick = () => { rep.sel = +b.dataset.bi; renderReports(); });
+}
+
+function expHtml(R, cur, partial) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const list = expenses.filter(x => { const d = expDay(x.spent_on); return d >= R.s && d < R.e; }).sort((a, b) => b.spent_on.localeCompare(a.spent_on) || String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  const left = cur.received - cur.spent;
+  const many = list.length > 8 && (rep.type === "month" || rep.type === "year");
+  const byKind = {}; list.forEach(x => byKind[x.kind] = (byKind[x.kind] || 0) + x.amount);
+  const rows = many
+    ? Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><span>${esc(expKind(k))}</span><b>${naira(v)}</b></div>`).join("")
+    : list.map(x => `<div class="exrow"><span><b>${esc(expKind(x.kind))}</b>${x.note ? `<em class="exnote">${esc(x.note)}</em>` : ""}<small>${rep.type === "day" ? "" : fmtDay(expDay(x.spent_on).getTime()) + (x.created_by ? " · " : "")}${x.created_by ? esc(x.created_by) : ""}</small></span><span class="exr"><b>${naira(x.amount)}</b><button class="exdel" data-exdel="${x.id}" aria-label="Delete ${esc(expKind(x.kind))} ${naira(x.amount)}">×</button></span></div>`).join("");
+  let form = "";
+  if (expAdd) {
+    const inRange = today >= R.s && today < R.e;
+    const last = new Date(R.e); last.setDate(last.getDate() - 1);
+    const dflt = expAdd.day || ymd(inRange || last > today ? today : last);
+    expAdd.day = dflt;
+    form = `<div class="exform"><label for="exa">Amount spent (₦)</label><input id="exa" ${moneyAttrs} value="${expAdd.amt || ""}" placeholder="e.g. 4500">
+      <p class="exl">What was it for?</p><div class="chips exchips">${EXP_KINDS.map(([k, l]) => `<button class="chip" data-exk="${k}" aria-pressed="${expAdd.kind === k}">${l}</button>`).join("")}</div>
+      <label for="exn">Note (optional)</label><input id="exn" maxlength="120" value="${esc(expAdd.note || "")}" placeholder="e.g. 2 bags of Ariel" autocomplete="off">
+      <label for="exd">Day</label><input id="exd" type="date" max="${ymd(today)}" value="${dflt}">
+      <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="excancel">Cancel</button><button class="btn btn-primary" id="exsave" ${expAdd.busy ? "disabled" : ""}>${expAdd.busy ? "Saving…" : "Save expense"}</button></div></div>`;
+  }
+  return `<h3 class="exh">Spending</h3>
+    <div class="lines"><div><span>Money received${partial}</span><b>${naira(cur.received)}</b></div><div><span>Spent on the shop${partial}</span><b>${naira(cur.spent)}</b></div>
+      <div class="exleft"><span>Left</span><b style="color:${left < 0 ? "var(--owes)" : "inherit"}">${left < 0 ? "−" : ""}${naira(Math.abs(left))}</b></div></div>
+    ${form || `<button class="btn btn-ghost" id="exadd" style="margin-top:10px">+ Add expense</button>`}
+    ${list.length ? `<div class="lines exlist">${many ? `<div class="exsub"><span>${list.length} expenses, by type</span></div>` : ""}${rows}</div>` : `<p class="hint">No expenses recorded for this ${rep.type === "day" ? "day" : rep.type}. Add what you spend on soap, fuel, staff pay and more, and Tagbook shows what's left.</p>`}`;
+}
+function wireExp(R) {
+  const ad = $("#exadd"); if (ad) ad.onclick = () => { expAdd = { kind: null }; renderReports(); const a = $("#exa"); if (a) a.focus(); };
+  const a = $("#exa"); if (a) moneyInput(a, v => expAdd.amt = v || "");
+  view.querySelectorAll("[data-exk]").forEach(b => b.onclick = () => { expAdd.kind = b.dataset.exk; expAdd.note = $("#exn").value; expAdd.day = $("#exd").value; renderReports(); });
+  const n = $("#exn"); if (n) n.oninput = () => expAdd.note = n.value;
+  const d = $("#exd"); if (d) d.onchange = () => expAdd.day = d.value;
+  const cx = $("#excancel"); if (cx) cx.onclick = () => { expAdd = null; renderReports(); };
+  const sv = $("#exsave"); if (sv) sv.onclick = async () => {
+    const amt = num($("#exa").value), note = tidy($("#exn").value).slice(0, 120), day = $("#exd").value;
+    if (!amt) { toast("Type the amount spent"); return; }
+    if (!expAdd.kind) { toast("Choose what it was for"); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || expDay(day) > new Date()) { toast("Choose a day, today or before"); return; }
+    expAdd.busy = true; renderReports();
+    const { data, error } = await sb.from("expenses").insert({ amount: amt, kind: expAdd.kind, note: note || null, spent_on: day, created_by: (me && me.name) || null }).select("id,amount,kind,note,spent_on,created_by,created_at").single();
+    if (error) { expAdd.busy = false; toast(failMsg(error)); renderReports(); return; }
+    expenses.push(data); expAdd = null; toast(`Expense of ${naira(amt)} recorded`); renderReports();
+  };
+  view.querySelectorAll("[data-exdel]").forEach(b => b.onclick = async () => {
+    const x = expenses.find(e => e.id === b.dataset.exdel); if (!x) return;
+    if (!await askConfirm(`Delete this expense?`, `${esc(expKind(x.kind))}, ${naira(x.amount)} on ${fmtDay(expDay(x.spent_on).getTime())}.`, "Yes, delete it")) return;
+    const { error } = await sb.from("expenses").delete().eq("id", x.id);
+    if (error) { toast(failMsg(error)); return; }
+    expenses = expenses.filter(e => e !== x); toast("Expense deleted"); renderReports();
+  });
 }
 
 /* ---------- Settings ---------- */

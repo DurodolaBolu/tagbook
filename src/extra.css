@@ -691,3 +691,17 @@ label .opt{font-size:13px}
 .osize .n{font-weight:600;margin-left:4px}
 .lco{font-size:12px;opacity:.8;margin-top:4px}
 .wacode{font-size:34px;font-weight:700;letter-spacing:6px;text-align:center;margin:8px 0 14px;font-variant-numeric:tabular-nums}
+/* Expenses on Reports */
+.exh{margin:22px 0 0;font-size:18px}
+.lines .exleft{font-weight:700;font-size:17px}
+.exlist .exrow{align-items:flex-start}
+.exrow>span:first-child{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}
+.exrow small{color:var(--muted);font-size:13px}
+.exr{display:flex;align-items:center;gap:6px;flex:none}
+.exdel{border:0;background:none;color:var(--muted);font-size:22px;line-height:1;width:36px;height:36px;border-radius:999px;cursor:pointer}
+.exdel:hover{background:var(--wait-soft)}
+.exsub span{color:var(--muted);font-size:14px}
+.exform{background:var(--card);border-radius:12px;padding:12px 14px;margin-top:10px}
+.exl{margin:12px 0 6px;font-size:15px;font-weight:600}
+.exchips{flex-wrap:wrap;overflow:visible}
+.exnote{font-style:normal;font-size:15px}

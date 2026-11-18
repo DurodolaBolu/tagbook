@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
-const db = { order_photos: [], send_log: [], quick_replies: [], shop_followups: [], shop_remarks: [],
+const db = { expenses: [], order_photos: [], send_log: [], quick_replies: [], shop_followups: [], shop_remarks: [],
   shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
@@ -18,7 +18,7 @@ const db = { order_photos: [], send_log: [], quick_replies: [], shop_followups: 
 const P = [["Shirt", { wi: 800, wo: 500, io: 300, wsi: 1000 }], ["Trouser", { wi: 800, wo: 500, io: 300, wsi: 1000 }], ["Native (2 piece)", { wi: 1500, wo: 1000, io: 600, wsi: 2000 }], ["Special item", null]];
 P.forEach(([n, p], i) => { const id = "it" + i; db.items.push({ id, shop_id: shopId, name: n, custom: !p, services: p ? Object.keys(p) : ["wi", "wo", "io", "wsi"], sort: i, hidden: false }); if (p) db.item_prices.push({ item_id: id, shop_id: shopId, prices: p }); });
 let current = null; // logged-in user id
-const ownerOnly = new Set(["shop_private", "item_prices", "customer_phones", "order_money"]);
+const ownerOnly = new Set(["expenses", "shop_private", "item_prices", "customer_phones", "order_money"]);
 const staffMay = t => t === "item_prices" && db.shops[0].staff_prices;
 const rowsFor = t => { const me = db.staff.find(s => s.user_id === current); if (ownerOnly.has(t) && me.role !== "owner" && !staffMay(t)) return []; return db[t]; };
 function filterRows(rows, params) {
@@ -28,7 +28,7 @@ function filterRows(rows, params) {
     if (op === "in") { const set = val.replace(/^\(|\)$/g, "").split(",").map(s => s.replace(/"/g, "")); rows = rows.filter(r => set.includes(String(r[k]))); } }
   return rows;
 }
-const pk = { order_photos: "id", send_log: "id", quick_replies: "id", shop_followups: "shop_id", shop_remarks: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
+const pk = { expenses: "id", order_photos: "id", send_log: "id", quick_replies: "id", shop_followups: "shop_id", shop_remarks: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
 const errors = [];
 async function handle(route) {
   const req = route.request(), u = new URL(req.url()), p = u.pathname, method = req.method();
@@ -139,6 +139,7 @@ async function handle(route) {
       return send(200, rows);
     }
     if (ownerOnly.has(t) && db.staff.find(s => s.user_id === current).role !== "owner") return send(403, { message: "rls" });
+    if (method === "DELETE") { const rows = filterRows(db[t], params); db[t] = db[t].filter(r => !rows.includes(r)); return send(204); }
     if (method === "PATCH") {
       const rows = filterRows(db[t], params);
       if (t === "orders" && db.staff.find(s => s.user_id === current).role !== "owner" && ("billed" in body || "list_sent" in body || (body.status && ["listed", "told"].includes(body.status)))) return send(400, { message: "OWNER_ONLY" });
@@ -643,6 +644,19 @@ async function handle(route) {
   // reports
   await T('#tabs button[data-tab="reports"]'); await shot("12-reports");
   console.log("reports received:", await page.textContent(".rhero b"));
+  { // expenses: add two, check Left, delete one
+    const recv = await page.evaluate(() => [...document.querySelectorAll(".lines div")].find(d => /Money received/.test(d.textContent)).querySelector("b").textContent);
+    await T("#exadd"); await page.fill("#exa", "1500"); await T('[data-exk="soap"]'); await page.fill("#exn", "2 bags of Ariel"); await shot("12a-expense-form"); await T("#exsave"); await page.waitForTimeout(300);
+    await T("#exadd"); await page.fill("#exa", "2000"); await T("#exsave"); const nokind = (await page.textContent("#toast")).trim(); await T('[data-exk="fuel"]'); await T("#exsave"); await page.waitForTimeout(300);
+    await shot("12b-expenses");
+    const spent = await page.evaluate(() => [...document.querySelectorAll(".lines div")].find(d => /Spent on the shop/.test(d.textContent)).querySelector("b").textContent);
+    const left = await page.textContent(".exleft b");
+    console.log("expenses:", db.expenses.length, "spent:", spent, "left:", left, "received:", recv, "no-kind toast:", nokind, "row:", JSON.stringify(db.expenses[0] && { a: db.expenses[0].amount, k: db.expenses[0].kind, n: db.expenses[0].note, d: !!db.expenses[0].spent_on }));
+    if (db.expenses.length !== 2 || spent !== "₦3,500") errors.push("expenses not saved right");
+    await T('[data-exdel]'); await T('.cfm [data-c="1"]'); await page.waitForTimeout(300);
+    console.log("after delete:", db.expenses.length, await page.textContent(".exleft b"));
+    if (db.expenses.length !== 1) errors.push("expense delete failed");
+  }
   // settings: add staff, price edit, branch add
   await T("#gear"); await shot("13a-settings-business");
   await T('[data-st="account"]'); await page.waitForTimeout(400); console.log("account notifications box:", (await page.textContent("#pushbox")).trim().slice(0, 40)); await shot("13x-account");
