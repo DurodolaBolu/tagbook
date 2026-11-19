@@ -558,13 +558,17 @@ function leadMsg(l, kind) {
   return list[leadPick[key]](greet(), l.name, near, akure ? "\n\nSince we're in Akure, we can also come by and set it up for you." : "");
 }
 /* Message for a live shop that hasn't started, or has gone quiet */
-/* Welcome for a new shop: the self sign-up version starts them off, the team version checks they got in. */
+/* Welcome for a new shop from Bolu's line: thanks them, names the team member who set them up, and asks them to save the number for updates. */
 function welcomeMsg(r) {
   const first = String(r.owner_name || "").trim().split(/\s+/).find(w => w.replace(/[^a-z]/gi, "").length >= 3) || "";
   const hi = `${greet()}${first ? " " + first : ""}. This is Bolu from Tagbook. 👋`;
   const vid = ((tuts || []).find(t => t.step_key === "order") || {}).youtube_id || "SiUDE8sCSQ4";
-  if (r.self_signup) return `${hi}\n\nThank you for signing up ${r.name} on Tagbook! Your first month is free.\n\nTo get started:\n1. Add your prices: ⚙️ → Price list\n2. Log your first customer's clothes: tap + Log clothes\n3. Turn on notifications: ⚙️ → Account\n\nThis short video shows how to log clothes: https://youtu.be/${vid}\n\nIf anything is not clear, reply here and we'll help you.\n\nBolu, Tagbook team`;
-  return `${hi}\n\nWelcome to Tagbook! Your account for ${r.name} is ready. Were you able to log in?\n\nTo get started:\n1. Add your prices: ⚙️ → Price list\n2. Log your first customer's clothes: tap + Log clothes\n3. Turn on notifications: ⚙️ → Account\n\nThis short video shows how to log clothes: https://youtu.be/${vid}\n\nIf anything is not clear, reply here and we'll help you.\n\nBolu, Tagbook team`;
+  const helper = String(r.setup_by_name || r.claim_by_name || "").trim().split(/\s+/)[0];
+  const start = `To get started:\n1. Add your prices: ⚙️ → Price list\n2. Log your first customer's clothes: tap + Log clothes\n3. Turn on notifications: ⚙️ → Account\n\nThis short video shows how to log clothes: https://youtu.be/${vid}`;
+  const save = `Please save this number. It's where we'll send you Tagbook updates and new features, and you can message us here anytime you need help.`;
+  if (r.self_signup) return `${hi}\n\nThank you for signing up ${r.name} on Tagbook! Your first month is free.\n\n${start}\n\n${save}\n\nBolu, Tagbook team`;
+  if (helper && helper.toLowerCase() !== "bolu") return `${hi}\n\nThank you for signing up ${r.name} on Tagbook through ${helper}! 🙏 Your first month is free.\n\n${save}\n\n${start}\n\nBolu, Tagbook team`;
+  return `${hi}\n\nWelcome to Tagbook! Your account for ${r.name} is ready. Were you able to log in?\n\n${start}\n\n${save}\n\nBolu, Tagbook team`;
 }
 async function markWelcomed(id) {
   const { error } = await sb.rpc("admin_mark_welcomed", { p_shop: id });

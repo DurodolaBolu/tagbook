@@ -173,31 +173,34 @@ We're here in Akure, so we can also come by and set it up for you.`:"");if(s)ret
 
 We can also come by and set it up for you.`:"");let r=t.city==="Akure",i=r?" We're based here in Akure.":Io.includes(t.city)?" We're in Akure, not far from you.":"";return n[ys[a]](ws(),t.name,i,r?`
 
-Since we're in Akure, we can also come by and set it up for you.`:"")}function Nc(t){let e=String(t.owner_name||"").trim().split(/\s+/).find(a=>a.replace(/[^a-z]/gi,"").length>=3)||"",s=`${ws()}${e?" "+e:""}. This is Bolu from Tagbook. \u{1F44B}`,n=((Fe||[]).find(a=>a.step_key==="order")||{}).youtube_id||"SiUDE8sCSQ4";return t.self_signup?`${s}
-
-Thank you for signing up ${t.name} on Tagbook! Your first month is free.
-
-To get started:
+Since we're in Akure, we can also come by and set it up for you.`:"")}function Nc(t){let e=String(t.owner_name||"").trim().split(/\s+/).find(o=>o.replace(/[^a-z]/gi,"").length>=3)||"",s=`${ws()}${e?" "+e:""}. This is Bolu from Tagbook. \u{1F44B}`,n=((Fe||[]).find(o=>o.step_key==="order")||{}).youtube_id||"SiUDE8sCSQ4",a=String(t.setup_by_name||t.claim_by_name||"").trim().split(/\s+/)[0],r=`To get started:
 1. Add your prices: \u2699\uFE0F \u2192 Price list
 2. Log your first customer's clothes: tap + Log clothes
 3. Turn on notifications: \u2699\uFE0F \u2192 Account
 
-This short video shows how to log clothes: https://youtu.be/${n}
+This short video shows how to log clothes: https://youtu.be/${n}`,i="Please save this number. It's where we'll send you Tagbook updates and new features, and you can message us here anytime you need help.";return t.self_signup?`${s}
 
-If anything is not clear, reply here and we'll help you.
+Thank you for signing up ${t.name} on Tagbook! Your first month is free.
+
+${r}
+
+${i}
+
+Bolu, Tagbook team`:a&&a.toLowerCase()!=="bolu"?`${s}
+
+Thank you for signing up ${t.name} on Tagbook through ${a}! \u{1F64F} Your first month is free.
+
+${i}
+
+${r}
 
 Bolu, Tagbook team`:`${s}
 
 Welcome to Tagbook! Your account for ${t.name} is ready. Were you able to log in?
 
-To get started:
-1. Add your prices: \u2699\uFE0F \u2192 Price list
-2. Log your first customer's clothes: tap + Log clothes
-3. Turn on notifications: \u2699\uFE0F \u2192 Account
+${r}
 
-This short video shows how to log clothes: https://youtu.be/${n}
-
-If anything is not clear, reply here and we'll help you.
+${i}
 
 Bolu, Tagbook team`}async function Zi(t){let{error:e}=await x.rpc("admin_mark_welcomed",{p_shop:t});if(e)return $("Couldn't save. Try again."),!1;let s=we.find(n=>n.id===t);return s&&(s.welcomed_at=new Date().toISOString()),!0}function Dc(t){let e=String(t.owner_name||"").trim().split(/\s+/).find(i=>i.replace(/[^a-z]/gi,"").length>=3)||"",s=`${ws()}${e?" "+e:""}. This is Bolu from Tagbook.`,n=ud(uo(t));if(n!==null&&n<0)return`${s}
 
