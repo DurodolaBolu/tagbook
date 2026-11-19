@@ -779,9 +779,13 @@ Open this link on your phone: tagbook.ordiventa.com
 Phone: ${n}
 PIN: ${s}
 
-Tip: add it to your Home Screen so it opens like an app. You can change your PIN in Settings.
+Put Tagbook on your phone so it opens like an app:
 
-This short video shows how to put Tagbook on your phone so it opens like an app: https://youtu.be/${c}
+*Android:* open the link in Chrome, tap the 3 dots (\u22EE) at the top right, then tap "Install app" or "Add to Home screen".
+
+*iPhone:* watch this short video: https://youtu.be/${c}
+
+You can change your PIN in Settings.
 
 Once you log in, tap "+ Log clothes" and add your next customer. We can call you to walk you through the first one, just tell us when you're ready.
 
