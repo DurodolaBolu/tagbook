@@ -3399,7 +3399,14 @@ function drawReset() {
       <p class="lfoot"><button class="llink" id="rcancel">Back to log in</button></p>
     </main></div>`;
   $("#rwa").onclick = () => { R.sent = true; setTimeout(drawReset, 400); };
-  $("#rnext").onclick = () => { L.err = ""; L.step = "newpin"; L.np = L.np2 = ""; drawLogin(); };
+  $("#rnext").onclick = async () => {
+    const btn = $("#rnext"); btn.disabled = true; btn.textContent = "Checking…";
+    let ok = false;
+    try { const { data, error } = await sb.rpc("wa_check_status", { p_id: R.checkId, p_phone: L.phone }); ok = !error && data === true; if (error) throw error; }
+    catch (_) { L.err = RESET_ERR.NETWORK; drawReset(); return; }
+    if (!ok) { L.err = RESET_ERR.NOT_VERIFIED; drawReset(); return; }
+    L.err = ""; L.step = "newpin"; L.np = L.np2 = ""; drawLogin();
+  };
   $("#rcancel").onclick = () => { L.step = "pin"; L.pin = ""; L.err = ""; L.reset = null; drawLogin(); };
 }
 async function finishReset() {

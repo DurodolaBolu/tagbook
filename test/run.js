@@ -58,6 +58,7 @@ async function handle(route) {
     global.fails[body.phone] = 0; current = s.user_id; if (global.unswitched) global.unswitched.delete(s.user_id);
     return send(200, { access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.sig", refresh_token: "r" });
   }
+  if (p === "/rest/v1/rpc/wa_check_status") return send(200, !!global.resetOk);
   if (p === "/functions/v1/admin" && (body.action === "pin_reset_start" || body.action === "pin_reset_finish")) {
     if (!db.staff.some(s => s.phone === body.phone)) return send(404, { error: "NO_ACCOUNT" });
     if (body.action === "pin_reset_start") return send(200, { ok: true, wa_to: "2349160478738", wa_code: "731905", check_id: "22222222-2222-2222-2222-222222222222" });
@@ -399,12 +400,11 @@ async function handle(route) {
     await page.click("#lforgot"); await page.waitForTimeout(500);
     console.log("reset screen:", !!(await page.$("#rwa")), "| link:", await page.getAttribute("#rwa", "href"));
     await page.screenshot({ path: path.join(out, "reset-2-code.png") });
-    await page.click("#rnext"); await page.waitForTimeout(300);
-    await page.keyboard.type("111111"); await page.waitForTimeout(300); console.log("easy pin refused:", (await page.textContent(".lerr")).slice(0, 40));
-    await page.keyboard.type("703518"); await page.waitForTimeout(300); await page.keyboard.type("703518"); await page.waitForTimeout(800);
-    console.log("not verified sends back:", !!(await page.$("#rwa")), (await page.textContent(".lerr")).slice(0, 50));
+    await page.click("#rnext"); await page.waitForTimeout(500);
+    console.log("not sent yet stays:", !!(await page.$("#rwa")), (await page.textContent(".lerr")).slice(0, 45));
     await page.screenshot({ path: path.join(out, "reset-3-notyet.png") });
-    global.resetOk = true; await page.click("#rnext"); await page.waitForTimeout(300);
+    global.resetOk = true; await page.click("#rnext"); await page.waitForTimeout(500);
+    await page.keyboard.type("111111"); await page.waitForTimeout(300); console.log("easy pin refused:", (await page.textContent(".lerr")).slice(0, 40));
     await page.keyboard.type("703518"); await page.waitForTimeout(300); await page.screenshot({ path: path.join(out, "reset-4-again.png") }); await page.keyboard.type("703518");
     try { await page.waitForSelector("#tabs button", { timeout: 8000 }); console.log("logged in with new PIN: true"); } catch (_) { console.log("logged in with new PIN: false", await page.textContent(".lerr").catch(() => "")); }
     process.exit(0);
