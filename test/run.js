@@ -181,6 +181,8 @@ async function handle(route) {
     await page.setViewportSize({ width: 390, height: 2600 }); await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(1500);
     const errs = []; page.on("pageerror", e => errs.push(e.message));
     await page.screenshot({ path: path.join(C, "dash.png"), fullPage: true }); console.log("dash text has App and alerts:", (await page.textContent("#view")).includes("App and alerts"), errs);
+    { const sec = await page.$("text=New shops to welcome"); if (sec) { await sec.scrollIntoViewIfNeeded(); await page.setViewportSize({ width: 390, height: 1100 }); await page.evaluate(() => { const h = [...document.querySelectorAll("h3")].find(x => /New shops to welcome/.test(x.textContent)); h.scrollIntoView({ block: "start" }); }); await page.screenshot({ path: path.join(C, "dash-welcome.png") }); }
+      console.log("welcome rows:", await page.$$eval(".dwel", e => e.length), "| first link has text:", (await page.getAttribute("[data-wwa]", "href") || "").includes("Tagbook")); }
     await page.setViewportSize({ width: 390, height: 1100 }); await page.click('.dsegs [data-dseg="alerts"]'); await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(C, "dash-alerts.png") });
     console.log("alerts segment cards:", await page.$$eval(".dlist .dshop", e => e.length), "| remind links:", await page.$$eval('a[href*="wa.me"][href*="notifications"]', e => e.length));

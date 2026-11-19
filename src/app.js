@@ -558,6 +558,19 @@ function leadMsg(l, kind) {
   return list[leadPick[key]](greet(), l.name, near, akure ? "\n\nSince we're in Akure, we can also come by and set it up for you." : "");
 }
 /* Message for a live shop that hasn't started, or has gone quiet */
+/* Welcome for a new shop: the self sign-up version starts them off, the team version checks they got in. */
+function welcomeMsg(r) {
+  const first = String(r.owner_name || "").trim().split(/\s+/).find(w => w.replace(/[^a-z]/gi, "").length >= 3) || "";
+  const hi = `${greet()}${first ? " " + first : ""}. This is Bolu from Tagbook. 👋`;
+  const vid = ((tuts || []).find(t => t.step_key === "order") || {}).youtube_id || "SiUDE8sCSQ4";
+  if (r.self_signup) return `${hi}\n\nThank you for signing up ${r.name} on Tagbook! Your first month is free.\n\nTo get started:\n1. Add your prices: ⚙️ → Price list\n2. Log your first customer's clothes: tap + Log clothes\n3. Turn on notifications: ⚙️ → Account\n\nThis short video shows how to log clothes: https://youtu.be/${vid}\n\nIf anything is not clear, reply here and we'll help you.\n\nBolu, Tagbook team`;
+  return `${hi}\n\nWelcome to Tagbook! Your account for ${r.name} is ready. Were you able to log in?\n\nTo get started:\n1. Add your prices: ⚙️ → Price list\n2. Log your first customer's clothes: tap + Log clothes\n3. Turn on notifications: ⚙️ → Account\n\nThis short video shows how to log clothes: https://youtu.be/${vid}\n\nIf anything is not clear, reply here and we'll help you.\n\nBolu, Tagbook team`;
+}
+async function markWelcomed(id) {
+  const { error } = await sb.rpc("admin_mark_welcomed", { p_shop: id });
+  if (error) { toast("Couldn't save. Try again."); return false; }
+  const r = dash.find(x => x.id === id); if (r) r.welcomed_at = new Date().toISOString(); return true;
+}
 function nudgeMsg(r) {
   // Skip initials like "O A Matthew" -> "Matthew"
   const first = String(r.owner_name || "").trim().split(/\s+/).find(w => w.replace(/[^a-z]/gi, "").length >= 3) || "";
@@ -895,7 +908,9 @@ function renderAdmin() {
       <div class="stat"><b>${naira(real.length * PRICE_MONTH)}</b><span>Monthly, once all pay</span></div>
     </div>
     ${(cl => cl.length ? `<section class="scard dcall"><h3 class="stitle">Claims to check</h3><p class="ssub">Approve only if you're sure. Your decision is final.</p>${cl.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.claim_by_name || "An agent")} says ${r.claim_kind === "self" ? "they" : esc(r.claim_for_name || "a team member")} found it</span></div><div class="row"><button class="btn btn-primary" data-cl="${r.id}" data-ok="1">Approve</button><button class="btn btn-ghost" data-cl="${r.id}" data-ok="0">Ordiventa</button><button class="btn btn-ghost" data-ep="${r.id}" data-goto="1">Someone else</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.claim_status === "pending"))}
-    ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New sign-ups to welcome</h3><p class="ssub">They signed up on their own. Call to welcome them, check the number is really theirs, then tap Confirmed.</p>${nw.map(r => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""} · ${ago(r.created_at)}</span></div><div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone || "")}">Call</a><button class="btn btn-primary" data-sconf="${r.id}">Confirmed</button></div></div>`).join("")}</section>` : "")(real.filter(r => r.self_signup && !r.confirmed))}
+    ${(nw => nw.length ? `<section class="scard dcall"><h3 class="stitle">New shops to welcome</h3><p class="ssub">Send each new shop the welcome message, or call. Once you've sent it, they leave this list.</p>${nw.map(r => `<div class="staff-row dwel"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""}</span><span>${r.self_signup ? `Signed up themselves${r.confirmed ? " · number confirmed" : " · number not confirmed"}` : `Set up by ${esc(r.setup_by_name || r.claim_by_name || "Bolu")}`} · ${ago(r.created_at)}</span></div>
+      ${r.owner_phone ? `<div class="row"><a class="btn btn-primary" data-wwa="${r.id}" href="${waLink(r.owner_phone, welcomeMsg(r))}" target="_blank" rel="noopener">Send welcome</a><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${iosBiz() ? `<button class="btn btn-ghost" data-wcopy="${r.id}">Copy</button>` : ""}</div>` : ""}
+      <div class="row dwelmore">${r.self_signup && !r.confirmed ? `<button class="btn btn-ghost" data-sconf="${r.id}">Number confirmed</button>` : ""}<button class="btn btn-ghost" data-wdone="${r.id}">Already welcomed</button></div></div>`).join("")}</section>` : "")(real.filter(r => !r.welcomed_at && Date.now() - Date.parse(r.created_at) < 14 * 864e5))}
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}${(st => st ? ` · messaged ${st.times}×, last ${ago(st.at)}` : "")(followState(r))}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" data-nwa="${r.id}" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     ${resting.length ? `<details class="scard drest"><summary><b>Messaged, waiting for a reply</b> <span class="hint">${resting.length} · they come back above when the next follow-up is due</span></summary>${resting.map(([r]) => { const st = followState(r); return `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Messaged ${st.times}×, last ${ago(st.at)} · next follow-up ${new Date(st.next).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span></div><button class="mini" data-nback="${r.id}">Follow up now</button></div>`; }).join("")}</details>` : ""}
     ${teamGoalHtml()}
@@ -960,6 +975,10 @@ function renderAdmin() {
     markFor = null; toast(`Saved. Paid until ${longDay(data.paid_until)}.`); dashAt = 0; loadDash();
   });
   view.querySelectorAll("[data-ncopy]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.ncopy); if (await copyText(nudgeMsg(r))) { nCopy = r.id; markFollow(r.id); renderAdmin(); } else toast("Couldn't copy"); });
+  view.querySelectorAll("[data-wwa]").forEach(a => a.addEventListener("click", () => { const id = a.dataset.wwa; setTimeout(async () => { if (await markWelcomed(id)) renderAdmin(); }, 800); }));
+  view.querySelectorAll("[data-wdone]").forEach(b => b.onclick = async () => { b.disabled = true; if (await markWelcomed(b.dataset.wdone)) { toast("Marked as welcomed"); renderAdmin(); } else b.disabled = false; });
+  view.querySelectorAll("[data-wcopy]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.wcopy); if (!r) return;
+    if (await copyText(welcomeMsg(r))) { toast("Copied. Open WhatsApp Business, open the chat and paste."); if (await markWelcomed(r.id)) setTimeout(renderAdmin, 1500); } else toast("Couldn't copy"); });
   view.querySelectorAll("[data-sconf]").forEach(b => b.onclick = async () => {
     b.disabled = true; const { error } = await sb.rpc("admin_confirm_shop", { p_shop: b.dataset.sconf });
     if (error) { b.disabled = false; return toast("Couldn't save. Try again."); }
