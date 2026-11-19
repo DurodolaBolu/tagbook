@@ -35,6 +35,10 @@ Deno.serve(async (req) => {
       const r = await fetch(`${G}/${WABA}/message_templates?name=${NAME}&fields=name,status,category,rejected_reason`, { headers: auth });
       return json({ status: r.status, body: await r.json() });
     }
+    if (b.action === "phone_info") {
+      const r = await fetch(`${G}/${PHONE_ID}?fields=display_phone_number,verified_name,name_status,new_name_status,quality_rating,messaging_limit_tier,is_official_business_account`, { headers: auth });
+      return json({ status: r.status, body: await r.json() });
+    }
     if (b.action === "send") {
       const to = String(b.to || "").replace(/\D/g, "");
       const params = (Array.isArray(b.params) ? b.params : []).map((p: unknown) => ({ type: "text", text: String(p ?? "").slice(0, 60) || "-" }));
