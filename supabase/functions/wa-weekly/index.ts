@@ -7,7 +7,7 @@ const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE
 const TOKEN = Deno.env.get("WA_TOKEN") || "";
 const PHONE_ID = Deno.env.get("WA_PHONE_ID") || "";
 const WABA = "1147029134697413";
-const NAME = "tagbook_weekly_report";
+const NAME = "tagbook_weekly_report_v2";
 const G = "https://graph.facebook.com/v21.0";
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const auth = { "Authorization": `Bearer ${TOKEN}`, "Content-Type": "application/json" };
@@ -27,12 +27,16 @@ Deno.serve(async (req) => {
         name: NAME, language: "en", category: "UTILITY",
         components: [
           { type: "BODY", text: BODY, example: { body_text: [["BrightWash Laundry", "16 to 22 Nov", "18", "₦96,500", "₦24,000", "4"]] } },
-          { type: "FOOTER", text: "Reply STOP to stop these weekly reports." },
+          { type: "FOOTER", text: "Save this number as Tagbook. Reply STOP to stop reports." },
         ] }) });
       return json({ status: r.status, body: await r.json() });
     }
     if (b.action === "template_status") {
       const r = await fetch(`${G}/${WABA}/message_templates?name=${NAME}&fields=name,status,category,rejected_reason`, { headers: auth });
+      return json({ status: r.status, body: await r.json() });
+    }
+    if (b.action === "delete_template" && typeof b.name === "string" && b.name.startsWith("tagbook_")) {
+      const r = await fetch(`${G}/${WABA}/message_templates?name=${encodeURIComponent(b.name)}`, { method: "DELETE", headers: auth });
       return json({ status: r.status, body: await r.json() });
     }
     if (b.action === "phone_info") {
