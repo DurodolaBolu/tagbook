@@ -564,7 +564,8 @@ function welcomeMsg(r) {
   const hi = `${greet()}${first ? " " + first : ""}. This is Bolu from Tagbook. 👋`;
   const vid = ((tuts || []).find(t => t.step_key === "order") || {}).youtube_id || "SiUDE8sCSQ4";
   const helper = String(r.setup_by_name || r.claim_by_name || "").trim().split(/\s+/)[0];
-  const start = `To get started:\n1. Add your prices: ⚙️ → Price list\n2. Log your first customer's clothes: tap + Log clothes\n3. Turn on notifications: ⚙️ → Account\n\nThis short video shows how to log clothes: https://youtu.be/${vid}`;
+  const inst = ((tuts || []).find(t => t.step_key === "install") || {}).youtube_id || "chuV8thnvrE";
+  const start = `To get started:\n1. Put Tagbook on your phone so it opens like an app.\n   *Android:* open tagbook.ordiventa.com in Chrome, tap the 3 dots (⋮) at the top right, then \"Install app\" or \"Add to Home screen\".\n   *iPhone:* watch this short video: https://youtu.be/${inst}\n2. Add your prices: ⚙️ → Price list\n3. Log your first customer's clothes: tap + Log clothes\n4. Turn on notifications: ⚙️ → Account\n\nThis short video shows how to log clothes: https://youtu.be/${vid}`;
   const save = `Please save this number. It's where we'll send you Tagbook updates and new features, and you can message us here anytime you need help.`;
   if (r.self_signup) return `${hi}\n\nThank you for signing up ${r.name} on Tagbook! Your first month is free.\n\n${start}\n\n${save}\n\nBolu, Tagbook team`;
   if (helper && helper.toLowerCase() !== "bolu") return `${hi}\n\nThank you for signing up ${r.name} on Tagbook through ${helper}! 🙏 Your first month is free.\n\n${save}\n\n${start}\n\nBolu, Tagbook team`;
