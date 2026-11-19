@@ -3299,8 +3299,12 @@ function drawLogin() {
     $("#pick-new").onclick = () => { L.choose = false; showSignup(); };
     return;
   }
-  const pinStep = L.step === "pin";
-  const boxes = pinStep
+  if (L.step === "reset") return drawReset();
+  const newStep = L.step === "newpin" || L.step === "newpin2";
+  const pinStep = L.step === "pin" || newStep;
+  const typed = newStep ? (L.step === "newpin" ? L.np : L.np2) : L.pin;
+  const boxes = newStep ? `<div class="pinboxes${L.err && !typed ? " shake" : ""}" aria-label="New PIN, ${typed.length} of 6 digits entered">${[0, 1, 2, 3, 4, 5].map(i => `<span class="pb ${i < typed.length ? "full" : ""} ${i === typed.length ? "cur" : ""}"></span>`).join("")}</div>`
+    : pinStep
     ? `<div class="pinboxes${L.err && !L.pin ? " shake" : ""}" aria-label="PIN, ${L.pin.length} of 6 digits entered">${[0, 1, 2, 3, 4, 5].map(i => `<span class="pb ${i < L.pin.length ? "full" : ""} ${i === L.pin.length ? "cur" : ""}"></span>`).join("")}</div>`
     : `<div class="phonebox ${L.phone ? "" : "empty"}" aria-live="polite">${L.phone ? fmtPhone(L.phone) + `<i class="pcur"></i>` : `<i class="pcur"></i><span class="pgh">Use the numbers below</span>`}</div>`;
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "back"];
@@ -3310,27 +3314,31 @@ function drawLogin() {
     <main class="lmain">
       <button class="lhelp" id="lhelp" aria-label="Help" aria-expanded="${L.help}">?</button>
       <div class="lart small">${ART_MACHINE}</div>
-      ${L.confirm ? `<p class="lhi">One quick safety step,</p><h1 class="lname">${esc(L.last.name)}</h1>`
+      ${newStep ? `<h1 class="lname">${L.step === "newpin" ? "Choose a new PIN" : "Type the new PIN again"}</h1>`
+        : L.confirm ? `<p class="lhi">One quick safety step,</p><h1 class="lname">${esc(L.last.name)}</h1>`
         : pinStep && L.last ? `<p class="lhi">Welcome back,</p><h1 class="lname">${esc(L.last.name)}</h1>${L.last.shop ? `<p class="lshop">${esc(L.last.shop)}</p>` : ""}`
         : `<h1 class="lname">${pinStep ? "Enter your PIN" : "Welcome to Tagbook"}</h1>`}
-      <p class="lask">${L.confirm ? "Enter your PIN once to switch on Tagbook's new login protection. You only do this once." : pinStep ? (L.last ? "Enter your 6-digit PIN to continue" : `PIN for ${fmtPhone(L.phone)}`) : "Enter your phone number"}</p>
-      ${L.help ? `<p class="lhelptext">Forgot your PIN? Ask the shop owner to set a new one in Settings.${pinStep && !L.confirm ? ` <button class="llink" id="lswitch">Log in with a different number</button>` : ""}</p>` : ""}
+      <p class="lask">${newStep ? (L.step === "newpin" ? "6 digits you'll remember. Don't use 123456." : "To make sure it's right") : L.confirm ? "Enter your PIN once to switch on Tagbook's new login protection. You only do this once." : pinStep ? (L.last ? "Enter your 6-digit PIN to continue" : `PIN for ${fmtPhone(L.phone)}`) : "Enter your phone number"}</p>
+      ${L.help ? `<p class="lhelptext">Forgot your PIN? Tap “Forgot PIN?” below to reset it with WhatsApp, or ask the shop owner to set a new one in Settings.${pinStep && !L.confirm && !newStep ? ` <button class="llink" id="lswitch">Log in with a different number</button>` : ""}</p>` : ""}
       ${boxes}
       <p class="lerr" role="alert">${esc(L.err)}</p>
       <div class="keypad">${keys.map(k => k === "" ? `<span></span>` : k === "back"
         ? `<button class="key" data-k="back" aria-label="Delete"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M9 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-6-6zM12 10l4 4m0-4-4 4"/></svg></button>`
         : `<button class="key" data-k="${k}" ${L.busy ? "disabled" : ""}>${k}</button>`).join("")}</div>
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
+        : newStep ? `<p class="lfoot"><button class="llink" id="lrback">Cancel</button></p>`
         : L.confirm ? `<p class="lfoot"><button class="llink" id="llater">Not now</button></p>`
-        : L.last ? "" : `<p class="lfoot"><button class="llink" id="lswitch">Change phone number</button></p>`}
+        : `<p class="lfoot"><button class="llink" id="lforgot">Forgot PIN?</button>${L.last ? "" : ` · <button class="llink" id="lswitch">Change phone number</button>`}</p>`}
       ${!L.confirm && !pinStep ? `<p class="lnew">New to Tagbook? <button class="llink" id="lnew">Start a new shop</button></p>` : ""}
-      ${L.busy ? `<p class="lbusy">${L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
+      ${L.busy ? `<p class="lbusy">${newStep ? "Saving your new PIN…" : L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
       <p class="lpriv"><a href="/privacy">Privacy policy</a></p><p class="lpriv lco">Tagbook is a product of Ordiventa Technologies Limited (RC 10010214), No. 4, Aule Housing Estate, Aule Street, Akure, Ondo State, Nigeria · WhatsApp +234 812 075 6325</p>
     </main></div>`;
   box.querySelectorAll("[data-k]").forEach(b => b.onclick = () => press(b.dataset.k));
   $("#lhelp").onclick = () => { L.help = !L.help; drawLogin(); };
   if ($("#lgo")) $("#lgo").onclick = () => next();
   if ($("#lnew")) $("#lnew").onclick = () => showSignup();
+  if ($("#lforgot")) $("#lforgot").onclick = () => startReset();
+  if ($("#lrback")) $("#lrback").onclick = () => { L.step = "pin"; L.pin = ""; L.err = ""; L.np = L.np2 = ""; drawLogin(); };
   if ($("#llater")) $("#llater").onclick = () => { try { sessionStorage.setItem("tb-pin-later", "1"); } catch (_) { } L = null; start(); };
   if ($("#lswitch")) $("#lswitch").onclick = () => { if (L.last) { try { localStorage.removeItem(LAST_KEY); } catch (_) { } } L = { step: "phone", phone: "", pin: "", err: "", busy: false, help: false, last: null }; drawLogin(); };
 }
@@ -3339,6 +3347,17 @@ function press(k) {
   if (L.step === "phone") {
     if (k === "back") L.phone = L.phone.slice(0, -1); else if (L.phone.length < 11) L.phone += k;
     L.err = ""; drawLogin(); return;
+  }
+  if (L.step === "newpin" || L.step === "newpin2") {
+    const f = L.step === "newpin" ? "np" : "np2";
+    if (k === "back") L[f] = L[f].slice(0, -1); else if (L[f].length < 6) L[f] += k;
+    L.err = ""; drawLogin();
+    if (L[f].length === 6) {
+      if (f === "np") { if (/^(\d)\1{5}$/.test(L.np) || L.np === "123456" || L.np === "654321") { L.np = ""; L.err = "That PIN is too easy to guess. Choose another."; drawLogin(); return; } L.step = "newpin2"; L.np2 = ""; drawLogin(); }
+      else if (L.np2 !== L.np) { L.step = "newpin"; L.np = L.np2 = ""; L.err = "The two PINs didn't match. Choose your new PIN again."; drawLogin(); }
+      else finishReset();
+    }
+    return;
   }
   if (k === "back") L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += k;
   L.err = ""; drawLogin();
@@ -3349,6 +3368,51 @@ function next() {
   L.step = "pin"; L.pin = ""; L.err = ""; drawLogin();
 }
 const waitWords = s => { const m = Math.ceil(s / 60); return m >= 60 ? `${Math.ceil(m / 60)} hour${m > 60 ? "s" : ""}` : `${m} minute${m === 1 ? "" : "s"}`; };
+/* Forgot PIN: prove the phone by sending a code from its WhatsApp, then choose a new PIN. */
+const RESET_ERR = {
+  NO_ACCOUNT: "No Tagbook login uses this number. Check the number, or ask your shop owner.",
+  RESET_OFF: "PIN reset isn't available right now. Ask your shop owner to set a new PIN in Settings.",
+  TOO_MANY: "Too many tries. Wait an hour, or ask your shop owner to set a new PIN.",
+  NOT_VERIFIED: "We haven't got the code on WhatsApp yet. Tap “Send code on WhatsApp”, send it, then come back.",
+  NETWORK: "Can't reach Tagbook. Check your internet and try again.",
+};
+async function startReset() {
+  L.busy = true; L.err = ""; drawLogin();
+  const r = await signupCall({ action: "pin_reset_start", phone: L.phone });
+  L.busy = false;
+  if (r.error) { L.err = RESET_ERR[r.error] || "Something went wrong. Please try again."; drawLogin(); return; }
+  L.reset = { checkId: r.check_id, to: r.wa_to, code: r.wa_code, sent: false }; L.step = "reset"; L.np = L.np2 = ""; drawLogin();
+}
+function drawReset() {
+  const box = $("#login"), R = L.reset;
+  box.innerHTML = `<div class="lwrap">
+    <aside class="lside"><div class="lart">${ART_MACHINE}</div><p class="lbrand">Tagbook</p><p class="ltag">Every cloth, accounted for.</p></aside>
+    <main class="lmain">
+      <div class="lart small">${ART_MACHINE}</div>
+      <h1 class="lname">Reset your PIN</h1>
+      <p class="lask">Send this code to Tagbook from the WhatsApp on <b>${fmtPhone(L.phone)}</b>, so we know the number is yours.</p>
+      <p class="wacode">${esc(R.code.replace(/(\d)(?=\d)/g, "$1 "))}</p>
+      <a class="btn btn-primary" id="rwa" href="https://wa.me/${esc(R.to)}?text=${encodeURIComponent("Tagbook PIN " + R.code)}" target="_blank" rel="noopener">Send code on WhatsApp</a>
+      <p class="hint">WhatsApp opens with the code typed in. Tap send, then come back here.</p>
+      <p class="lerr" role="alert">${esc(L.err)}</p>
+      <button class="btn ${R.sent ? "btn-primary" : "btn-ghost"} lgo" id="rnext">I've sent it. Choose a new PIN</button>
+      <p class="lfoot"><button class="llink" id="rcancel">Back to log in</button></p>
+    </main></div>`;
+  $("#rwa").onclick = () => { R.sent = true; setTimeout(drawReset, 400); };
+  $("#rnext").onclick = () => { L.err = ""; L.step = "newpin"; L.np = L.np2 = ""; drawLogin(); };
+  $("#rcancel").onclick = () => { L.step = "pin"; L.pin = ""; L.err = ""; L.reset = null; drawLogin(); };
+}
+async function finishReset() {
+  L.busy = true; drawLogin();
+  const r = await signupCall({ action: "pin_reset_finish", phone: L.phone, check_id: L.reset.checkId, pin: L.np });
+  L.busy = false;
+  if (r.error) {
+    if (r.error === "NOT_VERIFIED") { L.step = "reset"; L.err = RESET_ERR.NOT_VERIFIED; drawLogin(); return; }
+    L.step = "newpin"; L.np = L.np2 = ""; L.err = RESET_ERR[r.error] || (r.error === "BAD_PIN" ? "The PIN must be 6 digits." : "Something went wrong. Please try again."); drawLogin(); return;
+  }
+  const pin = L.np; L.reset = null; L.np = L.np2 = ""; L.step = "pin"; L.pin = pin; L.err = "";
+  toast("New PIN saved"); tryLogin();
+}
 async function tryLogin() {
   L.busy = true; drawLogin();
   let res = null, code = "";

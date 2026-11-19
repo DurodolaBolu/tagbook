@@ -54,9 +54,15 @@ async function handle(route) {
     global.fails = global.fails || {};
     const s = db.staff.find(x => x.phone === body.phone);
     if ((global.fails[body.phone] || 0) >= 5) return send(429, { error: "LOCKED", wait: 900 });
-    if (!s || body.pin !== "482915") { global.fails[body.phone] = (global.fails[body.phone] || 0) + 1; return global.fails[body.phone] >= 5 ? send(429, { error: "LOCKED", wait: 900 }) : send(401, { error: "BAD_LOGIN" }); }
+    if (!s || body.pin !== ((global.pins || {})[body.phone] || "482915")) { global.fails[body.phone] = (global.fails[body.phone] || 0) + 1; return global.fails[body.phone] >= 5 ? send(429, { error: "LOCKED", wait: 900 }) : send(401, { error: "BAD_LOGIN" }); }
     global.fails[body.phone] = 0; current = s.user_id; if (global.unswitched) global.unswitched.delete(s.user_id);
     return send(200, { access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.sig", refresh_token: "r" });
+  }
+  if (p === "/functions/v1/admin" && (body.action === "pin_reset_start" || body.action === "pin_reset_finish")) {
+    if (!db.staff.some(s => s.phone === body.phone)) return send(404, { error: "NO_ACCOUNT" });
+    if (body.action === "pin_reset_start") return send(200, { ok: true, wa_to: "2349160478738", wa_code: "731905", check_id: "22222222-2222-2222-2222-222222222222" });
+    if (!global.resetOk) return send(400, { error: "NOT_VERIFIED" });
+    global.pins = { ...(global.pins || {}), [body.phone]: body.pin }; global.fails[body.phone] = 0; return send(200, { ok: true });
   }
   if (p === "/functions/v1/admin" && (body.action === "signup_code" || body.action === "self_signup")) {
     if (body.action === "signup_code") return global.waMode ? send(200, { ok: true, wa_to: "2347000000000", wa_code: "482913", check_id: "11111111-1111-1111-1111-111111111111" }) : send(400, { error: "CODES_OFF" });
@@ -382,6 +388,25 @@ async function handle(route) {
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);
     console.log("due card:", await page.$$eval(".dueh b", e => e.map(x => x.textContent)));
     await page.screenshot({ path: path.join(out, "list.png"), fullPage: true });
+    process.exit(0);
+  }
+  if (process.env.RESET_TEST) { // forgot PIN: reset it by sending a code from the phone's WhatsApp
+    const out = process.env.RESET_TEST; await page.setViewportSize({ width: 390, height: 900 });
+    await page.evaluate(() => { try { localStorage.clear(); } catch (_) { } }); await page.goto("http://localhost:8787/"); await page.waitForSelector(".keypad, #pick-in");
+    if (await page.$("#pick-in")) await page.click("#pick-in");
+    await page.keyboard.type("08120756325"); await page.keyboard.press("Enter"); await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(out, "reset-1-pin.png") });
+    await page.click("#lforgot"); await page.waitForTimeout(500);
+    console.log("reset screen:", !!(await page.$("#rwa")), "| link:", await page.getAttribute("#rwa", "href"));
+    await page.screenshot({ path: path.join(out, "reset-2-code.png") });
+    await page.click("#rnext"); await page.waitForTimeout(300);
+    await page.keyboard.type("111111"); await page.waitForTimeout(300); console.log("easy pin refused:", (await page.textContent(".lerr")).slice(0, 40));
+    await page.keyboard.type("703518"); await page.waitForTimeout(300); await page.keyboard.type("703518"); await page.waitForTimeout(800);
+    console.log("not verified sends back:", !!(await page.$("#rwa")), (await page.textContent(".lerr")).slice(0, 50));
+    await page.screenshot({ path: path.join(out, "reset-3-notyet.png") });
+    global.resetOk = true; await page.click("#rnext"); await page.waitForTimeout(300);
+    await page.keyboard.type("703518"); await page.waitForTimeout(300); await page.screenshot({ path: path.join(out, "reset-4-again.png") }); await page.keyboard.type("703518");
+    try { await page.waitForSelector("#tabs button", { timeout: 8000 }); console.log("logged in with new PIN: true"); } catch (_) { console.log("logged in with new PIN: false", await page.textContent(".lerr").catch(() => "")); }
     process.exit(0);
   }
   if (process.env.WA_TEST) { // sign-up with the WhatsApp number check
