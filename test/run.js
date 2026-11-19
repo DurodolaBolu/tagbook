@@ -181,6 +181,11 @@ async function handle(route) {
     await page.setViewportSize({ width: 390, height: 2600 }); await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(1500);
     const errs = []; page.on("pageerror", e => errs.push(e.message));
     await page.screenshot({ path: path.join(C, "dash.png"), fullPage: true }); console.log("dash text has App and alerts:", (await page.textContent("#view")).includes("App and alerts"), errs);
+    await page.setViewportSize({ width: 390, height: 1100 }); await page.click('.dsegs [data-dseg="alerts"]'); await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(C, "dash-alerts.png") });
+    console.log("alerts segment cards:", await page.$$eval(".dlist .dshop", e => e.length), "| remind links:", await page.$$eval('a[href*="wa.me"][href*="notifications"]', e => e.length));
+    await page.click('.dsegs [data-dseg="all"]'); await page.fill("#dq", "kenny"); await page.waitForTimeout(400); console.log("search kenny:", await page.$$eval(".dlist .dshop", e => e.length));
+    await page.fill("#dq", ""); await page.click("[data-dopen]"); await page.waitForTimeout(300); console.log("opened details:", !!(await page.$(".dclose")));
     if (process.env.FOLLOW) {
       const before = await page.$$eval("[data-nwa]", e => e.length);
       await page.evaluate(() => { const a = document.querySelector("[data-nwa]"); a.removeAttribute("href"); a.removeAttribute("target"); a.click(); }); await page.waitForTimeout(1000);

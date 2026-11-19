@@ -311,6 +311,7 @@ function goalHtml(g) {
     ${monthPart}
   </section>`;
 }
+let dSeg = "all", dQ = "", dOpen = null;
 let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = 1, teamPay = [], editFor = null, payOpen = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
@@ -332,6 +333,21 @@ function markFollow(id) {
 }
 const daysLeft = d => d ? Math.round((Date.parse(String(d).slice(0, 10) + "T00:00:00Z") - Date.parse(lagosDay(Date.now()) + "T00:00:00Z")) / 864e5) : null;
 const coveredUntil = r => [r.trial_ends, r.paid_until].filter(Boolean).sort().pop() || null;
+const ownerPush = r => (r.owner_push != null ? r.owner_push : r.push) > 0;
+// WhatsApp message asking an owner to turn on Tagbook alerts, with steps for iPhone and Android.
+const alertsMsg = r => `Hello${(r.owner_name || "").split(/\s+/).find(w => w.length > 2) ? " " + (r.owner_name || "").split(/\s+/).find(w => w.length > 2) : ""}, this is Bolu from Tagbook. 😊\n\nPlease turn on Tagbook notifications, so your phone tells you when staff log clothes or mark them ready, even when the app is closed.\n\nHow to turn it on:\n1. Open Tagbook from your Home Screen (iPhone: if it's not there yet, open tagbook.ordiventa.com in Safari, tap Share, then "Add to Home Screen")\n2. Tap the ⚙️ at the top right\n3. Tap Account\n4. Tap "Turn on notifications" and choose Allow\n\nIt takes less than a minute. Thank you! 🙏`;
+const waTo = (p, t) => "https://wa.me/234" + String(p || "").replace(/\D/g, "").replace(/^0/, "") + "?text=" + encodeURIComponent(t);
+// Shop list segments on the admin dashboard, so Bolu doesn't scroll through every shop.
+const D_SEGS = [["all", "All"], ["new", "New this week"], ["trial", "On trial"], ["paying", "Paying"], ["call", "Need a call"], ["alerts", "Alerts off"], ["noapp", "App not installed"]];
+function inSeg(r, k) {
+  if (k === "new") return Date.now() - Date.parse(r.created_at) < 7 * 864e5;
+  if (k === "trial") return daysTo(r.trial_ends) >= 0 && !r.paid_total;
+  if (k === "paying") return r.paid_total > 0;
+  if (k === "call") return shopFlags(r).some(f => f[1] === "owes");
+  if (k === "alerts") return !ownerPush(r);
+  if (k === "noapp") return !r.installed;
+  return true;
+}
 function shopFlags(r) {
   const f = [], age = (Date.now() - Date.parse(r.created_at)) / 864e5, left = daysTo(r.trial_ends);
   if (!r.orders && age > 1) f.push(["No orders yet, " + Math.floor(age) + " day" + (Math.floor(age) === 1 ? "" : "s") + " in", "owes"]);
@@ -342,7 +358,7 @@ function shopFlags(r) {
   else if (cl !== null && cl <= 7) f.push([(r.paid_until && r.paid_until >= cov ? "Plan" : "Trial") + (cl === 0 ? " ends today" : " ends in " + cl + " day" + (cl === 1 ? "" : "s")), "warn"]);
   if (!r.staff) f.push(["No staff login", "warn"]);
   if (!r.installed) f.push(["App not installed", "warn"]);
-  if (!r.push) f.push(["Owner alerts off", "warn"]);
+  if (!ownerPush(r)) f.push(["Owner alerts off", "warn"]);
   return f;
 }
 let adminView = (() => { try { return localStorage.getItem("tb-admin-view") || "shops"; } catch (_) { return "shops"; } })();
@@ -790,7 +806,17 @@ function renderAdmin() {
   const wa = p => p ? "https://wa.me/234" + String(p).replace(/^0/, "") : "";
   const shopCard = r => {
     const left = daysTo(r.trial_ends), trend = r.prev_week ? Math.round((r.week - r.prev_week) / r.prev_week * 100) : null;
+    const open = dOpen === r.id || r.is_test === "never";
+    if (!open) { const fl = r.is_test ? [] : shopFlags(r);
+      return `<section class="dshop dmini${r.is_test ? " is-test" : ""}">
+      <div class="dhead"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")}${r.owner_phone ? ` · <a href="${wa(r.owner_phone)}" target="_blank" rel="noopener">${fmtPhone(r.owner_phone)}</a>` : ""}</span>
+        <span>${r.week} order${r.week === 1 ? "" : "s"} this week · ${r.orders} in all${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""}</span></div>
+        <span class="pill ${r.is_test ? "p-collected" : r.paid_total ? "p-ready" : left !== null && left >= 0 ? "p-billed" : "p-ready"}">${r.is_test ? "Test" : r.paid_total ? "Paying" : left !== null && left >= 0 ? "Trial" : "Live"}</span></div>
+      ${fl.length ? `<div class="dflags">${fl.map(([t, k]) => `<span class="pill p-${k === "owes" ? "owed" : "new"}">${t}</span>`).join("")}</div>` : ""}
+      <div class="row dminirow">${!r.is_test && !ownerPush(r) && r.owner_phone ? `<a class="btn btn-ghost" target="_blank" rel="noopener" href="${waTo(r.owner_phone, alertsMsg(r))}">Remind on WhatsApp</a>` : ""}<button class="btn btn-ghost" data-dopen="${r.id}">Details</button></div>
+    </section>`; }
     return `<section class="dshop${r.is_test ? " is-test" : ""}">
+      <button class="btn btn-ghost dclose" data-dopen="">Hide details</button>
       <div class="dhead"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")}${r.owner_phone ? ` · <a href="${wa(r.owner_phone)}" target="_blank" rel="noopener">${fmtPhone(r.owner_phone)}</a>` : ""}</span></div>
         <span class="pill ${r.is_test ? "p-collected" : left !== null && left >= 0 ? "p-billed" : "p-ready"}">${r.is_test ? "Test" : left !== null && left >= 0 ? "Trial" : "Live"}</span></div>
       <div class="dnums"><div><b>${r.today}</b><span>Today</span></div><div><b>${r.week}</b><span>7 days${trend !== null ? ` <em class="${trend >= 0 ? "up" : "down"}">${trend >= 0 ? "+" : ""}${trend}%</em>` : ""}</span></div><div><b>${r.orders}</b><span>All orders</span></div><div><b>${r.clothes_week}</b><span>Clothes this week</span></div></div>
@@ -873,19 +899,29 @@ function renderAdmin() {
     ${need.length ? `<section class="scard dcall"><h3 class="stitle">Call these shops</h3><p class="ssub">A call works best. If you can't call, send the message.</p>${need.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}${(st => st ? ` · messaged ${st.times}×, last ${ago(st.at)}` : "")(followState(r))}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" data-nwa="${r.id}" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}</section>` : ""}
     ${resting.length ? `<details class="scard drest"><summary><b>Messaged, waiting for a reply</b> <span class="hint">${resting.length} · they come back above when the next follow-up is due</span></summary>${resting.map(([r]) => { const st = followState(r); return `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Messaged ${st.times}×, last ${ago(st.at)} · next follow-up ${new Date(st.next).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span></div><button class="mini" data-nback="${r.id}">Follow up now</button></div>`; }).join("")}</details>` : ""}
     ${teamGoalHtml()}
-    ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !r.push), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
+    ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !ownerPush(r)), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
       return real.length ? `<section class="scard dstates"><h3 class="stitle">App and alerts</h3>
         <p class="ssub"><span class="dstate"><b>${real.length - noApp.length}</b> of ${real.length} installed the app</span><span class="dstate"><b>${real.length - noPush.length}</b> of ${real.length} have alerts on</span></p>
         ${noApp.length ? `<p class="dfollow"><b>Not installed:</b> ${names(noApp)}</p>` : ""}
-        ${noPush.length ? `<p class="dfollow"><b>Alerts off:</b> ${names(noPush)}</p>` : ""}</section>` : ""; })()}
+        ${noPush.length ? `<p class="dfollow"><b>Alerts off:</b> ${names(noPush)}</p><button class="btn btn-ghost" data-dseg="alerts">Remind them to turn alerts on</button>` : ""}</section>` : ""; })()}
     ${(st => { const n = k => st.filter(x => x.kind === k).reduce((a, x) => a + Number(x.sends), 0), sh = k => Math.max(0, ...st.filter(x => x.kind === k).map(x => Number(x.shops))); const pdf = n("pdf"), txt = n("text");
       return `<section class="scard dstates"><h3 class="stitle">Bills sent, last 30 days</h3>${pdf + txt ? `<p class="ssub"><span class="dstate"><b>${pdf}</b> as PDF invoice${sh("pdf") ? ` (${sh("pdf")} shop${sh("pdf") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${txt}</b> as text${sh("text") ? ` (${sh("text")} shop${sh("text") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${Math.round(pdf / (pdf + txt) * 100)}%</b> PDF</span></p>` : `<p class="ssub">None yet. Counting started 14 Nov.</p>`}</section>`; })(sendStats)}
     ${(by => by.length ? `<section class="scard dstates"><h3 class="stitle">Shops by state</h3><p class="ssub">${by.map(([k, n]) => `<span class="dstate"><b>${n}</b> ${esc(k)}</span>`).join("")}</p></section>` : "")(Object.entries(real.reduce((m, r) => { const k = r.state || "Not set"; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]))}
-    <div class="dlist">${real.map(shopCard).join("") || `<p class="hint">No shops yet.</p>`}</div>
+    ${(() => { const q = dQ.trim().toLowerCase(), digits = q.replace(/\D/g, "");
+      const hit = r => !q || [r.name, r.owner_name, r.area, r.state].some(v => String(v || "").toLowerCase().includes(q)) || (digits.length >= 3 && String(r.owner_phone || "").includes(digits));
+      const list = real.filter(r => inSeg(r, dSeg) && hit(r));
+      return `<h3 class="stitle" id="dlisth">All shops</h3>
+      <div class="chips dsegs">${D_SEGS.map(([k, l]) => `<button class="chip" data-dseg="${k}" aria-pressed="${dSeg === k}">${l}<span class="cnt">${real.filter(r => inSeg(r, k)).length}</span></button>`).join("")}</div>
+      <input id="dq" class="dq" type="search" placeholder="Search shop, owner, town or phone" value="${esc(dQ)}" autocomplete="off">
+      ${dSeg === "alerts" && list.length ? `<p class="hint">Tap Remind to send the owner a WhatsApp message with the steps to turn notifications on.</p>` : ""}
+      <div class="dlist">${list.map(shopCard).join("") || `<p class="hint">No shops here.</p>`}</div>`; })()}
     ${refHtml}
     ${agentHtml}
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
   wireAdminSeg();
+  view.querySelectorAll("[data-dseg]").forEach(b => b.onclick = () => { dSeg = b.dataset.dseg; dOpen = null; renderAdmin(); const h = $("#dlisth"); if (h) h.scrollIntoView({ block: "start" }); });
+  view.querySelectorAll("[data-dopen]").forEach(b => b.onclick = () => { dOpen = b.dataset.dopen || null; renderAdmin(); });
+  const dq = $("#dq"); if (dq) dq.oninput = () => { dQ = dq.value; const pos = dq.selectionStart; renderAdmin(); const n = $("#dq"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) { } } };
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
   view.querySelectorAll("[data-ep]").forEach(b => b.onclick = () => { editFor = b.dataset.ep; renderAdmin(); const f = $("#ep-b"); if (f) { f.scrollIntoView({ block: "center" }); f.focus(); } });
   view.querySelectorAll("[data-epno]").forEach(b => b.onclick = () => { editFor = null; renderAdmin(); });
