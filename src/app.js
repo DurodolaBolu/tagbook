@@ -547,14 +547,18 @@ function nudgeMsg(r) {
   const first = String(r.owner_name || "").trim().split(/\s+/).find(w => w.replace(/[^a-z]/gi, "").length >= 3) || "";
   const hi = `${greet()}${first ? " " + first : ""}. This is Bolu from Tagbook.`;
   const cl = daysLeft(coveredUntil(r));
-  if (cl !== null && cl < 0) return `${hi}\n\nYour Tagbook plan ended on ${longDay(coveredUntil(r))}.${cl >= -2 ? " You can still log clothes for a short while, but it will pause soon." : " New orders are paused for now, but all your records are safe."}\n\nYou can pay in the app under Settings, Plan & billing. The 6 months plan gives you 1 month free.\n\nIf you'd rather pay us directly, just reply here.\n\nBolu, Tagbook team`;
+  if (cl !== null && cl < 0) return `${hi}\n\nYour Tagbook plan ended on ${longDay(coveredUntil(r))}.${cl >= -2 ? " You can still log clothes for a short while, but it will pause soon." : " New orders are paused for now, but all your records are safe."}\n\nYou can pay in the app under Settings, Plan & billing. Paying for 1 year gives you 2 months free.\n\nIf you'd rather pay us directly, just reply here.\n\nBolu, Tagbook team`;
   const vid = ((tuts || []).find(t => t.step_key === "order") || {}).youtube_id || "SiUDE8sCSQ4";
   if (!r.orders) return `${hi}\n\nWe noticed no clothes have gone into Tagbook yet. Is anything stopping you, or is something not clear?\n\nThis short video shows how to log your first customer's clothes. It takes less than a minute: https://youtu.be/${vid}\n\nIf you'd like us to walk you through it, just reply and we'll give you a quick call.\n\nBolu, Tagbook team`;
   const days = Math.floor((Date.now() - Date.parse(r.last_order)) / 864e5);
   return `${hi}\n\nWe noticed nothing has been logged in Tagbook for ${days} days. Is everything okay with the app?\n\nIf something is not working well for you, tell us and we will fix it. We can also give you a quick call to help.\n\nBolu, Tagbook team`;
 }
 /* ---------- Plan & billing ---------- */
-let plan = null, planPick = "m6", planBusy = false, planFailed = false;
+let plan = null, planPick = null, planBusy = false, planFailed = false;
+// 1 year leads (picked first, shown first) from 20 Nov, 8am. BrightWash sees it now.
+const YEAR_LIVE = Date.parse("2026-11-20T08:00:00+01:00");
+const yearFirst = () => (!!shop && shop.id === "eb2f4c6c-ad86-42b4-bb8d-2a88ecf9e9b0") || Date.now() >= YEAR_LIVE || location.hostname === "localhost";
+const pickNow = () => planPick || (yearFirst() ? "m12" : "m6");
 const PRICE_MONTH = 3000;
 const PLAN_INFO = { m1: ["1 month", 1, ""], m6: ["6 months", 6, "1 month free"], m12: ["1 year", 12, "2 months free"] };
 const longDay = d => d ? new Date(String(d).slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -570,7 +574,7 @@ function planBanner() {
   let t = "";
   if (plan.state === "ended") t = own() ? "New orders are paused. Your records are safe. Pay to start logging clothes again." : "New orders are paused. Ask the owner to pay for Tagbook.";
   else if (plan.state === "grace") t = own() ? `Your Tagbook plan ended on ${longDay(plan.until)}. Pay by ${longDay(plan.grace_until)} to keep logging clothes.` : `The Tagbook plan has ended. Ask the owner to pay by ${longDay(plan.grace_until)}, or logging will pause.`;
-  else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. It's ${naira(PRICE_MONTH)} a month, or pay for 6 months or 1 year and get free months.` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
+  else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. ${yearFirst() ? `Pay ${naira(plan.prices && plan.prices.m12 || PRICE_MONTH * 10)} once for the whole year and get 2 months free, or ${naira(PRICE_MONTH)} a month.` : `It's ${naira(PRICE_MONTH)} a month, or pay for 6 months or 1 year and get free months.`}` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
   return t ? `<div class="alert ${plan.state === "ended" || plan.state === "grace" ? "planwarn" : ""}"><span>${t}</span>${pay}</div>` : "";
 }
 function wirePlanBanner(root) { root.querySelectorAll("[data-gopay]").forEach(b => b.onclick = () => go("plan")); }
@@ -594,16 +598,17 @@ function planHtml() {
   }[p.state];
   const per = k => Math.round(p.prices[k] / PLAN_INFO[k][1]);
   const save = k => p.prices.m1 * PLAN_INFO[k][1] - p.prices[k];
-  const opts = ["m1", "m6", "m12"].filter(k => p.prices[k]).map(k => `<button class="popt" data-plan="${k}" aria-pressed="${planPick === k}">
+  const pick = pickNow(), yf = yearFirst();
+  const opts = (yf ? ["m12", "m6", "m1"] : ["m1", "m6", "m12"]).filter(k => p.prices[k]).map(k => `<button class="popt" data-plan="${k}" aria-pressed="${pick === k}">
       <span class="pname">${PLAN_INFO[k][0]}${k === "m12" ? ` <em>Best value</em>` : ""}</span>
       <b>${naira(p.prices[k])}</b>
       <span class="hint">${k === "m1" ? "Pay every month" : `${PLAN_INFO[k][2]} (save ${naira(save(k))})`}</span></button>`).join("");
   const refs = p.referrals || [];
   return card("Your plan", "", `<p class="pstate"><b>${status[0]}</b><span>${status[1]}</span></p>`)
     + (p.state === "free" && !isAdmin ? "" : card("Choose a plan", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : "",
-      `<p class="hint" style="margin-top:0">${naira(p.prices.m1)} a month for every shop, with no extra charges. Pay ahead and get free months.</p>
+      `<p class="hint" style="margin-top:0">${yf && p.prices.m12 ? `Pay once for the whole year and get 2 months free. Or pay ${naira(p.prices.m1)} every month. No extra charges.` : `${naira(p.prices.m1)} a month for every shop, with no extra charges. Pay ahead and get free months.`}</p>
        <div class="plans">${opts}</div>
-       <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[planPick])} with Paystack</button>
+       <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[pick])} with Paystack</button>
        <p class="hint">Card, bank transfer or USSD. ${p.state === "free" ? "" : p.state === "trial" || p.state === "paid" ? `Paying early adds to the days you have left, so the new plan starts after ${longDay(p.until)}.` : "Logging opens again as soon as you pay."}</p>`))
     + card("Refer a laundry, get a month free", "When a shop you refer pays for Tagbook, your next month is free. Refer 12 and use Tagbook free for a year.",
       `<p class="pstate"><b>${refs.length} shop${refs.length === 1 ? "" : "s"} referred · ${p.free_months} free month${p.free_months === 1 ? "" : "s"} earned</b></p>
@@ -623,9 +628,9 @@ function wirePlan() {
   const go_ = $("#paygo"); if (!go_) return;
   go_.onclick = async () => {
     go_.disabled = true; go_.textContent = "Opening Paystack…";
-    const r = await billingCall({ action: "start", plan: planPick });
+    const r = await billingCall({ action: "start", plan: pickNow() });
     if (r.url) { location.href = r.url; return; }
-    go_.disabled = false; go_.textContent = `Pay ${naira(plan.prices[planPick])} with Paystack`;
+    go_.disabled = false; go_.textContent = `Pay ${naira(plan.prices[pickNow()])} with Paystack`;
     toast(r.error === "NOT_READY" ? "Online payment isn't switched on yet. Message Tagbook to pay." : r.error === "NETWORK" ? "Check your internet and try again." : "Couldn't open Paystack. Please try again.");
   };
 }

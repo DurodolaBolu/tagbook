@@ -285,6 +285,9 @@ async function handle(route) {
   console.log("plan down: calls in 2.5s (expect <=1):", global.planCalls, "| try again shown:", await page.isVisible("#planretry"));
   global.planFail = false; await T("#planretry"); await page.waitForTimeout(600);
   console.log("plan after Try again shows plans:", await page.isVisible("[data-plan]"));
+  { const first = await page.getAttribute(".plans [data-plan]", "data-plan"), picked = await page.getAttribute('[data-plan][aria-pressed="true"]', "data-plan"), btn = (await page.textContent("#paygo")).trim();
+    await shot("13p-plan-year-first"); console.log("plan order first:", first, "| picked:", picked, "| button:", btn);
+    if (first !== "m12" || picked !== "m12") errors.push("year plan not first"); }
   await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);
   if (process.env.CAPTURE_REPLIES) { // design review: admin Replies tab
     db.quick_replies = [
