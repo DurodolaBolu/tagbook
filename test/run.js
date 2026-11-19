@@ -655,6 +655,9 @@ async function handle(route) {
     if (db.expenses.length !== 2 || spent !== "₦3,500") errors.push("expenses not saved right");
     await T('[data-exdel]'); await T('.cfm [data-c="1"]'); await page.waitForTimeout(300);
     console.log("after delete:", db.expenses.length, await page.textContent(".exleft b"));
+    await T("#exprev"); const yl = await page.textContent(".exnav b"), yrows = await page.$$eval(".exlist .exrow", r => r.length); await shot("12c-expenses-yesterday"); await T("#exnext");
+    console.log("yesterday:", yl, "rows:", yrows, "| back to:", await page.textContent(".exnav b"));
+    if (yl !== "Yesterday" || yrows !== 0) errors.push("expense day picker wrong");
     if (db.expenses.length !== 1) errors.push("expense delete failed");
   }
   // settings: add staff, price edit, branch add
