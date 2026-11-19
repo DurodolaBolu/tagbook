@@ -658,6 +658,11 @@ async function handle(route) {
     await T("#exprev"); const yl = await page.textContent(".exnav b"), yrows = await page.$$eval(".exlist .exrow", r => r.length); await shot("12c-expenses-yesterday"); await T("#exnext");
     console.log("yesterday:", yl, "rows:", yrows, "| back to:", await page.textContent(".exnav b"));
     if (yl !== "Yesterday" || yrows !== 0) errors.push("expense day picker wrong");
+    await T('[data-ext="month"]'); const mspent = await page.evaluate(() => [...document.querySelectorAll(".lines div")].find(d => /Spent on the shop/.test(d.textContent)).querySelector("b").textContent);
+    const mtype = await page.textContent(".exlist"); const madd = !!(await page.$("#exadd")); await shot("12d-expenses-month");
+    console.log("month spent:", mspent, "| by type:", mtype.replace(/\s+/g, " ").trim(), "| add button:", madd);
+    if (mspent !== "₦2,000" || madd) errors.push("expense month view wrong");
+    await T('[data-ext="day"]');
     if (db.expenses.length !== 1) errors.push("expense delete failed");
   }
   // settings: add staff, price edit, branch add

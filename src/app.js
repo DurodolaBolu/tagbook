@@ -2527,7 +2527,7 @@ const EXP_KINDS = [["soap", "Soap"], ["chemicals", "Stain remover and chemicals"
 const expKind = k => (EXP_KINDS.find(x => x[0] === k) || EXP_KINDS[EXP_KINDS.length - 1])[1];
 const expDay = d => { const [y, mo, dd] = String(d).split("-").map(Number); return new Date(y, mo - 1, dd); };
 const ymd = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-let expAdd = null, expK = 0;
+let expAdd = null, expK = 0, expT = "day";
 function dkey(x) { return x.getFullYear() + "-" + (x.getMonth() + 1) + "-" + x.getDate(); }
 function liveByDay() {
   const m = {}; const add = (ts, f, v) => { const k = dkey(new Date(ts)); (m[k] = m[k] || { orders: 0, clothes: 0, billed: 0, received: 0, spent: 0 })[f] += v; };
@@ -2568,7 +2568,7 @@ function buckets(type, { s, e }, live) {
   return out;
 }
 function renderReports() {
-  if (!view.querySelector(".exnav")) { expK = 0; expAdd = null; } // Spending opens on today
+  if (!view.querySelector(".exnav")) { expT = "day"; expK = 0; expAdd = null; } // Spending opens on today
   const firstDay = (() => { const x = new Date(Math.min(Date.parse(shop.created_at), ...orders.map(o => o.at))); x.setHours(0, 0, 0, 0); return x; })();
   const live = liveByDay(), R = periodRange(rep.type, rep.k), P = periodRange(rep.type, rep.k - 1);
   const cur = sumRange(R.s, R.e, live);
@@ -2605,26 +2605,31 @@ function renderReports() {
   view.querySelectorAll("[data-bi]").forEach(b => b.onclick = () => { rep.sel = +b.dataset.bi; renderReports(); });
 }
 
-// Spending works one day at a time: today by default, ‹ goes back a day. (Week, month and year can come later.)
+// Spending opens on today. Day shows each expense (and adds to that day); week, month and year show totals by type.
 function expHtml(live) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const D = periodRange("day", expK), cur = sumRange(D.s, D.e, live);
+  const D = periodRange(expT, expK), cur = sumRange(D.s, D.e, live), isDay = expT === "day";
+  const sofar = !isDay && expK === 0 ? " so far" : "", lbl = periodLabel(expT, expK, D);
   const first = new Date(Date.parse(shop.created_at)); first.setHours(0, 0, 0, 0);
   const day = ymd(D.s), left = cur.received - cur.spent;
-  const list = expenses.filter(x => x.spent_on === day).sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
-  const rows = list.map(x => `<div class="exrow"><span><b>${esc(expKind(x.kind))}</b>${x.note ? `<em class="exnote">${esc(x.note)}</em>` : ""}</span><span class="exr"><b>${naira(x.amount)}</b><button class="exdel" data-exdel="${x.id}" aria-label="Delete ${esc(expKind(x.kind))} ${naira(x.amount)}">×</button></span></div>`).join("");
+  const list = expenses.filter(x => { const d = expDay(x.spent_on); return d >= D.s && d < D.e; }).sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  const byKind = {}; list.forEach(x => byKind[x.kind] = (byKind[x.kind] || 0) + x.amount);
+  const rows = !isDay ? Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><span>${esc(expKind(k))}</span><b>${naira(v)}</b></div>`).join("") : list.map(x => `<div class="exrow"><span><b>${esc(expKind(x.kind))}</b>${x.note ? `<em class="exnote">${esc(x.note)}</em>` : ""}</span><span class="exr"><b>${naira(x.amount)}</b><button class="exdel" data-exdel="${x.id}" aria-label="Delete ${esc(expKind(x.kind))} ${naira(x.amount)}">×</button></span></div>`).join("");
   const form = expAdd ? `<div class="exform"><label for="exa">Amount spent (₦)</label><input id="exa" ${moneyAttrs} value="${expAdd.amt || ""}" placeholder="e.g. 4500">
       <p class="exl">What was it for?</p><div class="chips exchips">${EXP_KINDS.map(([k, l]) => `<button class="chip" data-exk="${k}" aria-pressed="${expAdd.kind === k}">${l}</button>`).join("")}</div>
       <label for="exn">Note (optional)</label><input id="exn" maxlength="120" value="${esc(expAdd.note || "")}" placeholder="e.g. 2 bags of Ariel" autocomplete="off">
       <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="excancel">Cancel</button><button class="btn btn-primary" id="exsave" ${expAdd.busy ? "disabled" : ""}>${expAdd.busy ? "Saving…" : "Save expense"}</button></div></div>` : "";
   return `<h3 class="exh">Spending</h3>
-    <div class="rnav exnav"><button class="rbtn" id="exprev" aria-label="Day before" ${D.s > first ? "" : "disabled"}>‹</button><b>${periodLabel("day", expK, D)}</b><button class="rbtn" id="exnext" aria-label="Next day" ${expK < 0 ? "" : "disabled"}>›</button></div>
-    <div class="lines"><div><span>Money received</span><b>${naira(cur.received)}</b></div><div><span>Spent on the shop</span><b>${naira(cur.spent)}</b></div>
+    <div class="chips">${[["day", "Day"], ["week", "Week"], ["month", "Month"], ["year", "Year"]].map(([k, l]) => `<button class="chip" data-ext="${k}" aria-pressed="${expT === k}">${l}</button>`).join("")}</div>
+    <div class="rnav exnav"><button class="rbtn" id="exprev" aria-label="Previous" ${D.s > first ? "" : "disabled"}>‹</button><b>${lbl}</b><button class="rbtn" id="exnext" aria-label="Next" ${expK < 0 ? "" : "disabled"}>›</button></div>
+    <div class="lines"><div><span>Money received${sofar}</span><b>${naira(cur.received)}</b></div><div><span>Spent on the shop${sofar}</span><b>${naira(cur.spent)}</b></div>
       <div class="exleft"><span>Left</span><b style="color:${left < 0 ? "var(--owes)" : "inherit"}">${left < 0 ? "−" : ""}${naira(Math.abs(left))}</b></div></div>
-    ${form || `<button class="btn btn-ghost" id="exadd" style="margin-top:10px">+ Add expense${expK === 0 ? "" : ` for ${periodLabel("day", expK, D)}`}</button>`}
-    ${list.length ? `<div class="lines exlist">${rows}</div>` : `<p class="hint">No expenses recorded for ${expK === 0 ? "today" : expK === -1 ? "yesterday" : "this day"}. Add what you spend on soap, fuel, staff pay and more, and Tagbook shows what's left.</p>`}`;
+    ${!isDay ? "" : form || `<button class="btn btn-ghost" id="exadd" style="margin-top:10px">+ Add expense${expK === 0 ? "" : ` for ${lbl}`}</button>`}
+    ${list.length ? `<div class="lines exlist">${isDay ? "" : `<div class="exsub"><span>Spent by type</span></div>`}${rows}</div>` : `<p class="hint">No expenses recorded for ${!isDay ? `this ${expT}` : expK === 0 ? "today" : expK === -1 ? "yesterday" : "this day"}.${isDay ? " Add what you spend on soap, fuel, staff pay and more, and Tagbook shows what's left." : ""}</p>`}
+    ${isDay ? "" : `<p class="hint">To add an expense, tap Day.</p>`}`;
 }
 function wireExp() {
+  view.querySelectorAll("[data-ext]").forEach(b => b.onclick = () => { expT = b.dataset.ext; expK = 0; expAdd = null; renderReports(); });
   const pv = $("#exprev"); if (pv) pv.onclick = () => { expK--; expAdd = null; renderReports(); };
   const nx = $("#exnext"); if (nx) nx.onclick = () => { expK++; expAdd = null; renderReports(); };
   const ad = $("#exadd"); if (ad) ad.onclick = () => { expAdd = { kind: null }; renderReports(); const a = $("#exa"); if (a) a.focus(); };
