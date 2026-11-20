@@ -88,6 +88,17 @@ async function toPriceList(name, svc, price) {
   PRICES.push({ id: data.id, name, custom: false, services: [svc], sort, hidden: false, p: { [svc]: price } });
   return data.id;
 }
+// Sets the shop's price for one item and service (from the log screen or a bill), and ticks the prices step.
+async function setPrice(id, svc, price) {
+  const it = item(id); if (!it || !price) return false;
+  const pr = { ...(it.p || {}), [svc]: price }, svcs = [...new Set([...(it.services || []), svc])];
+  const { error } = await sb.from("item_prices").upsert({ item_id: id, shop_id: shop.id, prices: pr });
+  if (error) { toast(failMsg(error)); return false; }
+  if (!(it.services || []).includes(svc)) await put("items", { id }, { services: svcs });
+  it.p = pr; it.services = svcs; markSetup("prices");
+  return true;
+}
+const hasPrice = (id, svc) => { const it = item(id) || {}; return !!it.custom || !!(it.p || {})[svc]; };
 // A clear "are you sure" step for actions that are hard to undo (no browser pop-ups).
 function askConfirm(title, text, yes) {
   return new Promise(res => {
@@ -1210,7 +1221,7 @@ function setupSteps() {
   if (standalone() && !st.installed) markSetup("installed");
   return [
     { k: "login", t: "Log in", done: true },
-    { k: "prices", t: "Put in your own prices", d: "The list has sample prices. Tap each item and type what your shop charges. Bills are worked out from it.", go: "Change prices", done: !!st.prices },
+    { k: "prices", t: "Put in your prices", d: "Tap each item and type what your shop charges. Bills are worked out from it.", go: "Set prices", done: !!st.prices },
     { k: "install", t: `Install Tagbook on this ${device()}`, d: "So it opens like an app and can notify you.", go: "Show me", done: !!st.installed || standalone() || (!isPhone() && !installEvt) },
     { k: "bank", t: "Add your bank details", d: "Type your bank name, account number and account name. Your bill shows customers where to pay.", go: "Add bank", done: !!hasBank() },
     // Steps for newer features: shops that already finished the checklist don't see them again.
@@ -1234,7 +1245,7 @@ function welcomeCard() {
     ${pricesDone
       ? `<p>Your prices are set. Now log the next customer who brings clothes. It's the quickest way to learn Tagbook.</p>
          <button class="btn btn-primary" id="wlog">+ Log clothes</button>`
-      : `<p>Your free month has started. First, put in your own prices. The list has sample prices, and every bill is worked out from it.</p>
+      : `<p>Your free month has started. First, put in your prices. Every bill is worked out from them.</p>
          <button class="btn btn-primary" id="wprices">Check my prices</button>`}
     <p class="hint">We'll also call you shortly to help you get started.</p></section>`;
 }
@@ -1423,7 +1434,7 @@ function renderOrders() {
 
 /* ---------- Log clothes ---------- */
 let d;
-function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, wait: false, pickup: false, cDate: "", cTime: "", cOther: false, tOther: false, expDays: 0, rm: [], money: 0, rmOther: false, askSpecial: false, specialName: "", specialPrice: 0, paid: 0, saving: false }; }
+function reset() { d = { method: null, cust: null, q: "", newMode: false, phone: "", found: undefined, name: "", hasMark: null, mark: "", branch: (liveBranches()[0] || {}).id || null, greet: "", greetOther: false, svc: "wi", items: [], express: false, wait: false, pickup: false, cDate: "", cTime: "", cOther: false, tOther: false, expDays: 0, rm: [], money: 0, rmOther: false, askSpecial: false, specialName: "", specialPrice: 0, askPrice: null, askPriceVal: 0, paid: 0, saving: false }; }
 reset();
 const markTaken = m => customers.find(c => c.mark === m);
 function suggest(name) {
@@ -1516,12 +1527,17 @@ function renderNew() {
     <label>Service</label>
     <div class="chips" style="margin:0">${svcList.map(s => `<button class="chip" data-svc="${s}" aria-pressed="${d.svc === s}">${SERVICES[s]}</button>`).join("")}</div>
     <label>Tap to add clothes</label>
-    <div class="picker">${pickable.map(p => `<button data-add="${p.id}">${esc(p.name)}${p.custom ? "<small>Wedding gown, curtain</small>" : ""}</button>`).join("")}</div>
+    <div class="picker">${pickable.map(p => `<button data-add="${p.id}">${esc(p.name)}${p.custom ? "<small>Wedding gown, curtain</small>" : !hasPrice(p.id, d.svc) ? "<small class=\"nop\">No price yet</small>" : ""}</button>`).join("")}</div>
     ${d.askSpecial ? `<div class="check" style="margin-top:8px"><label for="sp" style="margin-top:0">What is the special item?</label>
       <input id="sp" placeholder="e.g. Wedding gown" value="${esc(d.specialName)}" autocomplete="off">
       ${own() ? `<label for="spp">Price for ${SERVICES[d.svc].toLowerCase()} (₦)</label><input id="spp" ${moneyAttrs} placeholder="e.g. 5000" value="${d.specialPrice || ""}">
       <p class="hint">With a price, it's also added to your price list, so next time just tap it. Leave it empty to set the price on the bill.</p>` : ""}
       <div class="row"><button class="btn btn-ghost" id="spc">Cancel</button><button class="btn btn-primary" id="spa" ${d.specialName.trim() ? "" : "disabled"}>Add item</button></div></div>` : ""}
+    ${d.askPrice && item(d.askPrice) ? `<div class="check pneed" style="margin-top:8px"><b>Price not set yet</b>
+      <label for="aprice" style="margin-top:6px">How much do you charge for ${esc(item(d.askPrice).name)} (${SERVICES[d.svc].toLowerCase()})? (₦)</label>
+      <input id="aprice" ${moneyAttrs} placeholder="e.g. 800" value="${d.askPriceVal || ""}">
+      <p class="hint">It's saved to your price list, so next time it's one tap.</p>
+      <div class="row"><button class="btn btn-ghost" id="apc">Cancel</button><button class="btn btn-primary" id="apa">Save price and add</button></div></div>` : ""}
     <div class="items">${d.items.map((it, i) => `
       <div class="item"><span>${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>
       <div class="qty">${photosOn() ? `<button data-cam="${i}" class="cam${(it.photos || []).length ? " on" : ""}" aria-label="Add a photo of ${esc(pname(it))}">${CAM_SVG}</button>` : ""}<button data-dec="${i}" aria-label="Remove one">−</button><b style="min-width:22px;text-align:center">${it.qty}</b><button data-inc="${i}" aria-label="Add one">+</button></div>
@@ -1579,9 +1595,23 @@ function renderNew() {
   view.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
     const id = b.dataset.add;
     if ((item(id) || {}).custom) { d.askSpecial = id; d.specialName = ""; d.specialPrice = 0; renderNew(); $("#sp").focus(); return; }
+    if (!hasPrice(id, d.svc)) {
+      if (own()) { d.askPrice = id; d.askPriceVal = 0; d.askSpecial = false; renderNew(); const f = $("#aprice"); if (f) f.focus(); return; }
+      toast(`No price for ${item(id).name} yet. The owner will set it before the bill.`);
+    }
     const f = d.items.find(i => i.id === id && i.svc === d.svc && !i.label); f ? f.qty++ : d.items.push({ id, svc: d.svc, qty: 1 }); renderNew();
   });
   if ($("#spc")) $("#spc").onclick = () => { d.askSpecial = false; renderNew(); };
+  const apIn = $("#aprice"); if (apIn) apIn.oninput = e => { const c = digits(e.target.value); d.askPriceVal = num(c); if (e.target.value !== c) e.target.value = c; };
+  if ($("#apc")) $("#apc").onclick = () => { d.askPrice = null; renderNew(); };
+  if ($("#apa")) $("#apa").onclick = async () => {
+    if (!d.askPriceVal) { toast("Type the price first"); $("#aprice").focus(); return; }
+    const btn = $("#apa"); btn.disabled = true; btn.textContent = "Saving…";
+    const id = d.askPrice, nm = item(id).name;
+    if (!(await setPrice(id, d.svc, d.askPriceVal))) { btn.disabled = false; btn.textContent = "Save price and add"; return; }
+    const f = d.items.find(i => i.id === id && i.svc === d.svc && !i.label); f ? f.qty++ : d.items.push({ id, svc: d.svc, qty: 1 });
+    toast(`${nm}: ${naira(d.askPriceVal)} saved to your price list`); d.askPrice = null; d.askPriceVal = 0; renderNew();
+  };
   const spp = $("#spp"); if (spp) spp.oninput = e => { const c = digits(e.target.value); d.specialPrice = num(c); if (e.target.value !== c) e.target.value = c; };
   if ($("#spa")) $("#spa").onclick = async () => {
     const name = tidy(d.specialName).slice(0, 40), price = own() ? d.specialPrice : 0;
@@ -2442,7 +2472,8 @@ function openOrder(no) {
     html += `<h2 style="margin-top:18px">Bill ${o.billed ? `<span class="pill p-ready" style="vertical-align:middle">Saved</span>` : ""}</h2>`;
     if (canEditBill) {
       html += `<div class="lines">
-        ${o.items.map((it, i) => { const p = item(it.id) || {}; return `<div><span>${it.qty} × ${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>${p.custom ? `<input data-cp="${i}" ${moneyAttrs} placeholder="Set price" value="${o.m.custom[i] || ""}" aria-label="Price for ${esc(pname(it))}">` : `<span>${naira(unitPrice(o, it, i) * it.qty)}</span>`}</div>`; }).join("")}
+        ${o.items.map((it, i) => { const p = item(it.id) || {}; return `<div><span>${it.qty} × ${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>${p.custom ? `<input data-cp="${i}" ${moneyAttrs} placeholder="Set price" value="${o.m.custom[i] || ""}" aria-label="Price for ${esc(pname(it))}">` : !unitPrice(o, it, i) ? `<input data-np="${i}" ${moneyAttrs} placeholder="Price not set" aria-label="Price for one ${esc(pname(it))}">` : `<span>${naira(unitPrice(o, it, i) * it.qty)}</span>`}</div>`; }).join("")}
+        ${o.items.some((it, i) => !(item(it.id) || {}).custom && !unitPrice(o, it, i)) ? `<p class="bad" style="margin:4px 0">Some clothes have no price yet. Type the price for one, and it's saved to your price list.</p>` : ""}
         ${o.wait ? `<div><span>Wait &amp; get${spLabel(o)}</span>${spManual(o) ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.m.express_amt || ""}" aria-label="Wait and get amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`
         : `<div><label class="ck" style="margin:0"><input type="checkbox" id="ex" ${o.express ? "checked" : ""}> Express delivery${expressLabel()}</label>${expManual() ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.express && o.m.express_amt ? o.m.express_amt : ""}" aria-label="Express delivery amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`}
         <div><span>Pickup / delivery${o.pickup ? "<br><small style='color:var(--muted)'>Customer asked for it</small>" : ""}</span><input id="dl" ${moneyAttrs} placeholder="0" value="${o.m.delivery || ""}" aria-label="Pickup or delivery cost"></div>
@@ -2535,6 +2566,7 @@ function openOrder(no) {
   sh.querySelectorAll("[data-again]").forEach(b => b.onclick = () => { o.again[b.dataset.again] = true; again(); });
   const live = () => { const kk = calc(o); $("#tot").textContent = naira(kk.total); if ($("#exv")) $("#exv").textContent = naira(kk.exp); };
   sh.querySelectorAll("[data-cp]").forEach(i => moneyInput(i, v => { o.m.custom[i.dataset.cp] = v; live(); }));
+  sh.querySelectorAll("[data-np]").forEach(i => { moneyInput(i, () => { }); i.onchange = async () => { const it = o.items[+i.dataset.np], v = num(i.value); if (!v) return; if (await setPrice(it.id, it.svc, v)) { toast(`${item(it.id).name}: ${naira(v)} saved to your price list`); again(); } }; });
   moneyInput($("#dl"), v => { o.m.delivery = v; live(); });
   moneyInput($("#dc"), v => { o.m.discount = v; live(); });
   moneyInput($("#pay"), () => { });
@@ -2543,6 +2575,8 @@ function openOrder(no) {
   const bill = $("#bill"); if (bill) bill.onclick = async () => {
     const miss = o.items.find((it, i) => (item(it.id) || {}).custom && !o.m.custom[i]);
     if (miss) { toast(`Set a price for ${pname(miss)} first`); return; }
+    const noPrice = o.items.find((it, i) => !(item(it.id) || {}).custom && !unitPrice(o, it, i));
+    if (noPrice) { toast(`Set a price for ${pname(noPrice)} first`); const f = sh.querySelector("[data-np]"); if (f) f.focus(); return; }
     if ((o.express || o.wait) && spManual(o) && !(+o.m.express_amt > 0)) { toast(`Type the ${spName(o).toLowerCase()} amount`); $("#exa").focus(); return; }
     if (!o.billed) lockPrices(o);
     const kk = calc(o);
@@ -3087,7 +3121,7 @@ function priceListHtml() {
         ${list.map(x => `<div class="pr" role="row"><input data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off" aria-label="Item name">${Object.keys(SERVICES).map(k => cell(x, k)).join("")}<button class="plink" data-prm="${x.id}" aria-label="Remove ${esc(x.name)}">Remove</button></div>`).join("")}</div>`
     : `<div class="plist">${list.map(x => priceOpen === x.id ? `<div class="pli open">${editor(x)}</div>`
         : `<button class="pli" data-popen="${x.id}"><b>${esc(x.name)}</b><span>${summary(x)}</span></button>`).join("")}</div>`;
-  const guide = own() && !setupState().prices ? `<div class="pguide"><b>These are sample prices.</b> Tap each item and type what your shop charges. The step ticks by itself once you save a price.<br>Have your price list on paper? <a href="https://wa.me/2348120756325?text=${encodeURIComponent("Hello, here is my price list for Tagbook")}" target="_blank" rel="noopener">Send us a photo on WhatsApp</a> and we'll put it in for you.</div>` : "";
+  const guide = own() && !setupState().prices ? `<div class="pguide"><b>Your prices aren't set yet.</b> Tap each item and type what your shop charges. The step ticks by itself once you save a price.<br>Have your price list on paper? <a href="https://wa.me/2348120756325?text=${encodeURIComponent("Hello, here is my price list for Tagbook")}" target="_blank" rel="noopener">Send us a photo on WhatsApp</a> and we'll put it in for you.</div>` : "";
   return guide + card("Price list", `${all.length} item${all.length === 1 ? "" : "s"}. ${wide.matches ? "Click any name or price to change it." : "Tap an item to change it."} Leave a price empty if you don't offer that service. Saved bills keep their prices.`,
       `${all.length > 8 ? `<input class="search" id="pq" placeholder="Search items" value="${esc(priceQ)}" aria-label="Search items" style="margin:4px 0 10px">` : ""}
        ${list.length ? rows : `<p class="hint">No item matches “${esc(priceQ)}”.</p>`}`)

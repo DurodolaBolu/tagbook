@@ -721,3 +721,5 @@ label .opt{font-size:13px}
 
 .pguide{background:var(--warn-soft);border-radius:12px;padding:12px 14px;margin:0 0 12px;font-size:15px;line-height:1.45}
 .pguide a{color:inherit;font-weight:600;text-decoration:underline}
+.picker small.nop{color:var(--warn);font-weight:600}
+.pneed{background:var(--warn-soft)}

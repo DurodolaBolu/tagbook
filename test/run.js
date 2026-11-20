@@ -367,6 +367,16 @@ async function handle(route) {
     await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(600);
     console.log("prices step done on checklist:", await priceDone(), "| skip links:", await page.$$eval("[data-sskip]", b => b.map(x => x.textContent)));
     await page.screenshot({ path: path.join(process.env.SETUP_TEST, "setup.png"), fullPage: true });
+    // A shop with no prices: logging an unpriced item asks the owner for its price first
+    db.item_prices.forEach(r => r.prices = {});
+    await page.goto("http://localhost:8787/#log"); await page.reload(); await page.waitForTimeout(1000);
+    await page.click('[data-svc="wi"]').catch(() => {}); await page.waitForTimeout(200);
+    console.log("picker says no price:", (await page.$$("[data-add] small.nop")).length > 0);
+    await page.click('[data-add="it0"]'); await page.waitForTimeout(300);
+    console.log("asks for price:", !!(await page.$("#aprice")), "| item not added yet:", (await page.$$(".items .item")).length === 0);
+    await page.screenshot({ path: path.join(process.env.SETUP_TEST, "askprice.png"), fullPage: true });
+    await page.fill("#aprice", "900"); await page.click("#apa"); await page.waitForTimeout(800);
+    console.log("price saved:", JSON.stringify((db.item_prices.find(r => r.item_id === "it0") || {}).prices), "| item added:", (await page.$$(".items .item")).length === 1);
     process.exit(0);
   }
   if (process.env.CAPTURE_OPTS) { // order options: collection date, wait & get, remarks, starch and iron
