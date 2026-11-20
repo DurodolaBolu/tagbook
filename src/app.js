@@ -240,6 +240,8 @@ const chargeLabel = (type, v) => type === "manual" ? "" : type === "times" ? ` (
 function expressFor(sub) { const p = sPriv(); return chargeFor(sub, p.express_type, p.express_value); }
 const expressLabel = () => { const p = sPriv(); return chargeLabel(p.express_type, p.express_value); };
 const spName = o => o.wait ? "Wait & get" : "Express delivery";
+// Shown under the order or invoice number in messages, so an express order is plain to the customer.
+const spTag = o => o.wait ? "\nWait & get" : o.express ? "\n⚡ EXPRESS" : "";
 const spManual = o => o.wait ? sPriv().wait_type === "manual" : expManual();
 const spFor = (o, sub) => { const p = sPriv(); return o.wait ? chargeFor(sub, p.wait_type, p.wait_value) : expressFor(sub); };
 const spLabel = o => { const p = sPriv(); return o.wait ? chargeLabel(p.wait_type, p.wait_value) : expressLabel(); };
@@ -1707,11 +1709,11 @@ function message(o, type) {
   const c = cust(o.cid), k = calc(o), hi = hello(c);
   if (type === "list") {
     const list = o.items.map(it => `${it.qty} x ${pname(it)} (${SERVICES[it.svc]})`).join("\n");
-    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${o.wait ? "\nWait & get" : ""}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
+    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${spTag(o)}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
-  if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
-  if (type === "early") return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE INV-${o.no}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as they are ready.\n\n_Sent with Tagbook_`;
+  if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
+  if (type === "early") return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as they are ready.\n\n_Sent with Tagbook_`;
   return `${hi}, a reminder from ${shopName()}: invoice INV-${o.no} (clothes dropped ${fmtDay(o.at)}) has ${naira(owed(o))} still to pay.${payTo()}\n\nThank you.\n_Sent with Tagbook_`;
 }
 const waFmt = t => esc(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<i>$2</i>").replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g, "$1<b>$2</b>");
@@ -1872,6 +1874,7 @@ async function invoicePages(o, c = cust(o.cid)) {
   if (logo) { const s = Math.min(132 / logo.width, 132 / logo.height), lw = logo.width * s, lh = logo.height * s; g.drawImage(logo, M, y + (132 - lh) / 2, lw, lh); x = M + lw + 28; }
   text("INVOICE", W - M, y + 52, F(700, 50), col, "right");
   text(invNo(o), W - M, y + 90, F(500, 24), MUTED, "right");
+  if (o.express || o.wait) text(o.wait ? "WAIT & GET" : "EXPRESS", W - M, y + 124, F(700, 24), "#C2410C", "right");
   const nameW = W - M - 320 - x; let hy = y + 44;
   wrap(shopName(), nameW, F(700, 38)).slice(0, 2).forEach(l => { text(l, x, hy, F(700, 38), INK); hy += 44; });
   hy -= 6;
@@ -1891,6 +1894,7 @@ async function invoicePages(o, c = cust(o.cid)) {
   let ry = y + 42;
   const kv = (kk, v) => { text(kk, c2, ry, F(400, 22), MUTED); if (v) text(v, c2 + 200, ry, F(600, 22)); ry += 36; };
   kv("Invoice no.", invNo(o)); kv("Dropped off", fmtDate(o.at)); kv("Invoice date", fmtDate(Date.now()));
+  if (o.express || o.wait) kv("Service", o.wait ? "Wait & get" : "Express");
   kv("Clothes", o.status === "picked" ? "Collected" : o.status === "ready" || o.status === "told" ? "Ready for pickup" : "Being cleaned");
   kv("Status", "");
   const st = due === 0 ? ["Paid", "#DCF2E7", "#0F6B47"] : paid ? ["Part paid", "#FEF3C7", "#92400E"] : ["Unpaid", "#FDE2E1", "#B42318"];
