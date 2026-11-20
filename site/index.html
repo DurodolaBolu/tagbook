@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261120184926";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261120200116";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -901,6 +901,7 @@ label .opt{font-size:13px}
 .xpchip[aria-pressed="true"]{background:var(--warn-soft);color:var(--fg);border-color:transparent;font-weight:600}
 .xpnote{background:var(--warn-soft);border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:14px;line-height:1.4}
 .xpcol{margin-top:12px}.xpcol>b{display:block;margin-bottom:2px}
+.pairnote{background:var(--warn-soft);border-radius:12px;padding:10px 12px;margin:14px 0 0;font-size:14px}.pairnote a{color:inherit;font-weight:600}
 </style>
 </head><body>
 <div id="boot" class="loading washing" role="status"><div class="lart big"><svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
@@ -931,7 +932,7 @@ label .opt{font-size:13px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261120184926"></script>
+<script src="/app.js?v=20261120200116"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

@@ -135,7 +135,7 @@ async function load() {
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
     fetchAll("customers", "id,name,mark,greet,greet_asked,inv_name"),
-    fetchAll("orders", "id,no,customer_id,branch_id,items,express,wait_get,pickup,collect_at,remarks,money_found,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
+    fetchAll("orders", "id,no,customer_id,branch_id,pair_id,items,express,wait_get,pickup,collect_at,remarks,money_found,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by", "no"),
   ]);
   if (base[0].error) throw base[0].error;
   shop = base[0].data; BRANCHES = base[1]; customers = base[3];
@@ -164,7 +164,7 @@ async function load() {
   PRICES = base[2].map(i => ({ ...i, p: prices[i.id] || {} }));
   customers.forEach(c => c.phone = phones[c.id] || "");
   const all = base[4].map(o => ({
-    id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, items: o.items || [], express: o.express, wait: !!o.wait_get, pickup: o.pickup, collect: o.collect_at ? Date.parse(o.collect_at) : 0, remarks: o.remarks || "", money: o.money_found || 0,
+    id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, pair: o.pair_id || null, items: o.items || [], express: o.express, wait: !!o.wait_get, pickup: o.pickup, collect: o.collect_at ? Date.parse(o.collect_at) : 0, remarks: o.remarks || "", money: o.money_found || 0,
     status: o.status, checking: o.checking, checked: o.checked || {}, notified: o.notified, billed: o.billed, settled: o.settled, list_sent: o.list_sent,
     at: Date.parse(o.created_at), m: { ...emptyMoney(), ...(money[o.id] || {}) }, again: {},
     cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "",
@@ -242,6 +242,7 @@ const expressLabel = () => { const p = sPriv(); return chargeLabel(p.express_typ
 const spName = o => o.wait ? "Wait & get" : "Express delivery";
 // Shown under the order or invoice number in messages, so an express order is plain to the customer.
 const spTag = o => o.wait ? "\nWait & get" : o.express ? "\n⚡ EXPRESS" : "";
+const pairLine = o => { const q = partner(o); if (!q) return ""; const n = q.items.reduce((s, it) => s + it.qty, 0); return `\n\nAlso dropped with these: Order #${q.no}${q.express ? " (⚡ express)" : ""}, ${n} item${n === 1 ? "" : "s"}.`; };
 const spManual = o => o.wait ? sPriv().wait_type === "manual" : expManual();
 const spFor = (o, sub) => { const p = sPriv(); return o.wait ? chargeFor(sub, p.wait_type, p.wait_value) : expressFor(sub); };
 const spLabel = o => { const p = sPriv(); return o.wait ? chargeLabel(p.wait_type, p.wait_value) : expressLabel(); };
@@ -1673,7 +1674,7 @@ function renderNew() {
       const r2 = await sb.rpc("log_order", { p: { branch_id: d.branch, items: clean(xs), express: true, wait_get: false, pickup: d.pickup, paid: d.paid || 0, method: d.method,
         collect_at: shop.collect_dates ? collectWhen({ ...d, express: true, wait: false }) : null, remarks: null, money_found: null, customer_id: data.customer_id } });
       if (r2.error) toast(`The normal clothes were saved as order #${data.no}, but the express ones were not: ${failMsg(r2.error)} Log them again as a new order.`);
-      else xdata = r2.data;
+      else { xdata = r2.data; try { await sb.rpc("pair_orders", { p_a: data.id, p_b: xdata.id }); } catch (_) { } }
     }
     d.saving = false;
     if (error) {
@@ -1700,6 +1701,12 @@ const tidy = v => String(v || "").replace(/[\u200B-\u200F\u2060\uFEFF]/g, "").re
 const NAME_MAX = 50;
 
 /* ---------- Messages ---------- */
+function comboBill(o, c, hi) {
+  const parts = [o, o.combo].sort((a, b) => (b.express ? 1 : 0) - (a.express ? 1 : 0));
+  const total = parts.reduce((s, q) => s + partTotal(q), 0), paid = parts.reduce((s, q) => s + (+q.m.paid || 0), 0), due = Math.max(0, total - paid);
+  const sec = q => `${q.express ? "⚡ EXPRESS" : "NORMAL"} (Order #${q.no})${q.collect ? ` · Ready ${fmtDay(q.collect)}` : ""}\n${billLines(q)}`;
+  return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE ${invNo(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n\n${parts.map(sec).join("\n\n")}\n\nTotal: ${naira(total)}${paid ? `\nPaid: ${naira(paid)}` : ""}${due ? `\nAmount to pay: ${naira(due)}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as each order is ready.\n\n_Sent with Tagbook_`;
+}
 function billLines(o) {
   const k = calc(o);
   return o.items.map((it, i) => `${it.qty} x ${pname(it)} ${naira(unitPrice(o, it, i) * it.qty)}`).join("\n")
@@ -1709,10 +1716,11 @@ function message(o, type) {
   const c = cust(o.cid), k = calc(o), hi = hello(c);
   if (type === "list") {
     const list = o.items.map(it => `${it.qty} x ${pname(it)} (${SERVICES[it.svc]})`).join("\n");
-    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${spTag(o)}\n\n${list}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
+    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${k.count} items${spTag(o)}\n\n${list}${pairLine(o)}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
   if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
+  if (type === "early" && o.combo) return comboBill(o, c, hi);
   if (type === "early") return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${k.count} items\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as they are ready.\n\n_Sent with Tagbook_`;
   return `${hi}, a reminder from ${shopName()}: invoice INV-${o.no} (clothes dropped ${fmtDay(o.at)}) has ${naira(owed(o))} still to pay.${payTo()}\n\nThank you.\n_Sent with Tagbook_`;
 }
@@ -1720,6 +1728,7 @@ const waFmt = t => esc(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<i>$2</i>").r
 const wa = (o, t) => { const p = cust(o.cid).phone; return (p ? "https://wa.me/234" + p.slice(1) : "https://wa.me/") + "?text=" + encodeURIComponent(t); };
 const MSG_NAMES = { list: "list of clothes", ready: "clothes ready, with invoice", owe: "payment reminder", early: "bill before the clothes are ready" };
 function waBlock(o, type, markable) {
+  if (type === "early") o = withCombo(o);
   const c = cust(o.cid);
   // Staff don't decide how a customer is greeted, so the owner answers once before the first message goes out.
   if (own() && c.id && !c.greet_asked) return `<div class="gask"><p class="wa-label" style="margin-top:0;color:var(--fg);font-size:15px">Before you send: how do you greet ${esc(c.name)} in messages?</p>
@@ -1842,7 +1851,11 @@ function invSwatches() {
 }
 async function invFonts() { try { await Promise.all(["400", "500", "600", "700"].map(w => document.fonts.load(`${w} 24px "IBM Plex Sans"`, "₦Aa1"))); } catch (_) { } }
 const fmtDate = ts => new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-const invNo = o => "INV-" + o.no;
+const invNo = o => o.combo ? "INV-" + [o.no, o.combo.no].sort((a, b) => a - b).join("/") : "INV-" + o.no;
+// Orders dropped together (express clothes split from the rest) share one bill sent before the clothes are ready.
+const partner = o => o && o.pair ? orders.find(x => x.id === o.pair) || null : null;
+const withCombo = o => { const q = partner(o); return q ? { ...o, combo: q } : o; };
+const partTotal = q => q.billed ? +q.m.total || 0 : calc(q).total;
 // The name printed on invoices: the shop can set a proper one ("Mr. Ezekiel") while still finding the customer by what they saved ("Lexus 350").
 const billName = c => (c.inv_name || "").trim() || c.name;
 let btEdit = null; // id of the customer whose invoice name is being edited
@@ -1866,7 +1879,9 @@ async function invoicePages(o, c = cust(o.cid)) {
   const box = (x, yy, w, h, r, fill, stroke) => { g.beginPath(); if (g.roundRect) g.roundRect(x, yy, w, h, r); else g.rect(x, yy, w, h); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 2; g.stroke(); } };
   const label = (t, x, yy, color) => { g.save(); if ("letterSpacing" in g) g.letterSpacing = "2px"; text(t.toUpperCase(), x, yy, F(600, 17), color || MUTED); g.restore(); };
   const bottom = H - 100, room = h => { if (y + h > bottom) newPage(); };
-  const total = o.billed ? (+o.m.total || 0) : k.total, paid = +o.m.paid || 0, due = Math.max(0, total - paid);
+  const parts = o.combo ? [o, o.combo].sort((a, b) => (b.express ? 1 : 0) - (a.express ? 1 : 0)) : [o];
+  const total = o.combo ? parts.reduce((s, q) => s + partTotal(q), 0) : o.billed ? (+o.m.total || 0) : k.total;
+  const paid = parts.reduce((s, q) => s + (+q.m.paid || 0), 0), due = Math.max(0, total - paid);
 
   newPage();
   // Header: logo, shop name and contact lines on the left; INVOICE and its number on the right
@@ -1905,10 +1920,12 @@ async function invoicePages(o, c = cust(o.cid)) {
   const cQty = 760, cPrice = 950, cAmt = W - M - 22;
   const head = () => { box(M, y, W - 2 * M, 54, 8, col); [["Item", M + 22, "left"], ["Qty", cQty, "right"], ["Price", cPrice, "right"], ["Amount", cAmt, "right"]].forEach(([t, xx, a]) => text(t, xx, y + 35, F(600, 20), "#fff", a)); y += 54; };
   head();
-  o.items.forEach((it, i) => {
+  parts.forEach(q => {
+  if (parts.length > 1) { if (y + 130 > bottom) { newPage(); head(); } text(`${q.express ? "EXPRESS" : "NORMAL"} · Order #${q.no}${q.collect ? " · Ready " + fmtDate(q.collect) : ""}`, M + 22, y + 40, F(700, 21), q.express ? "#C2410C" : col); y += 56; g.fillStyle = LINE; g.fillRect(M, y - 1, W - 2 * M, 1); }
+  q.items.forEach((it, i) => {
     if (y + 74 > bottom) { newPage(); head(); }
     if (i % 2) { g.fillStyle = TINT; g.fillRect(M, y, W - 2 * M, 74); }
-    const up = unitPrice(o, it, i);
+    const up = unitPrice(q, it, i);
     text(fit(pname(it), cQty - M - 120, F(500, 23)), M + 22, y + 33, F(500, 23));
     text(SERVICES[it.svc] || "", M + 22, y + 59, F(400, 18), MUTED);
     text(String(it.qty), cQty, y + 45, F(400, 23), INK, "right");
@@ -1916,13 +1933,15 @@ async function invoicePages(o, c = cust(o.cid)) {
     text(naira(up * it.qty), cAmt, y + 45, F(600, 23), INK, "right");
     y += 74; g.fillStyle = LINE; g.fillRect(M, y - 1, W - 2 * M, 1);
   });
+  });
 
   // Totals, ending in the balance bar
-  const rows = [["Subtotal", naira(k.sub)]];
-  if (k.exp) rows.push([spName(o), naira(k.exp)]);
-  if (+o.m.delivery) rows.push(["Pickup / delivery", naira(o.m.delivery)]);
-  if (+o.m.discount) rows.push(["Discount", "-" + naira(o.m.discount)]);
-  const last = (o.m.payments || []).slice(-1)[0];
+  const ks = parts.map(q => calc(q)), sum = f => parts.reduce((s, q, i) => s + f(q, ks[i]), 0);
+  const rows = [["Subtotal", naira(sum((q, kk) => kk.sub))]];
+  parts.forEach((q, i) => { if (ks[i].exp) rows.push([spName(q) + (parts.length > 1 ? ` (#${q.no})` : ""), naira(ks[i].exp)]); });
+  if (sum(q => +q.m.delivery || 0)) rows.push(["Pickup / delivery", naira(sum(q => +q.m.delivery || 0))]);
+  if (sum(q => +q.m.discount || 0)) rows.push(["Discount", "-" + naira(sum(q => +q.m.discount || 0))]);
+  const last = parts.flatMap(q => q.m.payments || []).sort((a, b) => a.at - b.at).slice(-1)[0];
   room(rows.length * 42 + 190); y += 24;
   const tw = 540, tx = W - M - tw;
   const trow = (l, r, bold) => { text(l, tx + 18, y + 28, F(bold ? 600 : 400, 23), bold ? INK : MUTED); text(r, W - M - 18, y + 28, F(bold ? 700 : 500, 23), INK, "right"); y += 42; };
@@ -1992,7 +2011,7 @@ async function pagesToPdf(pages) {
 }
 async function invoiceFile(o, c = cust(o.cid)) {
   const blob = await pagesToPdf(await invoicePages(o, c));
-  const name = `${invNo(o)} ${shopName()} ${c.name}`.replace(/[^A-Za-z0-9 -]+/g, "").trim().replace(/\s+/g, "-").slice(0, 80) + ".pdf";
+  const name = `${invNo(o).replace("/", "-")} ${shopName()} ${c.name}`.replace(/[^A-Za-z0-9 -]+/g, "").trim().replace(/\s+/g, "-").slice(0, 80) + ".pdf";
   return new File([blob], name, { type: "application/pdf" });
 }
 function saveFile(f) {
@@ -2493,6 +2512,7 @@ function openOrder(no) {
     if (o.status === "new" && !o.list_sent) html += waBlock(o, "list", true); else if (o.list_sent) html += sentLine(o, "list", "List of clothes sent.");
     if (o.status === "ready") html += o.billed ? waBlock(o, "ready", true) : `<p class="bad">Clothes are packed and ready. Save the bill below first so the message can include it.</p>`;
     if (o.status === "told" || (o.status === "picked" && o.billed)) html += sentLine(o, "ready", "Ready message and invoice sent.");
+    if (partner(o)) { const q = partner(o); html += `<p class="pairnote">Dropped together with <a href="#order-${q.no}">order #${q.no}</a>${q.express ? " (⚡ express)" : ""}. You can send the customer one bill for both, below.</p>`; }
     html += `<h2 style="margin-top:18px">Bill ${o.billed ? `<span class="pill p-ready" style="vertical-align:middle">Saved</span>` : ""}</h2>`;
     if (canEditBill) {
       html += `<div class="lines">
@@ -2505,7 +2525,7 @@ function openOrder(no) {
         <div><b>Total</b><b id="tot">${naira(k.total)}</b></div></div>
         <button class="btn ${o.billed ? "btn-ghost" : "btn-primary"}" id="bill">${o.billed ? "Update bill" : "Save bill"}</button>
         ${o.status === "new" || o.status === "listed" ? (o.billed
-          ? `<details class="early"${earlyOpen === o.id ? " open" : ""}><summary>Send the bill now, before the clothes are ready</summary>${waBlock(o, "early", false)}</details>
+          ? `<details class="early"${earlyOpen === o.id ? " open" : ""}><summary>${partner(o) ? `Send one bill for both orders (#${Math.min(o.no, partner(o).no)} and #${Math.max(o.no, partner(o).no)}) now` : "Send the bill now, before the clothes are ready"}</summary>${waBlock(o, "early", false)}</details>
              <p class="hint">For customers who pay first. The bill also goes out with the ready message.</p>`
           : `<p class="hint">You can save or change the bill any time. Save it to send it now, or it goes with the ready message.</p>`) : ""}`;
     } else {
@@ -2564,7 +2584,7 @@ function openOrder(no) {
   const ogs = $("#og-save"); if (ogs) ogs.onclick = () => { const g = cleanGreet($("#data-og-txt").value); if (!g) { toast("Type how you greet them"); return; } setGreet(g); };
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
-  sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(o, b, b.dataset.pdf));
+  sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(b.dataset.pdf === "early" ? withCombo(o) : o, b, b.dataset.pdf));
   sh.querySelectorAll("details.early").forEach(dt => dt.ontoggle = () => { earlyOpen = dt.open ? o.id : null; });
   sh.querySelectorAll("[data-bt]").forEach(b => b.onclick = () => { btEdit = o.cid; openOrder(o.no); const i = $("#btn-in"); if (i) { i.focus(); i.select(); } });
   sh.querySelectorAll("[data-btok]").forEach(b => b.onclick = async () => { const c = cust(o.cid); b.disabled = true; if (await put("customers", { id: c.id }, { inv_name: c.name.slice(0, 60) })) c.inv_name = c.name.slice(0, 60); openOrder(o.no); });
@@ -2625,8 +2645,10 @@ function openOrder(no) {
     const { data, error } = await sb.rpc("record_payment", { p_order: o.id, p_amount: v, p_method: payMethod });
     if (error) { toast(/ALREADY_PAID/.test(error.message || "") ? "This order is already fully paid." : failMsg(error)); pp.disabled = false; pp.textContent = label; return; }
     v = data.added;
+    let extra = ""; const q = partner(o), rest = pp.id === "pp" ? Math.max(0, num(($("#pay") || {}).value || "0") - data.added) : 0;
+    if (q && rest > 0 && q.billed && owed(q) > 0) { const r2 = await sb.rpc("record_payment", { p_order: q.id, p_amount: Math.min(rest, owed(q)), p_method: payMethod }); if (!r2.error) extra = ` ${naira(r2.data.added)} went to order #${q.no}, dropped together.`; }
     try { await load(); } catch (_) { }
-    if (own()) toast(data.billed && data.paid < data.total ? `Recorded ${naira(data.added)}. ${naira(data.total - data.paid)} still to pay.` : data.billed ? "Recorded. Fully paid." : `Recorded ${naira(data.added)} paid early`);
+    if (own()) toast((data.billed && data.paid < data.total ? `Recorded ${naira(data.added)}. ${naira(data.total - data.paid)} still to pay.` : data.billed ? "Recorded. Fully paid." : `Recorded ${naira(data.added)} paid early`) + extra);
     else toast(data.settled ? "Recorded. The customer has now paid in full. The owner has been told." : `Recorded ${naira(v)}. The owner has been told.`);
     render();
   };

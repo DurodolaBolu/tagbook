@@ -103,6 +103,11 @@ async function handle(route) {
   if (p === "/rest/v1/rpc/team_options") return send(200, [{ id: "11111111-1111-1111-1111-111111111111", name: "Louis" }]);
   if (p === "/rest/v1/rpc/is_agent") return send(200, false);
   if (p === "/rest/v1/tutorials" && method === "GET") return send(200, [{ id: "t1", title: "How to install Tagbook on iPhone", youtube_id: "chuV8thnvrE", section: "start", audience: "all", step_key: "install", sort: 10 }, { id: "t2", title: "How to log a customer's clothes", youtube_id: "SiUDE8sCSQ4", section: "daily", audience: "all", step_key: "order", sort: 20 }, { id: "t3", title: "How to send the list of clothes to your customer", youtube_id: "hinlU63w8ck", section: "daily", audience: "owner", step_key: null, sort: 30 }]);
+  if (p === "/rest/v1/rpc/pair_orders") {
+    const A = db.orders.find(o => o.id === body.p_a), B = db.orders.find(o => o.id === body.p_b);
+    if (!A || !B || A.customer_id !== B.customer_id) return send(200, false);
+    A.pair_id = B.id; B.pair_id = A.id; return send(200, true);
+  }
   if (p === "/rest/v1/rpc/record_payment") {
     const me = db.staff.find(s => s.user_id === current); const m = db.order_money.find(q => q.order_id === body.p_order); const o = db.orders.find(q => q.id === body.p_order);
     const nw = m.billed_at ? Math.min(m.total, m.paid + body.p_amount) : m.paid + body.p_amount; const added = nw - m.paid;
@@ -364,6 +369,19 @@ async function handle(route) {
     await page.click("#save"); await page.waitForTimeout(1500);
     const added = db.orders.slice(before);
     console.log("orders saved:", added.length, "| express flags:", added.map(o => o.express), "| items:", added.map(o => o.items.map(i => i.id).join("+")), "| same customer:", added.length === 2 && added[0].customer_id === added[1].customer_id);
+    console.log("paired:", added[0].pair_id === added[1].id && added[1].pair_id === added[0].id);
+    const normal = added.find(o => !o.express);
+    await page.goto("http://localhost:8787/#order-" + normal.no); await page.reload(); await page.waitForTimeout(1200);
+    console.log("pair note:", !!(await page.$(".pairnote")));
+    await page.click("details.early summary"); await page.waitForTimeout(300);
+    console.log("early summary:", (await page.textContent("details.early summary")).trim());
+    await page.click("details.early .wtext summary").catch(() => {}); await page.waitForTimeout(200);
+    db.customers.forEach(c => { c.greet_asked = true; }); await page.reload(); await page.waitForTimeout(1200); await page.click("details.early summary"); await page.waitForTimeout(300); await page.click("details.early .wtext summary").catch(() => {}); await page.waitForTimeout(200); console.log("combined bill text:\n" + (await page.textContent("#wamsg-early")));
+    await page.screenshot({ path: path.join(process.env.XP_TEST, "combo.png"), fullPage: true });
+    await page.evaluate(() => { try { delete navigator.share; navigator.canShare = () => false; } catch (_) { } });
+    const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
+    await page.click('details.early [data-pdf="early"]');
+    const f = await dl; if (!f) console.log("pdf: no download"); else { const fp = path.join(process.env.XP_TEST, "combo.pdf"); await f.saveAs(fp); console.log("pdf:", f.suggestedFilename(), fs.statSync(fp).size); }
     process.exit(0);
   }
   if (process.env.SETUP_TEST) { // checklist steps tick only when the real work is done

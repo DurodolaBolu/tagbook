@@ -727,3 +727,4 @@ label .opt{font-size:13px}
 .xpchip[aria-pressed="true"]{background:var(--warn-soft);color:var(--fg);border-color:transparent;font-weight:600}
 .xpnote{background:var(--warn-soft);border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:14px;line-height:1.4}
 .xpcol{margin-top:12px}.xpcol>b{display:block;margin-bottom:2px}
+.pairnote{background:var(--warn-soft);border-radius:12px;padding:10px 12px;margin:14px 0 0;font-size:14px}.pairnote a{color:inherit;font-weight:600}
