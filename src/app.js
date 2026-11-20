@@ -1210,13 +1210,13 @@ function setupSteps() {
   if (standalone() && !st.installed) markSetup("installed");
   return [
     { k: "login", t: "Log in", done: true },
-    { k: "prices", t: "Check your price list", d: "Change any price that's different in your shop. Bills are worked out from it.", go: "Open", done: !!st.prices },
+    { k: "prices", t: "Put in your own prices", d: "The list has sample prices. Tap each item and type what your shop charges. Bills are worked out from it.", go: "Change prices", done: !!st.prices },
     { k: "install", t: `Install Tagbook on this ${device()}`, d: "So it opens like an app and can notify you.", go: "Show me", done: !!st.installed || standalone() || (!isPhone() && !installEvt) },
-    { k: "bank", t: "Add your bank details", d: "Your bill shows customers where to pay.", go: "Add", done: !!hasBank() },
+    { k: "bank", t: "Add your bank details", d: "Type your bank name, account number and account name. Your bill shows customers where to pay.", go: "Add bank", done: !!hasBank() },
     // Steps for newer features: shops that already finished the checklist don't see them again.
-    { k: "invoice", t: "Add your logo to your invoice", d: "Customers get a neat PDF invoice with your logo and colours.", go: "Add", done: !!sPriv().inv_logo || !!st.invoice },
-    ...(newOpts() ? [{ k: "options", t: "Choose your order options", d: "Collection dates, Wait & get and Express charges. Turn on only what your shop uses.", go: "Choose", done: !!st.options }] : []),
-    { k: "staff", t: "Add your staff", d: "Each staff gets their own login.", go: "Add", done: staffList.some(x => x.role !== "owner") || !!st.alone, alone: true },
+    { k: "invoice", t: "Add your logo to your invoice", d: "Upload a picture of your logo. Customers get a neat PDF invoice with it.", go: "Add logo", done: !!sPriv().inv_logo || !!st.invoice, skip: ["I don't have a logo", "invoice"] },
+    ...(newOpts() ? [{ k: "options", t: "Choose your order options", d: "Turn on Collection dates or Wait & get, or set your Express charge. Only what your shop uses.", go: "Choose", done: !!st.options, skip: ["My shop doesn't need these", "options"] }] : []),
+    { k: "staff", t: "Add your staff", d: "Type each staff's name and phone. Each one gets their own login.", go: "Add staff", done: staffList.some(x => x.role !== "owner") || !!st.alone, skip: ["I work alone", "alone"] },
     { k: "push", t: "Turn on notifications", d: "Get a buzz when staff log clothes.", go: "Turn on", done: pushSupported() && Notification.permission === "granted" },
     { k: "order", t: "Log your first customer's clothes", d: "Try it with the next customer who walks in.", go: "Log", done: orders.length > 0 },
   ];
@@ -1245,9 +1245,10 @@ function setupCard() {
   if (n === steps.length) { markSetup("complete"); return `<section class="scard sdone"><span class="sbig">${TICK}</span><div><b>Your shop is ready</b><span>Every customer's clothes, bill and payment, now in one place.</span></div></section>`; }
   const next = steps.findIndex(x => !x.done);
   return `<section class="scard setup"><div class="cl-top"><h3>Get your shop ready</h3><span class="count">${n} of ${steps.length} done</span></div>
+    <p class="hint" style="margin:2px 0 8px">Tap the green button on a step and finish it there. The tick comes by itself once it's really done.</p>
     <div class="segs">${steps.map(x => `<i class="${x.done ? "on" : ""}"></i>`).join("")}</div>
     <ul class="ssteps">${steps.map((x, i) => `<li class="sstep ${x.done ? "done" : ""} ${i === next ? "next" : ""}">
-      <span class="tick">${TICK}</span><span class="txt"><b>${x.t}</b>${x.done ? "" : `<span>${x.d}${x.alone ? ` <button class="linkbtn" data-salone>I work alone</button>` : ""}${tutFor(x.k) ? ` <button class="linkbtn" data-watch="${tutFor(x.k)}">Watch how</button>` : ""}</span>`}</span>
+      <span class="tick">${TICK}</span><span class="txt"><b>${x.t}</b>${x.done ? "" : `<span>${x.d}${x.skip ? ` <button class="linkbtn" data-sskip="${x.skip[1]}">${x.skip[0]}</button>` : ""}${tutFor(x.k) ? ` <button class="linkbtn" data-watch="${tutFor(x.k)}">Watch how</button>` : ""}</span>`}</span>
       ${x.done ? "" : `<button class="go" data-sgo="${x.k}">${x.go}</button>`}</li>
       ${x.k === "install" && !x.done && instOpen ? `<li class="sinst">${installSteps()}</li>` : ""}`).join("")}</ul>
     <button class="linkbtn" id="slater">Hide for now</button></section>`;
@@ -1257,16 +1258,16 @@ function wireSetup() {
   view.querySelectorAll("[data-sgo]").forEach(b => b.onclick = async () => {
     const k = b.dataset.sgo;
     if (k === "install") { if (installEvt) { const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (_) { } } else instOpen = !instOpen; return renderOrders(); }
-    if (k === "prices") { await markSetup("prices"); setTab = "prices"; return go("shop"); }
+    if (k === "prices") { setTab = "prices"; return go("shop"); }
     if (k === "bank") { setTab = "business"; go("shop"); setTimeout(() => { const f = $("#an"); if (f) { f.scrollIntoView({ block: "center" }); f.focus(); } }, 250); return; }
     if (k === "staff") { setTab = "staff"; return go("shop"); }
-    if (k === "invoice") { await markSetup("invoice"); setTab = "invoice"; return go("shop"); }
-    if (k === "options") { await markSetup("options"); setTab = "business"; go("shop"); setTimeout(() => { const f = $("#oc"); if (f) f.scrollIntoView({ block: "center" }); }, 250); return; }
+    if (k === "invoice") { setTab = "invoice"; return go("shop"); }
+    if (k === "options") { setTab = "business"; go("shop"); setTimeout(() => { const f = $("#oc"); if (f) f.scrollIntoView({ block: "center" }); }, 250); return; }
     if (k === "push") { if (!pushSupported()) { toast(isIOS ? "Install Tagbook first (the step above), then open it from your Home Screen." : "This browser can't show notifications."); return; } await enablePush(); return renderOrders(); }
     if (k === "order") return go("log");
   });
   view.querySelectorAll("[data-watch]").forEach(b => b.onclick = () => go("help-" + b.dataset.watch));
-  const a = view.querySelector("[data-salone]"); if (a) a.onclick = async () => { await markSetup("alone"); renderOrders(); };
+  view.querySelectorAll("[data-sskip]").forEach(a => a.onclick = async () => { await markSetup(a.dataset.sskip); renderOrders(); });
   const l = $("#slater"); if (l) l.onclick = () => { try { localStorage.setItem("tb-setup-later", Date.now()); } catch (_) { } renderOrders(); };
 }
 
@@ -1411,7 +1412,7 @@ function renderOrders() {
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
   wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine();
   if ($("#wlog")) $("#wlog").onclick = () => go("log");
-  if ($("#wprices")) $("#wprices").onclick = async () => { await markSetup("prices"); setTab = "prices"; go("shop"); };
+  if ($("#wprices")) $("#wprices").onclick = () => { setTab = "prices"; go("shop"); };
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", String(Date.now())); } catch (_) { } renderOrders(); };
   const s = $("#seen"); if (s) s.onclick = () => {
@@ -2794,7 +2795,7 @@ function renderSettings() {
   if (setTab === "shops" && isAdmin) body = shopsHtml();
   view.innerHTML = `${backBtn("Orders")}<h2 class="ptitle">Settings</h2>${meLine}<div class="${own() ? "slayout" : ""}">${nav}<div class="sbody">${body}</div></div><p class="foot">Tagbook by Ordiventa · version ${String(window.TB_BUILD || "").slice(4, 12)} · <a href="/privacy">Privacy policy</a></p>`;
   wireBack(view);
-  view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "prices") markSetup("prices"); if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
+  view.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; if (setTab === "plan") loadPlan().then(() => { if (tab === "prices" && setTab === "plan") renderSettings(); }); priceOpen = null; resetFor = null; addOpen = false; renderSettings(); });
   if (setTab === "account") wireAccount();
   if (setTab === "business") wireBusiness();
   if (setTab === "invoice") wireInvoice();
@@ -2834,7 +2835,7 @@ function wireAccount() {
   $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } try { await disablePush(); } catch (_) { } await sb.auth.signOut(); location.hash = ""; location.reload(); };
 }
 function wireBusiness() {
-  [["#oc", "collect_dates"], ["#ow", "wait_get_on"]].forEach(([id, k]) => { const el = $(id); if (el) el.onchange = async e => { const v = e.target.checked; shop[k] = v; savedToast(await put("shops", { id: shop.id }, { [k]: v })); if (k === "wait_get_on") renderSettings(); }; });
+  [["#oc", "collect_dates"], ["#ow", "wait_get_on"]].forEach(([id, k]) => { const el = $(id); if (el) el.onchange = async e => { const v = e.target.checked; shop[k] = v; savedToast(await put("shops", { id: shop.id }, { [k]: v })); markSetup("options"); if (k === "wait_get_on") renderSettings(); }; });
   view.querySelectorAll("[data-wt]").forEach(b => b.onclick = async () => { const t = b.dataset.wt; await savePriv({ wait_type: t, wait_value: t === "percent" ? 50 : t === "times" ? 2 : t === "fixed" ? 1000 : 0 }); renderSettings(); });
   if ($("#wv")) { moneyInput($("#wv"), v => { const t = priv.wait_type; priv.wait_value = t === "percent" ? Math.min(v, 300) : t === "times" ? Math.min(Math.max(v, 1), 5) : v; $("#wvx").textContent = exampleWait(); });
     $("#wv").onchange = () => savePriv({ wait_value: priv.wait_value }); }
@@ -2845,7 +2846,7 @@ function wireBusiness() {
   $("#am").onchange = e => savePriv({ acct_name: e.target.value.trim().slice(0, 60) });
   moneyInput($("#an"), () => { const el = $("#an"); if (el.value.length > 10) el.value = el.value.slice(0, 10); $("#anx").textContent = el.value.length === 10 ? "" : "Account number must be 10 digits."; });
   $("#an").onchange = e => savePriv({ acct_no: e.target.value });
-  view.querySelectorAll("[data-et]").forEach(b => b.onclick = async () => { await savePriv({ express_type: b.dataset.et, express_value: b.dataset.et === "percent" ? 50 : b.dataset.et === "times" ? 2 : b.dataset.et === "fixed" ? 1000 : 0 }); renderSettings(); });
+  view.querySelectorAll("[data-et]").forEach(b => b.onclick = async () => { markSetup("options"); await savePriv({ express_type: b.dataset.et, express_value: b.dataset.et === "percent" ? 50 : b.dataset.et === "times" ? 2 : b.dataset.et === "fixed" ? 1000 : 0 }); renderSettings(); });
   if ($("#ev")) { moneyInput($("#ev"), v => { priv.express_value = p.express_type === "percent" ? Math.min(v, 300) : p.express_type === "times" ? Math.min(Math.max(v, 1), 5) : v; $("#evx").textContent = exampleExpress(); });
   $("#ev").onchange = () => savePriv({ express_value: priv.express_value }); }
 }
@@ -3086,7 +3087,8 @@ function priceListHtml() {
         ${list.map(x => `<div class="pr" role="row"><input data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off" aria-label="Item name">${Object.keys(SERVICES).map(k => cell(x, k)).join("")}<button class="plink" data-prm="${x.id}" aria-label="Remove ${esc(x.name)}">Remove</button></div>`).join("")}</div>`
     : `<div class="plist">${list.map(x => priceOpen === x.id ? `<div class="pli open">${editor(x)}</div>`
         : `<button class="pli" data-popen="${x.id}"><b>${esc(x.name)}</b><span>${summary(x)}</span></button>`).join("")}</div>`;
-  return card("Price list", `${all.length} item${all.length === 1 ? "" : "s"}. ${wide.matches ? "Click any name or price to change it." : "Tap an item to change it."} Leave a price empty if you don't offer that service. Saved bills keep their prices.`,
+  const guide = own() && !setupState().prices ? `<div class="pguide"><b>These are sample prices.</b> Tap each item and type what your shop charges. The step ticks by itself once you save a price.<br>Have your price list on paper? <a href="https://wa.me/2348120756325?text=${encodeURIComponent("Hello, here is my price list for Tagbook")}" target="_blank" rel="noopener">Send us a photo on WhatsApp</a> and we'll put it in for you.</div>` : "";
+  return guide + card("Price list", `${all.length} item${all.length === 1 ? "" : "s"}. ${wide.matches ? "Click any name or price to change it." : "Tap an item to change it."} Leave a price empty if you don't offer that service. Saved bills keep their prices.`,
       `${all.length > 8 ? `<input class="search" id="pq" placeholder="Search items" value="${esc(priceQ)}" aria-label="Search items" style="margin:4px 0 10px">` : ""}
        ${list.length ? rows : `<p class="hint">No item matches “${esc(priceQ)}”.</p>`}`)
     + (!addOpen ? `<button class="btn btn-ghost" id="addopen">+ Add an item</button><p class="hint">Special items, like a wedding gown, get their price when you make the bill.</p>`
@@ -3102,6 +3104,7 @@ function wirePrices() {
     const { error } = await sb.from("item_prices").upsert({ item_id: x.id, shop_id: shop.id, prices: x.p });
     if (error) { toast(failMsg(error)); refresh(); return; }
     savedToast(a);
+    if (a && !setupState().prices) { await markSetup("prices"); toast("Price saved. Change any other price that's different in your shop."); }
   };
   const pq = $("#pq"); if (pq) pq.oninput = e => { priceQ = e.target.value; const p = e.target.selectionStart; renderSettings(); const n = $("#pq"); n.focus(); n.setSelectionRange(p, p); };
   view.querySelectorAll("[data-popen]").forEach(b => b.onclick = () => { priceOpen = b.dataset.popen; renderSettings(); });
@@ -3121,7 +3124,7 @@ function wirePrices() {
     const { data, error } = await sb.from("items").insert({ shop_id: shop.id, name: n.slice(0, 40), services: Object.keys(pr).filter(k => pr[k] != null), sort }).select("id").single();
     if (error) { toast(failMsg(error)); $("#nadd").disabled = false; return; }
     const r2 = await sb.from("item_prices").insert({ item_id: data.id, shop_id: shop.id, prices: pr });
-    if (r2.error) toast(failMsg(r2.error)); else toast(`${n} added`);
+    if (r2.error) toast(failMsg(r2.error)); else { toast(`${n} added`); markSetup("prices"); }
     addOpen = false; await load(); renderSettings();
   };
 }

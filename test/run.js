@@ -351,6 +351,24 @@ async function handle(route) {
     console.log("logged:", JSON.stringify(global.lastCall), "| no WhatsApp buttons:", !(await page.$("[data-wa]")), "| script name:", (await page.textContent(".oscript")).includes("Tolu") || (await page.textContent(".oscript")).slice(0, 0));
     process.exit(0);
   }
+  if (process.env.SETUP_TEST) { // checklist steps tick only when the real work is done
+    await page.setViewportSize({ width: 390, height: 1500 });
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);
+    const priceDone = async () => page.$eval('[data-sgo="prices"]', () => false).catch(() => true);
+    console.log("prices step open at start:", !(await priceDone()));
+    await page.click('[data-sgo="prices"]'); await page.waitForTimeout(600);
+    console.log("guide shown on price list:", !!(await page.$(".pguide")));
+    await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(600);
+    console.log("just opening did NOT tick it:", !(await priceDone()), "| saved flag:", !!(db.shop_private[0].setup || {}).prices);
+    await page.click('[data-sgo="prices"]'); await page.waitForTimeout(600);
+    await page.click("[data-popen] >> nth=0"); await page.waitForTimeout(300);
+    const inp = await page.$("[data-pp]"); await inp.fill("1234"); await inp.dispatchEvent("change"); await page.waitForTimeout(800);
+    console.log("saving a price ticked it:", !!(db.shop_private[0].setup || {}).prices, "| guide gone:", !(await page.$(".pguide")));
+    await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(600);
+    console.log("prices step done on checklist:", await priceDone(), "| skip links:", await page.$$eval("[data-sskip]", b => b.map(x => x.textContent)));
+    await page.screenshot({ path: path.join(process.env.SETUP_TEST, "setup.png"), fullPage: true });
+    process.exit(0);
+  }
   if (process.env.CAPTURE_OPTS) { // order options: collection date, wait & get, remarks, starch and iron
     const out = process.env.CAPTURE_OPTS; await page.setViewportSize({ width: 390, height: 1900 });
     await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(800);
