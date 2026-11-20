@@ -351,6 +351,21 @@ async function handle(route) {
     console.log("logged:", JSON.stringify(global.lastCall), "| no WhatsApp buttons:", !(await page.$("[data-wa]")), "| script name:", (await page.textContent(".oscript")).includes("Tolu") || (await page.textContent(".oscript")).slice(0, 0));
     process.exit(0);
   }
+  if (process.env.XP_TEST) { // express for some clothes only: saved as 2 orders for the same customer
+    await page.setViewportSize({ width: 390, height: 1600 });
+    await page.goto("http://localhost:8787/#log"); await page.reload(); await page.waitForTimeout(1000);
+    const before = db.orders.length;
+    await page.click("[data-pick] >> nth=0"); await page.waitForTimeout(300);
+    await page.click('[data-add="it0"]'); await page.click('[data-add="it1"]'); await page.waitForTimeout(300);
+    console.log("express chips shown:", (await page.$$("[data-xp]")).length);
+    await page.click('[data-xp="0"]'); await page.waitForTimeout(300);
+    console.log("split note:", !!(await page.$(".xpnote")), "| button:", (await page.textContent("#save")).trim());
+    await page.screenshot({ path: path.join(process.env.XP_TEST, "xp.png"), fullPage: true });
+    await page.click("#save"); await page.waitForTimeout(1500);
+    const added = db.orders.slice(before);
+    console.log("orders saved:", added.length, "| express flags:", added.map(o => o.express), "| items:", added.map(o => o.items.map(i => i.id).join("+")), "| same customer:", added.length === 2 && added[0].customer_id === added[1].customer_id);
+    process.exit(0);
+  }
   if (process.env.SETUP_TEST) { // checklist steps tick only when the real work is done
     await page.setViewportSize({ width: 390, height: 1500 });
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000);

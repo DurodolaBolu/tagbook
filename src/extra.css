@@ -723,3 +723,7 @@ label .opt{font-size:13px}
 .pguide a{color:inherit;font-weight:600;text-decoration:underline}
 .picker small.nop{color:var(--warn);font-weight:600}
 .pneed{background:var(--warn-soft)}
+.xpchip{margin-top:6px;border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
+.xpchip[aria-pressed="true"]{background:var(--warn-soft);color:var(--fg);border-color:transparent;font-weight:600}
+.xpnote{background:var(--warn-soft);border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:14px;line-height:1.4}
+.xpcol{margin-top:12px}.xpcol>b{display:block;margin-bottom:2px}

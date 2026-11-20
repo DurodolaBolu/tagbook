@@ -1517,6 +1517,10 @@ function renderNew() {
   const svcList = offered.length ? offered : Object.keys(SERVICES).filter(k => k !== "si");
   if (!svcList.includes(d.svc)) d.svc = svcList[0];
   const pickable = PRICES.filter(p => !p.hidden && (p.custom || (p.services || []).includes(d.svc)));
+  // Express for some clothes only: those clothes become their own express order when saved.
+  const xpOn = xpLive() && !d.wait && !d.express && d.items.length > 1;
+  if (!xpOn && !d.express) d.items.forEach(i => { i.x = false; });
+  const split = xpOn && d.items.some(i => i.x) && d.items.some(i => !i.x), allX = xpOn && d.items.length && d.items.every(i => i.x);
   view.innerHTML = `
     ${backBtn("Orders")}
     <h2>Log clothes</h2>
@@ -1539,13 +1543,14 @@ function renderNew() {
       <p class="hint">It's saved to your price list, so next time it's one tap.</p>
       <div class="row"><button class="btn btn-ghost" id="apc">Cancel</button><button class="btn btn-primary" id="apa">Save price and add</button></div></div>` : ""}
     <div class="items">${d.items.map((it, i) => `
-      <div class="item"><span>${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>
+      <div class="item"><span>${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small>${xpOn ? `<br><button type="button" class="xpchip" data-xp="${i}" aria-pressed="${!!it.x}">⚡ ${it.x ? "Express" : "Make express"}</button>` : ""}</span>
       <div class="qty">${photosOn() ? `<button data-cam="${i}" class="cam${(it.photos || []).length ? " on" : ""}" aria-label="Add a photo of ${esc(pname(it))}">${CAM_SVG}</button>` : ""}<button data-dec="${i}" aria-label="Remove one">−</button><b style="min-width:22px;text-align:center">${it.qty}</b><button data-inc="${i}" aria-label="Add one">+</button></div>
       ${(it.photos || []).length ? `<div class="phedit">${photoThumbs(it.photos.map(b => b.url), i)}
         <p class="phq">What did you notice?</p><div class="chips rpick" style="margin:0">${photoNotes().map(n => `<button class="chip" data-pn="${i}" data-note="${esc(n)}" aria-pressed="${(it.pn || []).includes(n)}">${n}</button>`).join("")}</div></div>` : ""}</div>`).join("")}</div>
     ${shop.wait_get_on ? `<label>How fast?</label><div class="chips" style="margin:0">${[["std", "Standard"], ["exp", "Express"], ["wait", "Wait & get"]].map(([k, l]) => `<button class="chip" data-spd="${k}" aria-pressed="${(k === "wait" && d.wait) || (k === "exp" && d.express && !d.wait) || (k === "std" && !d.express && !d.wait)}">${l}</button>`).join("")}</div>`
-      : `<label class="toggle"><span>Express delivery</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>`}
-    ${shop.collect_dates ? collectPicker(d) : ""}
+      : `<label class="toggle"><span>Express delivery${xpOn ? " (all clothes)" : ""}</span><input type="checkbox" id="ex" ${d.express ? "checked" : ""}></label>`}
+    ${split ? `<p class="xpnote">⚡ ${d.items.filter(i => i.x).reduce((n, i) => n + i.qty, 0)} express, ${d.items.filter(i => !i.x).reduce((n, i) => n + i.qty, 0)} normal. They'll be saved as 2 orders for this customer, so the express clothes get their own ready date, ready message and express charge.</p>` : ""}
+    ${shop.collect_dates ? (split ? `<div class="xpcol"><b>Express clothes</b>${collectPicker(Object.assign(Object.create(d), { express: true }))}</div><div class="xpcol"><b>Other clothes</b>${collectPicker(Object.assign(Object.create(d), { express: false, wait: false }))}</div>` : collectPicker(allX ? Object.assign(Object.create(d), { express: true }) : d)) : ""}
     <label class="toggle"><span>Pickup and delivery</span><input type="checkbox" id="pk" ${d.pickup ? "checked" : ""}></label>
     ${newOpts() ? remarkPicker(d) : ""}
     <label for="pd">Paid now (₦)</label><input id="pd" ${moneyAttrs} placeholder="0" value="${d.paid || ""}">
@@ -1553,7 +1558,7 @@ function renderNew() {
     <div class="lines"><div><b>Clothes logged</b><b>${count}</b></div></div>
     <p class="hint">${own() ? "After saving, you can send the list of clothes to the customer straight away." : "Saving sends this order to the owner's phone. The owner sends the list of clothes to the customer."}</p>
     <p class="bad" id="saveerr" role="alert" hidden></p>
-    <button class="btn btn-primary" id="save" ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : own() ? "Save order" : "Save and send to owner"}</button>
+    <button class="btn btn-primary" id="save" ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : split ? (own() ? "Save 2 orders" : "Save 2 orders and send to owner") : own() ? "Save order" : "Save and send to owner"}</button>
     <button class="btn btn-ghost" id="clr">Clear</button>`;
   wireBack(view);
   const keep = (id, fn) => { const el = $(id); if (!el) return; el.oninput = e => { fn(e.target.value); const p = e.target.selectionStart; renderNew(); const n = $(id); if (n) { n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } } }; };
@@ -1633,6 +1638,7 @@ function renderNew() {
     renderNew();
   });
   view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => { d.items[+b.dataset.inc].qty++; renderNew(); });
+  view.querySelectorAll("[data-xp]").forEach(b => b.onclick = () => { const it = d.items[+b.dataset.xp]; it.x = !it.x; renderNew(); });
   view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => { const i = +b.dataset.dec; d.items[i].qty--; if (!d.items[i].qty) d.items.splice(i, 1); renderNew(); });
   $("#clr").onclick = () => { reset(); renderNew(); };
   $("#save").onclick = async () => {
@@ -1651,11 +1657,22 @@ function renderNew() {
       : !d.items.length ? "Add at least one cloth to the order." : "";
     if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
     const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
-    const base = { branch_id: d.branch, items: d.items.map(({ photos, pn, ...i }) => ({ ...i })), express: d.express && !d.wait, wait_get: !!(shop.wait_get_on && d.wait), pickup: d.pickup, paid: d.paid || 0, method: d.method,
-      collect_at: shop.collect_dates ? collectWhen(d) : null, remarks: newOpts() && d.rm.length ? d.rm.join("; ").slice(0, 300) : null, money_found: newOpts() && d.money ? d.money : null };
+    const clean = list => list.map(({ photos, pn, x, ...i }) => ({ ...i }));
+    const xs = d.items.filter(i => i.x), xpSplit = !d.wait && !d.express && xs.length > 0 && xs.length < d.items.length, xpAll = !d.wait && !d.express && d.items.length > 1 && xs.length === d.items.length;
+    const firstItems = xpSplit ? d.items.filter(i => !i.x) : d.items;
+    const base = { branch_id: d.branch, items: clean(firstItems), express: (d.express || xpAll) && !d.wait, wait_get: !!(shop.wait_get_on && d.wait), pickup: d.pickup, paid: xpSplit ? 0 : d.paid || 0, method: d.method,
+      collect_at: shop.collect_dates ? collectWhen(xpSplit ? { ...d, express: false, wait: false } : xpAll ? { ...d, express: true } : d) : null, remarks: newOpts() && d.rm.length ? d.rm.join("; ").slice(0, 300) : null, money_found: newOpts() && d.money ? d.money : null };
     const p = d.cust ? { ...base, customer_id: d.cust.id } : { ...base, phone: d.phone, name: d.name.trim(), mark, ...(own() ? { greet: d.greet || null } : {}) };
     d.saving = true; renderNew();
     const { data, error } = await sb.rpc("log_order", { p });
+    // The express clothes go in their own order for the same customer; any payment goes on that one (collected first).
+    let xdata = null;
+    if (!error && xpSplit) {
+      const r2 = await sb.rpc("log_order", { p: { branch_id: d.branch, items: clean(xs), express: true, wait_get: false, pickup: d.pickup, paid: d.paid || 0, method: d.method,
+        collect_at: shop.collect_dates ? collectWhen({ ...d, express: true, wait: false }) : null, remarks: null, money_found: null, customer_id: data.customer_id } });
+      if (r2.error) toast(`The normal clothes were saved as order #${data.no}, but the express ones were not: ${failMsg(r2.error)} Log them again as a new order.`);
+      else xdata = r2.data;
+    }
     d.saving = false;
     if (error) {
       const m = error.message || "";
@@ -1663,12 +1680,15 @@ function renderNew() {
       else showErr(failMsg(error));
       renderNew(); return;
     }
-    const pend = d.items.flatMap(it => (it.photos || []).map(ph => ({ blob: ph.blob, item: pname(it), notes: it.pn || [] })));
+    const pics = list => list.flatMap(it => (it.photos || []).map(ph => ({ blob: ph.blob, item: pname(it), notes: it.pn || [] })));
+    const pend = pics(firstItems), xpend = xdata ? pics(xs) : [];
     reset(); filter = "all";
     try { await load(); } catch (_) { }
     if (pend.length) savePhotosLater(data.no, pend);
-    if (own()) { go("order-" + data.no); toast(`Saved. Write ${data.mark} inside every cloth.`); }
-    else { go("orders"); toast(`Saved. Write ${data.mark} inside every cloth. The owner has been told.`); }
+    if (xpend.length) savePhotosLater(xdata.no, xpend);
+    const two = xdata ? ` Saved as 2 orders: #${xdata.no} (express) and #${data.no}.` : " Saved.";
+    if (own()) { go("order-" + (xdata ? xdata.no : data.no)); toast(`${two.trim()} Write ${data.mark} inside every cloth.`); }
+    else { go("orders"); toast(`${two.trim()} Write ${data.mark} inside every cloth. The owner has been told.`); }
   };
   function showErr(err) { const e = $("#saveerr"); e.textContent = err; e.hidden = false; toast(err); e.scrollIntoView({ block: "center", behavior: "smooth" }); }
 }
@@ -2622,6 +2642,9 @@ function openOrder(no) {
 /* ---------- Reports (owner) ---------- */
 // Expenses (owner only): money spent on the shop, so Reports can show what is left. BrightWash first, every shop from 19 Nov, 6pm.
 const EXP_LIVE = Date.parse("2026-11-19T18:00:00+01:00");
+// Express for some clothes only (asked for by ProClean, 20 Nov): BrightWash first, everyone from 8am on 21 Nov.
+const XP_LIVE = Date.parse("2026-11-21T08:00:00+01:00");
+const xpLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= XP_LIVE || location.hostname === "localhost");
 const expOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || Date.now() >= EXP_LIVE || location.hostname === "localhost");
 const EXP_KINDS = [["soap", "Soap"], ["chemicals", "Stain remover and chemicals"], ["fuel", "Fuel"], ["staff", "Staff pay"], ["electricity", "Electricity bill"], ["rent", "Rent"], ["nylon", "Packing nylon"], ["starch", "Starch"], ["maintenance", "Generator, machine and repairs"], ["other", "Other"]];
 const expKind = k => (EXP_KINDS.find(x => x[0] === k) || EXP_KINDS[EXP_KINDS.length - 1])[1];
