@@ -50,6 +50,8 @@ let BRANCHES = [], PRICES = [], customers = [], orders = [], cancelledOrders = [
 let tab = "orders", filter = "all", query = "", openNo = null, page = 0;
 const PER_PAGE = 20;
 const own = () => role === "own";
+// Owner, or a staff member the owner allowed to send lists and bills and take payments (no discounts, no reports).
+const canBill = () => own() || (!!me && !!me.can_bill && billLive());
 const theme = () => { try { return localStorage.getItem("tb-theme") || "light"; } catch (_) { return "light"; } };
 const shopName = () => (shop && shop.name.trim()) || "Your laundry";
 const branchName = id => (BRANCHES.find(b => b.id === id) || {}).name || "";
@@ -142,13 +144,13 @@ async function load() {
   if (newOpts()) sb.from("shop_remarks").select("text").order("created_at").then(({ data }) => { if (data) shopRemarks = data.map(r => r.text); });
   loadPlan().then(() => { if (me && (tab === "orders" || tab === "new" || (tab === "prices" && setTab === "plan"))) render(); });
   let prices = {}, phones = {}, money = {};
-  if (own()) {
+  if (canBill()) {
     const [p, ip, ph, om, st] = await Promise.all([
       sb.from("shop_private").select("*").single(),
       fetchAll("item_prices", "item_id,prices"),
       fetchAll("customer_phones", "customer_id,phone"),
       fetchAll("order_money", "order_id,unit,custom,delivery,discount,total,billed_at,paid,payments,express_amt"),
-      fetchAll("staff", "user_id,name,phone,role,created_at", "created_at"),
+      fetchAll("staff", "user_id,name,phone,role,created_at,can_bill", "created_at"),
     ]);
     if (p.error) throw p.error;
     priv = p.data; staffList = st;
@@ -177,6 +179,8 @@ async function load() {
 function failMsg(e) {
   const m = (e && (e.message || e.error_description)) || "";
   if (/fetch|network|Failed to/i.test(m)) return "Not saved. Check your internet and try again.";
+  if (/DISCOUNT_OWNER_ONLY/.test(m)) return "Only the owner can give a discount.";
+  if (/PAYMENT_OWNER_ONLY/.test(m)) return "Only the owner can change a payment that is already recorded.";
   if (/OWNER_ONLY/.test(m)) return "Only the owner can do that.";
   if (/PLAN_ENDED/.test(m)) { loadPlan().then(render); return "New orders are paused until the Tagbook plan is paid."; }
   return "Not saved. Please try again.";
@@ -223,7 +227,7 @@ let channel = null;
 function subscribe() {
   if (channel) sb.removeChannel(channel);
   channel = sb.channel("shop-" + shop.id);
-  const tables = ["orders", "customers", "items", "branches", "shops"].concat(own() ? ["order_money", "customer_phones", "item_prices", "shop_private"] : shop.staff_prices ? ["item_prices"] : []);
+  const tables = ["orders", "customers", "items", "branches", "shops"].concat(canBill() ? ["order_money", "customer_phones", "item_prices", "shop_private"] : shop.staff_prices ? ["item_prices"] : []);
   tables.forEach(t => channel.on("postgres_changes", { event: "*", schema: "public", table: t, filter: t === "shops" ? `id=eq.${shop.id}` : `shop_id=eq.${shop.id}` }, refresh));
   channel.subscribe();
 }
@@ -255,13 +259,13 @@ function unitPrice(o, it, i) {
 function lockPrices(o) { o.m.unit = o.items.map((it, i) => (item(it.id) || {}).custom ? null : unitPrice({ ...o, m: { ...o.m, unit: null } }, it, i)); }
 function calc(o) {
   const count = o.items.reduce((s, it) => s + it.qty, 0);
-  if (!own()) return { sub: 0, exp: 0, total: 0, count };
+  if (!canBill()) return { sub: 0, exp: 0, total: 0, count };
   const sub = o.items.reduce((s, it, i) => s + unitPrice(o, it, i) * it.qty, 0);
   const exp = o.express || o.wait ? (spManual(o) || (o.billed && o.m.express_amt) ? (+o.m.express_amt || 0) : spFor(o, sub)) : 0;
   const total = Math.max(0, sub + exp + (+o.m.delivery || 0) - (+o.m.discount || 0));
   return { sub, exp, total, count };
 }
-const owed = o => own() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (o.billed && !o.settled ? 1 : 0);
+const owed = o => canBill() ? (o.billed ? Math.max(0, o.m.total - o.m.paid) : 0) : (o.billed && !o.settled ? 1 : 0);
 
 const MOON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
 const SUN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>';
@@ -1085,11 +1089,11 @@ function render() {
 // one plain status word. The filter chips already say the status, so it isn't repeated there.
 function orderRight(o, showStatus) {
   // [words, colour class]: each stage has its own colour so rows are easy to tell apart at a glance
-  const st = own()
+  const st = canBill()
     ? { new: ["Send list", "s-new"], listed: ["In progress", "s-work"], ready: ["Ready, not told", "s-new"], told: ["Customer told", "s-told"], picked: ["Picked up", "s-done"] }
     : { new: ["In progress", "s-work"], listed: ["In progress", "s-work"], ready: ["Ready", "s-told"], told: ["Ready", "s-told"], picked: ["Picked up", "s-done"] };
   let money = "";
-  if (own() && !o.cancelled) {
+  if (canBill() && !o.cancelled) {
     // A bold amount is always money still to collect.
     const due = owed(o);
     if (o.billed && due && (o.status === "told" || o.status === "picked")) money = `<b class="owes">Owes ${naira(due)}</b>`;
@@ -1098,7 +1102,7 @@ function orderRight(o, showStatus) {
     else if (o.m.paid) money = `<span class="sub">${naira(o.m.paid)} paid</span>`;
     else if (o.status !== "new") money = `<span class="sub">No bill yet</span>`;
   }
-  if (!own() && o.billed && (o.status === "told" || o.status === "picked") && owed(o)) money = `<b class="owes">Not paid</b>`;
+  if (!canBill() && o.billed && (o.status === "told" || o.status === "picked") && owed(o)) money = `<b class="owes">Not paid</b>`;
   const status = o.cancelled ? ["Cancelled", "s-done"] : showStatus ? st[o.status] : null;
   return money + (status ? `<span class="sub ${status[1]}">${status[0]}</span>` : "");
 }
@@ -1364,14 +1368,14 @@ function renderOrders() {
   const notTold = orders.filter(o => o.status === "ready");
   const owing = orders.reduce((s, o) => s + ((o.status === "told" || o.status === "picked") ? (own() ? owed(o) : 0) : 0), 0);
   const inShop = orders.filter(o => o.status !== "picked");
-  const fl = own()
+  const fl = canBill()
     ? [["all", "All"], ["new", "Send list"], ["work", "In progress"], ["ready", "Ready, not told"], ["owed", "Owing"], ["picked", "Picked up"], ...(cancelledOrders.length || filter === "cx" ? [["cx", "Cancelled"]] : [])]
     : [["all", "All"], ["work", "In progress"], ["ready", "Ready"], ["picked", "Picked up"]];
   const inF = (o, f) => {
     // Owner: "In progress" = list sent, being washed (new ones sit under "Send list"). Staff: everything not yet ready.
-    if (f === "work" && !(own() ? o.status === "listed" : (o.status === "new" || o.status === "listed"))) return false;
+    if (f === "work" && !(canBill() ? o.status === "listed" : (o.status === "new" || o.status === "listed"))) return false;
     if (f === "new" && o.status !== "new") return false;
-    if (f === "ready" && !(own() ? o.status === "ready" : (o.status === "ready" || o.status === "told"))) return false;
+    if (f === "ready" && !(canBill() ? o.status === "ready" : (o.status === "ready" || o.status === "told"))) return false;
     if (f === "owed" && !((o.status === "told" || o.status === "picked") && owed(o))) return false;
     if (f === "picked" && o.status !== "picked") return false;
     return true;
@@ -1380,7 +1384,7 @@ function renderOrders() {
     if (!inF(o, filter)) return false;
     if (query) {
       const c = cust(o.cid), q = query.toLowerCase().replace(/\s/g, "");
-      return (own() && c.phone.includes(q)) || c.name.toLowerCase().replace(/\s/g, "").includes(q) || c.mark.toLowerCase() === q || String(o.no).includes(q);
+      return (canBill() && c.phone.includes(q)) || c.name.toLowerCase().replace(/\s/g, "").includes(q) || c.mark.toLowerCase() === q || String(o.no).includes(q);
     }
     return true;
   }).sort((a, b) => b.no - a.no);
@@ -1403,7 +1407,7 @@ function renderOrders() {
       : `<div class="stats" style="grid-template-columns:1fr 1fr">
       <div class="stat"><b>${inShop.length}</b><span>Orders in the shop</span></div>
       <div class="stat"><b>${inShop.reduce((s, o) => s + calc(o).count, 0)}</b><span>Clothes in the shop</span></div></div>`}
-    <input class="search" id="q" placeholder="${own() ? "Search phone, name or mark (BO)" : "Search name or mark (BO)"}" value="${esc(query)}" aria-label="Search">
+    <input class="search" id="q" placeholder="${canBill() ? "Search phone, name or mark (BO)" : "Search name or mark (BO)"}" value="${esc(query)}" aria-label="Search">
     <div class="chips">${fl.map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filter === k}">${l}<span class="cnt">${k === "cx" ? cancelledOrders.length : orders.filter(o => inF(o, k)).length}</span></button>`).join("")}</div>
     <div class="list">${shown.length ? shown.map(o => {
       const c = cust(o.cid), k = calc(o); return `
@@ -1459,7 +1463,7 @@ function searchCustomers(q) {
   if (!t) return [];
   const score = c => {
     if (c.mark.toLowerCase() === t) return 0;
-    if (own() && dg.length >= 4 && c.phone.includes(dg)) return 1;
+    if (canBill() && dg.length >= 4 && c.phone.includes(dg)) return 1;
     const n = c.name.toLowerCase();
     if (n.startsWith(t) || n.split(/\s+/).some(w => w.startsWith(t))) return 2;
     if (n.includes(t)) return 3;
@@ -1477,13 +1481,13 @@ async function lookup(phone) {
   if (error) toast(failMsg(error));
   if (tab === "new") renderNew();
 }
-const custRow = c => `<button class="crow" data-pick="${c.id}"><span class="${markCls(c.mark)}">${esc(c.mark)}</span><span class="cn"><b>${esc(c.name)}</b>${own() && c.phone ? `<small>${fmtPhone(c.phone)}</small>` : ""}</span></button>`;
+const custRow = c => `<button class="crow" data-pick="${c.id}"><span class="${markCls(c.mark)}">${esc(c.mark)}</span><span class="cn"><b>${esc(c.name)}</b>${canBill() && c.phone ? `<small>${fmtPhone(c.phone)}</small>` : ""}</span></button>`;
 function customerBlock() {
   if (d.cust) return `<div class="cpicked"><span class="${markCls(d.cust.mark)}">${esc(d.cust.mark)}</span><span class="cn"><b>${esc(d.cust.name)}</b><small>Regular customer. Write <b>${esc(d.cust.mark)}</b> inside every cloth.</small></span><button class="mini" id="cchange">Change</button></div>`;
   if (!d.newMode) {
     const res = searchCustomers(d.q), recent = d.q ? [] : recentCustomers(5);
     const dg = digits(d.q), phoneLike = /^0\d{10}$/.test(dg) && dg === d.q.replace(/\s/g, "");
-    return `<input id="cq" class="search" style="margin:0" placeholder="${own() ? "Search name, mark (BO) or phone" : "Search name or mark (BO)"}" value="${esc(d.q)}" autocomplete="off" aria-label="Find customer">
+    return `<input id="cq" class="search" style="margin:0" placeholder="${canBill() ? "Search name, mark (BO) or phone" : "Search name or mark (BO)"}" value="${esc(d.q)}" autocomplete="off" aria-label="Find customer">
       ${res.length ? `<div class="clist">${res.map(custRow).join("")}</div>` : ""}
       ${d.q && !res.length ? `<p class="hint">${phoneLike ? "Checking this number…" : `No customer called “${esc(d.q)}”.`}</p>` : ""}
       ${recent.length ? `<p class="clabel">Recent customers</p><div class="clist">${recent.map(custRow).join("")}</div>` : ""}
@@ -1559,9 +1563,9 @@ function renderNew() {
     <label for="pd">Paid now (₦)</label><input id="pd" ${moneyAttrs} placeholder="0" value="${d.paid || ""}">
     ${d.paid ? "" : `<p class="hint">Leave empty if the customer will pay later.</p>`}
     <div class="lines"><div><b>Clothes logged</b><b>${count}</b></div></div>
-    <p class="hint">${own() ? "After saving, you can send the list of clothes to the customer straight away." : "Saving sends this order to the owner's phone. The owner sends the list of clothes to the customer."}</p>
+    <p class="hint">${canBill() ? "After saving, you can send the list of clothes to the customer straight away." : "Saving sends this order to the owner's phone. The owner sends the list of clothes to the customer."}</p>
     <p class="bad" id="saveerr" role="alert" hidden></p>
-    <button class="btn btn-primary" id="save" ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : split ? (own() ? "Save 2 orders" : "Save 2 orders and send to owner") : own() ? "Save order" : "Save and send to owner"}</button>
+    <button class="btn btn-primary" id="save" ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : split ? (canBill() ? "Save 2 orders" : "Save 2 orders and send to owner") : canBill() ? "Save order" : "Save and send to owner"}</button>
     <button class="btn btn-ghost" id="clr">Clear</button>`;
   wireBack(view);
   const keep = (id, fn) => { const el = $(id); if (!el) return; el.oninput = e => { fn(e.target.value); const p = e.target.selectionStart; renderNew(); const n = $(id); if (n) { n.focus(); try { n.setSelectionRange(p, p); } catch (_) { } } }; };
@@ -1690,7 +1694,7 @@ function renderNew() {
     if (pend.length) savePhotosLater(data.no, pend);
     if (xpend.length) savePhotosLater(xdata.no, xpend);
     const two = xdata ? ` Saved as 2 orders: #${xdata.no} (express) and #${data.no}.` : " Saved.";
-    if (own()) { go("order-" + (xdata ? xdata.no : data.no)); toast(`${two.trim()} Write ${data.mark} inside every cloth.`); }
+    if (canBill()) { go("order-" + (xdata ? xdata.no : data.no)); toast(`${two.trim()} Write ${data.mark} inside every cloth.`); }
     else { go("orders"); toast(`${two.trim()} Write ${data.mark} inside every cloth. The owner has been told.`); }
   };
   function showErr(err) { const e = $("#saveerr"); e.textContent = err; e.hidden = false; toast(err); e.scrollIntoView({ block: "center", behavior: "smooth" }); }
@@ -1762,7 +1766,7 @@ const payForm = (ph, full) => `${full ? `<button class="btn btn-primary" id="ppa
 /* ---------- Printed receipt (supermarket-style receipt printers, 80mm or 58mm) ---------- */
 let paper = (() => { try { return localStorage.getItem("tb-paper") === "58" ? "58" : "80"; } catch (_) { return "80"; } })();
 function receiptHtml(o) {
-  const c = cust(o.cid), k = calc(o), priced = own() && o.billed;
+  const c = cust(o.cid), k = calc(o), priced = canBill() && o.billed;
   const row = (l, r, cls) => `<div class="rr${cls ? " " + cls : ""}"><span>${l}</span><span>${r}</span></div>`;
   const total = o.m.total || k.total, due = owed(o);
   const bank = priced && due && hasBank() ? (() => { const b = sPriv(); return `<div class="rsep"></div><div class="rc">Pay by transfer to<br><b>${esc(b.bank_name.trim())}</b><br><b>${esc(b.acct_no)}</b><br>${esc(b.acct_name.trim())}</div>`; })() : "";
@@ -1774,7 +1778,7 @@ function receiptHtml(o) {
     <div class="rsep"></div>
     ${priced ? `${k.exp ? row(spName(o), naira(k.exp)) : ""}${o.m.delivery ? row("Pickup / delivery", naira(o.m.delivery)) : ""}${o.m.discount ? row("Discount", "-" + naira(o.m.discount)) : ""}
       ${row("<b>TOTAL</b>", `<b>${naira(total)}</b>`, "rbig")}${row("Paid", naira(o.m.paid))}${row(due ? "<b>Balance</b>" : "Balance", due ? `<b>${naira(due)}</b>` : "Fully paid")}`
-      : row("<b>Clothes</b>", `<b>${k.count}</b>`, "rbig") + `<div class="rc">${own() ? "Bill to follow when your clothes are ready." : "Keep this slip for pickup."}</div>`}
+      : row("<b>Clothes</b>", `<b>${k.count}</b>`, "rbig") + `<div class="rc">${canBill() ? "Bill to follow when your clothes are ready." : "Keep this slip for pickup."}</div>`}
     ${o.remarks || o.money ? `<div class="rsep"></div><div class="rc">${o.remarks ? `Noted: ${esc(o.remarks.split("; ").join(", "))}` : ""}${o.remarks && o.money ? "<br>" : ""}${o.money ? `Money found in pocket: ${naira(o.money)}` : ""}</div>` : ""}
     ${bank}
     <div class="rsep"></div><div class="rc">Thank you for your patronage.</div>`;
@@ -1791,9 +1795,9 @@ function printReceipt(o) {
   window.addEventListener("afterprint", done);
   setTimeout(() => { window.print(); setTimeout(done, 1500); }, 50);
 }
-const printBlock = o => `<div class="prow"><button class="btn btn-ghost" id="prt">${own() && o.billed ? "Print receipt" : "Print drop-off slip"}</button>
+const printBlock = o => `<div class="prow"><button class="btn btn-ghost" id="prt">${canBill() && o.billed ? "Print receipt" : "Print drop-off slip"}</button>
   <div class="aseg" aria-label="Receipt paper width"><button data-paper="80" aria-pressed="${paper === "80"}">80mm</button><button data-paper="58" aria-pressed="${paper === "58"}">58mm</button></div></div>`;
-const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>` : "";
+const payList = o => (o.m.payments || []).length ? `<div class="paylist">${o.m.payments.map(p => `<div><span>${naira(p.amt)}</span><span>${p.by ? esc(p.by) + " · " : ""}${fmtDay(p.at)}</span></div>`).join("")}</div>${own() ? `<button class="linkbtn" id="unpay">Recorded by mistake? Remove the last payment (${naira(o.m.payments[o.m.payments.length - 1].amt)})</button>` : ""}` : "";
 
 /* ---------- Invoice as a PDF ----------
    Drawn on a canvas at A4 size (so ₦ and the shop's logo always render), saved as JPEG pages inside a
@@ -2022,7 +2026,7 @@ const invCaption = (o, type) => { const c = cust(o.cid); return type === "early"
 let invReady = null;
 // Counts bills sent as PDF vs text (no customer details), so Bolu can see which one shops use.
 const BILL_STAGES = ["ready", "owe", "early"];
-function logSend(kind, stage) { if (!own() || !shop || !BILL_STAGES.includes(stage)) return; sb.from("send_log").insert({ shop_id: shop.id, kind, stage }).then(() => { }, () => { }); }
+function logSend(kind, stage) { if (!canBill() || !shop || !BILL_STAGES.includes(stage)) return; sb.from("send_log").insert({ shop_id: shop.id, kind, stage }).then(() => { }, () => { }); }
 let earlyOpen = null; // order whose "send the bill now" panel is open // the last invoice made, so a second tap shares at once
 async function sendInvoice(o, btn, type) {
   const key = [o.id, o.status, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length].join(":"), label = "Send invoice (PDF)";
@@ -2146,8 +2150,8 @@ function fixView(o) {
   let body = "";
   if (o.cancelled) {
     body = `${head(`Order #${o.no}`)}
-      <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b><span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}dropped ${fmtDay(o.at)}</span></div></div>
-      <div class="lines">${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it))}</span><span>${own() ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div>`).join("")}</div>
+      <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b><span>${canBill() && c.phone ? fmtPhone(c.phone) + " · " : ""}dropped ${fmtDay(o.at)}</span></div></div>
+      <div class="lines">${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it))}</span><span>${canBill() ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div>`).join("")}</div>
       <p class="fxnote">Cancelled${o.cancelled_by ? ` by ${esc(o.cancelled_by)}` : ""} on ${fmtDay(o.cancelled)}. It is not counted in your orders or totals.${o.m.paid ? ` The ${naira(o.m.paid)} paid on it still shows in your money received.` : ""}</p>
       ${own() ? `<button class="btn btn-primary" id="fxrestore">Bring this order back</button>` : ""}`;
   } else if (oMode === "items") {
@@ -2400,7 +2404,7 @@ async function loadPhotos(o) {
   if (list.length) {
     const s = await sb.storage.from("order-photos").createSignedUrls(list.map(p => p.path), 3600);
     list.forEach((p, i) => p.url = (s.data && s.data[i] && s.data[i].signedUrl) || "");
-    if (own()) { const t = await sb.rpc("order_photo_link", { p_order: o.id }); list.token = t.data || null; }
+    if (canBill()) { const t = await sb.rpc("order_photo_link", { p_order: o.id }); list.token = t.data || null; }
   }
   photoCache[o.id] = list;
   if (oFor === o.no && !$("#sheet").hidden) openOrder(o.no);
@@ -2434,8 +2438,8 @@ function photoBlock(o) {
     ${list.length ? `<div class="phlist">${list.map((p, j) => `<figure class="phfig"><a class="phbig" href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.url)}" alt="Photo ${j + 1}${p.item ? " of " + esc(p.item) : ""}"></a>
       <figcaption class="phcap"><b>${esc(p.item || "Cloth")}${p.notes ? ": " + esc(p.notes.toLowerCase()) : ""}</b><span>Taken ${taken(p)}</span></figcaption></figure>`).join("")}</div>` : (add ? "" : `<p class="hint">Take a photo of any stain, tear or costly cloth, so you can show the customer it was there before you washed it.</p>`)}
     ${add || (o.cancelled || list.length >= 6 ? "" : `<button class="btn btn-ghost" id="phadd">${CAM_SVG} Add photo</button>`)}
-    ${list.length && own() && list.token && o.list_sent ? `<a class="btn btn-ghost" id="phsend" href="${wa(o, photoMsg(o, list))}" target="_blank" rel="noopener">Send photos to ${esc(c.name.split(" ")[0])} on WhatsApp</a>` : ""}
-    ${list.length && own() && !o.list_sent ? `<p class="hint">The photo link goes out with the list of clothes below.</p>` : ""}
+    ${list.length && canBill() && list.token && o.list_sent ? `<a class="btn btn-ghost" id="phsend" href="${wa(o, photoMsg(o, list))}" target="_blank" rel="noopener">Send photos to ${esc(c.name.split(" ")[0])} on WhatsApp</a>` : ""}
+    ${list.length && canBill() && !o.list_sent ? `<p class="hint">The photo link goes out with the list of clothes below.</p>` : ""}
     ${photoBusy[o.no] ? `<p class="hint">Saving photos… wait a moment before you send the list of clothes.</p>` : ""}
     ${list.length ? `<p class="hint">Photos are deleted 7 days after the clothes are collected.</p>` : ""}</div>`;
 }
@@ -2486,7 +2490,7 @@ function wireNote(sh, o) {
     go.disabled = true;
     if (!(await put("orders", { id: o.id }, { collect_at: collect, remarks, money_found: money }))) { go.disabled = false; return; }
     o.collect = collect ? Date.parse(collect) : 0; o.remarks = remarks || ""; o.money = money || 0; noteEdit = null; ne = null;
-    toast(o.list_sent && own() ? "Saved. Send the list of clothes again if the customer should know." : "Saved");
+    toast(o.list_sent && canBill() ? "Saved. Send the list of clothes again if the customer should know." : "Saved");
     again();
   };
 }
@@ -2495,20 +2499,20 @@ function openOrder(no) {
   if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; if (phAdd) { URL.revokeObjectURL(phAdd.url); phAdd = null; } }
   if (o.cancelled || oMode) { fixView(o); return; }
   const c = cust(o.cid), k = calc(o), sh = $("#sheet");
-  if (own() && !o.notified) { o.notified = true; put("orders", { id: o.id }, { notified: true }); }
+  if (canBill() && !o.notified) { o.notified = true; put("orders", { id: o.id }, { notified: true }); }
   const idx = STEPS.findIndex(s => s[0] === o.status);
   const allChecked = o.items.every((_, i) => o.checked[i]);
-  const canEditBill = own() && o.status !== "picked";
+  const canEditBill = canBill() && o.status !== "picked";
   let html = "";
   const checkHtml = () => {
     if (!(o.status === "new" || o.status === "listed")) return "";
     return o.checking ? `<div class="check"><p><b>Check before bagging.</b> Gather every cloth with mark <b>${esc(c.mark)}</b> inside, and tick each one. If something is missing, you find out now, not when the customer comes.</p>
         ${o.items.map((it, i) => `<label class="ck"><input type="checkbox" data-ck="${i}" ${o.checked[i] ? "checked" : ""}> ${it.qty} × ${esc(pname(it))}</label>`).join("")}
         <button class="btn btn-primary" id="rd" ${allChecked ? "" : "disabled"}>All here. Mark ready</button></div>`
-      : `<button class="btn ${own() ? "btn-ghost" : "btn-primary"}" id="washed" style="margin-top:16px">Clothes are washed and ironed</button>
+      : `<button class="btn ${canBill() ? "btn-ghost" : "btn-primary"}" id="washed" style="margin-top:16px">Clothes are washed and ironed</button>
         <p class="hint">Tap this when the work is done. You'll check every cloth with mark ${esc(c.mark)} before bagging.</p>`;
   };
-  if (own()) {
+  if (canBill()) {
     if (o.status === "new" && !o.list_sent) html += waBlock(o, "list", true); else if (o.list_sent) html += sentLine(o, "list", "List of clothes sent.");
     if (o.status === "ready") html += o.billed ? waBlock(o, "ready", true) : `<p class="bad">Clothes are packed and ready. Save the bill below first so the message can include it.</p>`;
     if (o.status === "told" || (o.status === "picked" && o.billed)) html += sentLine(o, "ready", "Ready message and invoice sent.");
@@ -2516,12 +2520,12 @@ function openOrder(no) {
     html += `<h2 style="margin-top:18px">Bill ${o.billed ? `<span class="pill p-ready" style="vertical-align:middle">Saved</span>` : ""}</h2>`;
     if (canEditBill) {
       html += `<div class="lines">
-        ${o.items.map((it, i) => { const p = item(it.id) || {}; return `<div><span>${it.qty} × ${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>${p.custom ? `<input data-cp="${i}" ${moneyAttrs} placeholder="Set price" value="${o.m.custom[i] || ""}" aria-label="Price for ${esc(pname(it))}">` : !unitPrice(o, it, i) ? `<input data-np="${i}" ${moneyAttrs} placeholder="Price not set" aria-label="Price for one ${esc(pname(it))}">` : `<span>${naira(unitPrice(o, it, i) * it.qty)}</span>`}</div>`; }).join("")}
+        ${o.items.map((it, i) => { const p = item(it.id) || {}; return `<div><span>${it.qty} × ${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>${p.custom ? `<input data-cp="${i}" ${moneyAttrs} placeholder="Set price" value="${o.m.custom[i] || ""}" aria-label="Price for ${esc(pname(it))}">` : !unitPrice(o, it, i) ? !own() ? `<span class="bad">No price yet</span>` : `<input data-np="${i}" ${moneyAttrs} placeholder="Price not set" aria-label="Price for one ${esc(pname(it))}">` : `<span>${naira(unitPrice(o, it, i) * it.qty)}</span>`}</div>`; }).join("")}
         ${o.items.some((it, i) => !(item(it.id) || {}).custom && !unitPrice(o, it, i)) ? `<p class="bad" style="margin:4px 0">Some clothes have no price yet. Type the price for one, and it's saved to your price list.</p>` : ""}
         ${o.wait ? `<div><span>Wait &amp; get${spLabel(o)}</span>${spManual(o) ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.m.express_amt || ""}" aria-label="Wait and get amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`
         : `<div><label class="ck" style="margin:0"><input type="checkbox" id="ex" ${o.express ? "checked" : ""}> Express delivery${expressLabel()}</label>${expManual() ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.express && o.m.express_amt ? o.m.express_amt : ""}" aria-label="Express delivery amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`}
         <div><span>Pickup / delivery${o.pickup ? "<br><small style='color:var(--muted)'>Customer asked for it</small>" : ""}</span><input id="dl" ${moneyAttrs} placeholder="0" value="${o.m.delivery || ""}" aria-label="Pickup or delivery cost"></div>
-        <div><span>Discount</span><input id="dc" ${moneyAttrs} placeholder="0" value="${o.m.discount || ""}" aria-label="Discount"></div>
+        ${own() ? `<div><span>Discount</span><input id="dc" ${moneyAttrs} placeholder="0" value="${o.m.discount || ""}" aria-label="Discount"></div>` : o.m.discount ? `<div><span>Discount</span><span>−${naira(o.m.discount)}</span></div>` : ""}
         <div><b>Total</b><b id="tot">${naira(k.total)}</b></div></div>
         <button class="btn ${o.billed ? "btn-ghost" : "btn-primary"}" id="bill">${o.billed ? "Update bill" : "Save bill"}</button>
         ${o.status === "new" || o.status === "listed" ? (o.billed
@@ -2555,14 +2559,14 @@ function openOrder(no) {
     if (o.status === "ready") html += `<p class="hint" style="margin-top:12px">Ready and bagged. Waiting for the owner to tell the customer.</p>`;
   }
   if (o.status === "ready" || o.status === "told") html += `<button class="btn btn-ghost" id="pick" style="margin-top:16px">Clothes picked up</button>
-    <p class="hint">Mark this when the customer takes the clothes${own() ? ". Payment is recorded separately, because some customers pay later." : ". Payment is recorded by the owner."}</p>`;
+    <p class="hint">Mark this when the customer takes the clothes${canBill() ? ". Payment is recorded separately, because some customers pay later." : ". Payment is recorded by the owner."}</p>`;
 
   html += printBlock(o);
   const y = sh.hidden ? 0 : sh.scrollTop;
   sh.innerHTML = `<div class="app">
     ${orderTop(o)}
     <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b>
-      <span>${own() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${speedLabel(o) ? " · " + speedLabel(o) : ""}</span></div></div>
+      <span>${canBill() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${speedLabel(o) ? " · " + speedLabel(o) : ""}</span></div></div>
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
     <p class="hint">Dropped ${fmtDay(o.at)}</p>
     ${noteBlock(o)}
@@ -2612,7 +2616,7 @@ function openOrder(no) {
   sh.querySelectorAll("[data-cp]").forEach(i => moneyInput(i, v => { o.m.custom[i.dataset.cp] = v; live(); }));
   sh.querySelectorAll("[data-np]").forEach(i => { moneyInput(i, () => { }); i.onchange = async () => { const it = o.items[+i.dataset.np], v = num(i.value); if (!v) return; if (await setPrice(it.id, it.svc, v)) { toast(`${item(it.id).name}: ${naira(v)} saved to your price list`); again(); } }; });
   moneyInput($("#dl"), v => { o.m.delivery = v; live(); });
-  moneyInput($("#dc"), v => { o.m.discount = v; live(); });
+  if ($("#dc")) moneyInput($("#dc"), v => { o.m.discount = v; live(); });
   moneyInput($("#pay"), () => { });
   if ($("#ex")) $("#ex").onchange = e => { o.express = e.target.checked; if (!expManual()) o.m.express_amt = 0; else if (o.express && $("#exa")) $("#exa").focus(); live(); };
   if ($("#exa")) moneyInput($("#exa"), v => { o.m.express_amt = v; if (v && !o.express && !o.wait) { o.express = true; $("#ex").checked = true; } live(); });
@@ -2620,10 +2624,15 @@ function openOrder(no) {
     const miss = o.items.find((it, i) => (item(it.id) || {}).custom && !o.m.custom[i]);
     if (miss) { toast(`Set a price for ${pname(miss)} first`); return; }
     const noPrice = o.items.find((it, i) => !(item(it.id) || {}).custom && !unitPrice(o, it, i));
+    if (noPrice && !own()) { toast(`${pname(noPrice)} has no price yet. Ask the owner to set it.`); return; }
     if (noPrice) { toast(`Set a price for ${pname(noPrice)} first`); const f = sh.querySelector("[data-np]"); if (f) f.focus(); return; }
     if ((o.express || o.wait) && spManual(o) && !(+o.m.express_amt > 0)) { toast(`Type the ${spName(o).toLowerCase()} amount`); $("#exa").focus(); return; }
     if (!o.billed) lockPrices(o);
     const kk = calc(o);
+    if (+o.m.paid > kk.total) {
+      if (!own()) { toast(`${naira(o.m.paid)} is already recorded as paid, more than this bill. Ask the owner to fix the payment first.`); return; }
+      if (!await askConfirm(`Paid is more than the bill`, `${naira(o.m.paid)} is recorded as paid, but this bill is ${naira(kk.total)}. If a payment was recorded by mistake, remove it under Payment. Save the bill anyway?`, "Save anyway")) return;
+    }
     o.m.express_amt = kk.exp; o.m.total = kk.total; o.m.billed_at = o.m.billed_at || new Date().toISOString();
     bill.disabled = true;
     if (await put("orders", { id: o.id }, { express: o.express }) && await saveMoney(o)) {
@@ -2632,7 +2641,7 @@ function openOrder(no) {
       for (const [i, it] of o.items.entries()) {
         if (!(item(it.id) || {}).custom || !it.label || !+o.m.custom[i]) continue;
         const known = PRICES.find(x => !x.custom && x.name.toLowerCase() === it.label.toLowerCase() && (x.p || {})[it.svc] && !x.hidden);
-        if (!known && await toPriceList(tidy(it.label).slice(0, 40), it.svc, +o.m.custom[i])) added.push(it.label);
+        if (own() && !known && await toPriceList(tidy(it.label).slice(0, 40), it.svc, +o.m.custom[i])) added.push(it.label);
       }
       toast(added.length ? `Bill saved. Added ${added.join(", ")} to your price list.` : "Bill saved");
     }
@@ -2653,13 +2662,22 @@ function openOrder(no) {
     render();
   };
   const who = esc(cust(o.cid).name);
+  const up = $("#unpay"); if (up) up.onclick = async () => {
+    const last = o.m.payments[o.m.payments.length - 1];
+    if (!await askConfirm(`Remove ${naira(last.amt)}?`, `The last payment on order #${o.no}${last.by ? `, recorded by ${esc(last.by)}` : ""}. Only do this if it was recorded by mistake.`, "Yes, remove it")) return;
+    up.disabled = true;
+    const { error } = await sb.rpc("remove_last_payment", { p_order: o.id });
+    if (error) { toast(failMsg(error)); up.disabled = false; return; }
+    try { await load(); } catch (_) { }
+    toast(`Removed ${naira(last.amt)}`); render();
+  };
   const pp = $("#pp"); if (pp) pp.onclick = async () => { const v = num($("#pay").value); if (!v) { toast("Type the amount received"); return; }
     if (await askConfirm(`Record ${naira(v)}?`, `Payment from ${who}, order #${o.no}.`, "Yes, record it")) doPay(pp, v); };
   const pa = $("#ppall"); if (pa) pa.onclick = async () => {
     if (await askConfirm("Mark as paid in full?", `${o.billed && owed(o) ? `${naira(owed(o))} from ${who}` : `Full payment from ${who}`}, order #${o.no}.`, "Yes, paid in full")) doPay(pa, 100000000); };
   const w = $("#washed"); if (w) w.onclick = () => { o.checking = true; again(); put("orders", { id: o.id }, { checking: true }); };
   sh.querySelectorAll("[data-ck]").forEach(b => b.onchange = () => { o.checked = { ...o.checked, [b.dataset.ck]: b.checked }; again(); put("orders", { id: o.id }, { checked: o.checked }); });
-  const rd = $("#rd"); if (rd) rd.onclick = () => setStatus("ready", own() ? "Marked ready. Send the ready message." : "Marked ready. The owner has been told.");
+  const rd = $("#rd"); if (rd) rd.onclick = () => setStatus("ready", canBill() ? "Marked ready. Send the ready message." : "Marked ready. The owner has been told.");
   const pk = $("#pick"); if (pk) pk.onclick = async () => {
     if (!await askConfirm(`Has ${cust(o.cid).name} picked up their clothes?`, `Order #${o.no}. After this, the bill can't be changed.${owed(o) ? ` They still owe ${naira(owed(o))}.` : ""}`, "Yes, picked up")) return;
     setStatus("picked", owed(o) ? "Picked up. Not fully paid yet." : "Picked up"); };
@@ -2670,6 +2688,9 @@ function openOrder(no) {
 const EXP_LIVE = Date.parse("2026-11-19T18:00:00+01:00");
 // Express for some clothes only (asked for by ProClean, 20 Nov): BrightWash first, everyone from 8am on 21 Nov.
 const XP_LIVE = Date.parse("2026-11-21T08:00:00+01:00");
+// Staff who can send bills: BrightWash first, everyone from 8am on 22 Nov (asked for by Mr Akiba of Impressions Laundry).
+const BILL_LIVE = Date.parse("2026-11-22T08:00:00+01:00");
+const billLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= BILL_LIVE || location.hostname === "localhost");
 const xpLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= XP_LIVE || location.hostname === "localhost");
 const expOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || Date.now() >= EXP_LIVE || location.hostname === "localhost");
 const EXP_KINDS = [["soap", "Soap"], ["chemicals", "Stain remover and chemicals"], ["fuel", "Fuel"], ["staff", "Staff pay"], ["electricity", "Electricity bill"], ["rent", "Rent"], ["nylon", "Packing nylon"], ["starch", "Starch"], ["maintenance", "Generator, machine and repairs"], ["other", "Other"]];
@@ -2857,9 +2878,10 @@ function renderSettings() {
   if (setTab === "branches") body = card("Branches", "Where customers drop clothes. With one branch, the app doesn't ask.",
       `${liveBranches().map(b => `<div class="row srow"><input data-bn="${b.id}" value="${esc(b.name)}" autocomplete="off" aria-label="Branch name">${liveBranches().length > 1 ? `<button class="mini danger" data-brm="${b.id}">Remove</button>` : ""}</div>`).join("")}
        <div class="row srow"><input id="nb" placeholder="New branch name" autocomplete="off" aria-label="New branch name"><button class="mini" id="nbb">Add</button></div>`);
-  if (setTab === "staff") body = card("Staff logins", `Staff log clothes and check them before bagging. They never see bills, payments or customer numbers${shop.staff_prices ? ", but they can see your price list to answer customers" : ""}.`,
-      staffList.map(s => `<div class="staff-row"><div><b>${esc(s.name)}${s.user_id === me.user_id ? " (you)" : ""}</b><span>${s.role === "owner" ? "Owner" : "Staff"} · ${fmtPhone(s.phone)}</span></div>
+  if (setTab === "staff") body = card("Staff logins", `Staff log clothes and check them before bagging. They never see bills, payments or customer numbers${shop.staff_prices ? ", but they can see your price list to answer customers" : ""}${billLive() ? ", unless you let them send bills" : ""}.`,
+      staffList.map(s => `<div class="staff-row"><div><b>${esc(s.name)}${s.user_id === me.user_id ? " (you)" : ""}</b><span>${s.role === "owner" ? "Owner" : s.can_bill && billLive() ? "Staff · sends bills" : "Staff"} · ${fmtPhone(s.phone)}</span></div>
         ${s.user_id === me.user_id ? "" : `<div class="acts"><button class="mini" data-rp="${s.user_id}">New PIN</button><button class="mini danger" data-srm="${s.user_id}">Remove</button></div>`}</div>
+        ${s.role !== "owner" && billLive() ? `<label class="ck sbill"><input type="checkbox" data-cb="${s.user_id}" ${s.can_bill ? "checked" : ""}><span><b>Can send lists and bills, and take payments</b><small>For a front desk or cashier using the shop's WhatsApp. They see bills, payments and customer numbers, but can't give discounts, change prices or see your reports.</small></span></label>` : ""}
         ${resetFor === s.user_id ? `<div class="row srow"><input id="rpi" class="pin" ${pinAttrs} placeholder="6 digits" aria-label="New PIN for ${esc(s.name)}"><button class="mini" id="rpb">Save</button></div>` : ""}`).join(""))
     + (newStaff ? card(`Send ${esc(newStaff.name.split(" ")[0])} their login`, "They need this to open Tagbook on their phone.",
       `<div class="wa">${esc(newStaff.msg)}</div>
@@ -2943,6 +2965,14 @@ function wireStaff() {
   view.querySelectorAll("[data-sp]").forEach(b => b.onclick = async () => { const v = b.dataset.sp === "1"; if (v === !!shop.staff_prices) return; shop.staff_prices = v; renderSettings(); savedToast(await put("shops", { id: shop.id }, { staff_prices: v })); });
   view.querySelectorAll("[data-rp]").forEach(b => b.onclick = () => { resetFor = resetFor === b.dataset.rp ? null : b.dataset.rp; renderSettings(); const i = $("#rpi"); if (i) i.focus(); });
   if ($("#rpb")) $("#rpb").onclick = async () => { const pin = digits($("#rpi").value); if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; } $("#rpb").disabled = true; const r = await callAdmin({ action: "reset_pin", user_id: resetFor, pin }); toast(r.ok ? "New PIN saved. Tell them in person." : r.msg); if (r.ok) { resetFor = null; renderSettings(); } else $("#rpb").disabled = false; };
+  view.querySelectorAll("[data-cb]").forEach(b => b.onchange = async () => {
+    const on = b.checked, who = staffList.find(x => x.user_id === b.dataset.cb); b.disabled = true;
+    const { error } = await sb.rpc("set_staff_can_bill", { p_user: b.dataset.cb, p_on: on });
+    if (error) { toast(failMsg(error)); b.checked = !on; b.disabled = false; return; }
+    if (who) who.can_bill = on;
+    toast(on ? `${who ? who.name.split(" ")[0] : "They"} can now send lists and bills. They see it next time they open Tagbook.` : `${who ? who.name.split(" ")[0] : "They"} can no longer send bills.`);
+    renderSettings();
+  });
   view.querySelectorAll("[data-srm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again"; return; } b.disabled = true; const r = await callAdmin({ action: "remove_staff", user_id: b.dataset.srm }); toast(r.ok ? "Staff login removed" : r.msg); if (r.ok) { await load(); renderSettings(); } });
   if ($("#nsfcopy")) $("#nsfcopy").onclick = async () => toast(await copyText(newStaff.msg) ? "Message copied" : "Couldn't copy");
   if ($("#nsfdone")) $("#nsfdone").onclick = () => { newStaff = null; renderSettings(); };
@@ -3552,7 +3582,7 @@ async function start() {
     if (hasSavedLogin() && (se || !navigator.onLine)) return cantReach("Can't reach Tagbook. Check your internet and try again.");
     return showLogin();
   }
-  const { data: st, error } = await sb.from("staff").select("user_id,shop_id,role,name,phone,active").eq("user_id", user.id).maybeSingle();
+  const { data: st, error } = await sb.from("staff").select("user_id,shop_id,role,name,phone,active,can_bill").eq("user_id", user.id).maybeSingle();
   if (error) {
     if (/JWT|token|401/i.test(error.message || "") ) { const r = await sb.auth.refreshSession(); if (!r.error) return start(); }
     return cantReach("Can't reach Tagbook. Check your internet and try again.");

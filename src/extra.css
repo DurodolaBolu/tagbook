@@ -728,3 +728,7 @@ label .opt{font-size:13px}
 .xpnote{background:var(--warn-soft);border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:14px;line-height:1.4}
 .xpcol{margin-top:12px}.xpcol>b{display:block;margin-bottom:2px}
 .pairnote{background:var(--warn-soft);border-radius:12px;padding:10px 12px;margin:14px 0 0;font-size:14px}.pairnote a{color:inherit;font-weight:600}
+.sbill{margin:2px 0 12px;font-size:14px;align-items:flex-start;gap:10px}
+.sbill b{font-weight:600}
+.sbill small{display:block;color:var(--muted);font-size:13px;margin-top:2px;line-height:1.4}
+#unpay{display:block;margin:6px 0 2px}

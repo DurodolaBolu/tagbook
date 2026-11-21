@@ -20,7 +20,8 @@ P.forEach(([n, p], i) => { const id = "it" + i; db.items.push({ id, shop_id: sho
 let current = null; // logged-in user id
 const ownerOnly = new Set(["expenses", "shop_private", "item_prices", "customer_phones", "order_money"]);
 const staffMay = t => t === "item_prices" && db.shops[0].staff_prices;
-const rowsFor = t => { const me = db.staff.find(s => s.user_id === current); if (ownerOnly.has(t) && me.role !== "owner" && !staffMay(t)) return []; return db[t]; };
+const biller = () => { const me = db.staff.find(s => s.user_id === current); return me && (me.role === "owner" || me.can_bill); };
+const rowsFor = t => { const me = db.staff.find(s => s.user_id === current); if (ownerOnly.has(t) && me.role !== "owner" && !staffMay(t) && !(t !== "expenses" && me.can_bill)) return []; return db[t]; };
 function filterRows(rows, params) {
   for (const [k, v] of params) { if (["select", "order", "limit", "offset", "on_conflict", "columns"].includes(k)) continue;
     const [op, ...rest] = v.split("."); const val = rest.join(".");
@@ -103,6 +104,8 @@ async function handle(route) {
   if (p === "/rest/v1/rpc/team_options") return send(200, [{ id: "11111111-1111-1111-1111-111111111111", name: "Louis" }]);
   if (p === "/rest/v1/rpc/is_agent") return send(200, false);
   if (p === "/rest/v1/tutorials" && method === "GET") return send(200, [{ id: "t1", title: "How to install Tagbook on iPhone", youtube_id: "chuV8thnvrE", section: "start", audience: "all", step_key: "install", sort: 10 }, { id: "t2", title: "How to log a customer's clothes", youtube_id: "SiUDE8sCSQ4", section: "daily", audience: "all", step_key: "order", sort: 20 }, { id: "t3", title: "How to send the list of clothes to your customer", youtube_id: "hinlU63w8ck", section: "daily", audience: "owner", step_key: null, sort: 30 }]);
+  if (p === "/rest/v1/rpc/set_staff_can_bill") { if (current !== ownerId) return send(400, { message: "OWNER_ONLY" }); db.staff.find(s => s.user_id === body.p_user).can_bill = body.p_on; return send(204); }
+  if (p === "/rest/v1/rpc/remove_last_payment") { if (current !== ownerId) return send(400, { message: "OWNER_ONLY" }); const m = db.order_money.find(q => q.order_id === body.p_order); const last = m.payments.pop(); m.paid -= last.amt; const o = db.orders.find(q => q.id === body.p_order); o.settled = !!m.billed_at && m.paid >= m.total; return send(200, { removed: last.amt }); }
   if (p === "/rest/v1/rpc/pair_orders") {
     const A = db.orders.find(o => o.id === body.p_a), B = db.orders.find(o => o.id === body.p_b);
     if (!A || !B || A.customer_id !== B.customer_id) return send(200, false);
@@ -150,11 +153,12 @@ async function handle(route) {
       const range = req.headers()["range"]; if (range) { const [a, b] = range.split("-").map(Number); rows = rows.slice(a, b + 1); }
       return send(200, rows);
     }
-    if (ownerOnly.has(t) && db.staff.find(s => s.user_id === current).role !== "owner") return send(403, { message: "rls" });
+    if (ownerOnly.has(t) && db.staff.find(s => s.user_id === current).role !== "owner" && !(t === "order_money" && biller())) return send(403, { message: "rls" });
+    if (t === "order_money" && db.staff.find(s => s.user_id === current).role !== "owner") { const ex = db.order_money.find(x => x.order_id === body.order_id); if ((+body.discount || 0) !== (ex ? +ex.discount || 0 : 0)) return send(400, { message: "DISCOUNT_OWNER_ONLY" }); }
     if (method === "DELETE") { const rows = filterRows(db[t], params); db[t] = db[t].filter(r => !rows.includes(r)); return send(204); }
     if (method === "PATCH") {
       const rows = filterRows(db[t], params);
-      if (t === "orders" && db.staff.find(s => s.user_id === current).role !== "owner" && ("billed" in body || "list_sent" in body || (body.status && ["listed", "told"].includes(body.status)))) return send(400, { message: "OWNER_ONLY" });
+      if (t === "orders" && db.staff.find(s => s.user_id === current).role !== "owner" && !biller() && ("billed" in body || "list_sent" in body || (body.status && ["listed", "told"].includes(body.status)))) return send(400, { message: "OWNER_ONLY" });
       rows.forEach(r => Object.assign(r, body)); return send(204);
     }
     if (method === "POST") {
@@ -382,6 +386,37 @@ async function handle(route) {
     const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
     await page.click('details.early [data-pdf="early"]');
     const f = await dl; if (!f) console.log("pdf: no download"); else { const fp = path.join(process.env.XP_TEST, "combo.pdf"); await f.saveAs(fp); console.log("pdf:", f.suggestedFilename(), fs.statSync(fp).size); }
+    process.exit(0);
+  }
+  if (process.env.BILL_TEST) { // owner lets a front desk staff send bills; staff can't discount; owner can remove a wrong payment
+    const relog = async ph => { await page.evaluate(() => { try { localStorage.clear(); sessionStorage.clear(); } catch (_) { } }); current = null; await login(ph); };
+    const C = process.env.BILL_TEST; await page.setViewportSize({ width: 390, height: 1700 });
+    await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(1000);
+    await page.click('[data-st="staff"]'); await page.waitForTimeout(400);
+    console.log("switch shown:", !!(await page.$('[data-cb="u-sec"]')));
+    await page.screenshot({ path: path.join(C, "staff-switch.png"), fullPage: true });
+    await page.check('[data-cb="u-sec"]'); await page.waitForTimeout(600);
+    console.log("can_bill saved:", db.staff.find(s => s.user_id === "u-sec").can_bill === true);
+    const o = db.orders[db.orders.length - 1];
+    o.items = [{ id: "it2", svc: "wi", qty: 2 }]; o.express = false; o.status = "new"; o.list_sent = false; o.billed = false; o.settled = false; db.customers.forEach(c => { c.greet_asked = true; });
+    db.order_money = db.order_money.filter(m => m.order_id !== o.id);
+    await relog("08000000091");
+    await page.goto("http://localhost:8787/#order-" + o.no); await page.reload(); await page.waitForTimeout(1200);
+    console.log("staff sees send list:", !!(await page.$(".wa, [data-wa], .wa-label")), "| bill button:", !!(await page.$("#bill")), "| discount box:", !!(await page.$("#dc")), "| phone shown:", (await page.textContent(".dhead span, .ohead span").catch(() => "")).includes("0"));
+    await page.screenshot({ path: path.join(C, "staff-order.png"), fullPage: true });
+    await page.click("#bill"); await page.waitForTimeout(400); console.log("toast:", await page.textContent(".toast").catch(() => "-")); await page.waitForTimeout(500);
+    const mm = db.order_money.find(m => m.order_id === o.id);
+    console.log("staff saved bill:", !!(mm && mm.billed_at), "total:", mm && mm.total, "| unpay for staff:", !!(await page.$("#unpay")));
+    await page.fill("#pay", "1000"); await page.click("#pp"); await page.waitForTimeout(300); await page.click('.cfm [data-c="1"]'); await page.waitForTimeout(900);
+    await page.fill("#pay", "1000").catch(() => {}); await page.click("#pp").catch(() => {}); await page.waitForTimeout(300); await page.click('.cfm [data-c="1"]').catch(() => {}); await page.waitForTimeout(900);
+    console.log("payments recorded:", mm.payments.length, "paid:", mm.paid);
+    await relog("08120756325");
+    await page.goto("http://localhost:8787/#order-" + o.no); await page.reload(); await page.waitForTimeout(1200);
+    console.log("owner unpay button:", !!(await page.$("#unpay")));
+    await page.click("#unpay"); await page.waitForTimeout(300); await page.screenshot({ path: path.join(C, "unpay-confirm.png") }); await page.click('.cfm [data-c="1"]'); await page.waitForTimeout(900);
+    console.log("after remove: payments", mm.payments.length, "paid", mm.paid);
+    await page.screenshot({ path: path.join(C, "owner-order.png"), fullPage: true });
+    console.log("errors:", errors.slice(0, 5));
     process.exit(0);
   }
   if (process.env.SETUP_TEST) { // checklist steps tick only when the real work is done
