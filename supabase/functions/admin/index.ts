@@ -31,7 +31,7 @@ async function passFor(phone: string, pin: string) {
 const isUuid = (s: unknown) => /^[0-9a-f-]{36}$/i.test(String(s ?? ""));
 const isoIn = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
 // Names pasted from WhatsApp can carry invisible characters; drop them and squeeze spaces.
-const tidy = (v: unknown) => String(v ?? "").replace(/[​-‏⁠﻿]/g, "").replace(/\s+/g, " ").trim();
+const tidy = (v: unknown) => String(v ?? "").replace(/[\u200B-\u200F\u2060\uFEFF]/g, "").replace(/\s+/g, " ").trim();
 const SHOP_NAME_MAX = 50;
 // Where shops are, for Bolu's marketing tracking. Only these values are stored.
 const STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT Abuja","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
@@ -137,7 +137,9 @@ async function codeOk(pinId: string, code: string) {
 // WhatsApp check for sign-ups and PIN resets. The person sends a 6-digit code from their own WhatsApp to Tagbook's number;
 // the "wa" function confirms it. Needs WA_TOKEN and WA_NUMBER in Supabase, and WA_LIVE set to true here.
 // WA_LIVE switched on 19 Nov after Meta replies were confirmed working end to end. Set to false to pause both checks.
-const WA_LIVE = true;
+// 22 Nov 2026: paused. Meta banned the WhatsApp Business account, so codes sent to the number never arrive.
+// Sign-ups now go through unconfirmed (Bolu calls every new shop), and forgotten PINs go to Bolu on 0812.
+const WA_LIVE = false;
 const WA_NUMBER = (Deno.env.get("WA_NUMBER") || "").replace(/\D/g, "");
 const WA_READY = WA_LIVE && !!(Deno.env.get("WA_TOKEN") && /^\d{10,15}$/.test(WA_NUMBER));
 const WA_ON = WA_READY; // sign-up check (an SMS key, if ever added, takes priority)
@@ -268,6 +270,30 @@ Deno.serve(async (req) => {
         if (et) console.error("set_new_shop_team", et);
       }
       return json({ ok: true, shop_id: r.shopId });
+    }
+
+    // ---- Ordiventa only: give a shop owner a new PIN, and fix their login phone if it was typed wrong ----
+    if (action === "owner_login") {
+      if (!isAdmin && !keyOk) return fail("NOT_ALLOWED", 403);
+      if (!isUuid(body.shop_id)) return fail("NOT_FOUND", 404);
+      const pin = String(body.pin || ""), phone = cleanPhone(body.phone);
+      if (!okPin(pin)) return fail("BAD_PIN");
+      if (!okPhone(phone)) return fail("BAD_PHONE");
+      const { data: own } = await admin.from("staff").select("user_id, phone").eq("shop_id", body.shop_id).eq("role", "owner").eq("active", true).order("created_at").limit(1).maybeSingle();
+      if (!own) return fail("NOT_FOUND", 404);
+      if (phone !== own.phone) {
+        const { data: taken } = await admin.from("staff").select("user_id").eq("phone", phone).limit(1).maybeSingle();
+        if (taken) return fail("PHONE_IN_USE", 409);
+      }
+      const { error } = await admin.auth.admin.updateUserById(own.user_id, {
+        email: emailFor(phone), email_confirm: true, user_metadata: { phone }, password: await passFor(phone, pin), app_metadata: { pin_v2: true } });
+      if (error) throw new Error(/already/i.test(error.message) ? "PHONE_IN_USE" : error.message);
+      if (phone !== own.phone) {
+        const { error: se } = await admin.from("staff").update({ phone }).eq("user_id", own.user_id);
+        if (se) throw se;
+      }
+      await admin.rpc("login_result", { p_phone: phone, p_ip: "reset", p_ok: true }); // clears any lock
+      return json({ ok: true, phone });
     }
 
     // ---- Ordiventa only: add someone who can set up shops ----

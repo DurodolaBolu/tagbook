@@ -330,7 +330,7 @@ function goalHtml(g) {
   </section>`;
 }
 let dSeg = "all", dQ = "", dOpen = null;
-let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = 1, teamPay = [], editFor = null, payOpen = null;
+let dash = null, dashAt = 0, dashBusy = false, leads = [], leadForm = false, agents = [], agentForm = false, newAgent = null, nCopy = null, markFor = null, markPlan = 1, teamPay = [], editFor = null, payOpen = null, ologFor = null, ologDone = null;
 const ago = t => { if (!t) return "never"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); if (m < 2) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + "h ago"; const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago"; };
 const daysTo = d => d ? Math.ceil((Date.parse(d + "T23:59:59") - Date.now()) / 864e5) : null;
 async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [{ data, error }, L, A] = await Promise.all([sb.rpc("admin_dashboard"), sb.from("ref_leads").select("*").order("created_at"), sb.rpc("admin_agents")]); if (!error) { dash = data || []; dashAt = Date.now(); } if (!L.error) leads = L.data || []; if (!A.error) agents = A.data || []; try { const T = await sb.rpc("admin_team_pay"); if (!T.error) teamPay = T.data || []; } catch (_) { } try { const B = await sb.rpc("admin_send_stats", { p_days: 30 }); if (!B.error) sendStats = B.data || []; } catch (_) { } try { const F = await sb.from("shop_followups").select("*"); if (!F.error) follows = Object.fromEntries((F.data || []).map(x => [x.shop_id, x])); } catch (_) { } } finally { dashBusy = false; } if (tab === "admin") keepTyped(renderAdmin); }
@@ -878,6 +878,13 @@ function renderAdmin() {
           ${r.claim_status === "pending" ? `<p class="hint">Pick the team member who really found this shop, then Save.</p>` : ""}
           <label for="ep-s">Helper (demoed and set it up)</label><select id="ep-s"><option value="">Nobody (no helper pay)</option>${agents.map(a => `<option value="${a.user_id}" ${r.setup_by === a.user_id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
           <div class="row"><button class="btn btn-ghost" data-epno>Cancel</button><button class="btn btn-primary" data-epgo="${r.id}">Save</button></div></div>` : `<button class="btn btn-ghost dmarkbtn" data-ep="${r.id}">Edit referral, agent and helper</button>`}
+      ${r.is_test ? "" : ologFor === r.id ? `<div class="dlead dmark">
+          <label for="ol-p">Owner's login phone</label><input id="ol-p" type="tel" inputmode="numeric" maxlength="11" value="${esc(r.owner_phone || "")}">
+          <label for="ol-n">New 6-digit PIN</label><input id="ol-n" ${genPinAttrs()}>
+          <p class="hint">Fix the phone if it was typed wrong. They log in with this phone and PIN.</p>
+          <div class="row"><button class="btn btn-ghost" data-olno>Cancel</button><button class="btn btn-primary" data-olgo="${r.id}">Save</button></div></div>`
+        : ologDone && ologDone.id === r.id ? `<div class="dlead dmark"><p><b>Saved.</b> Send them their login:</p><a class="btn btn-primary" target="_blank" rel="noopener" href="${waTo(ologDone.phone, ologDone.msg)}">Send on WhatsApp</a><button class="btn btn-ghost" data-olno>Done</button></div>`
+        : `<button class="btn btn-ghost dmarkbtn" data-olog="${r.id}">New PIN or fix login phone</button>`}
       ${r.is_test ? "" : markFor === r.id ? `<div class="dlead dmark"><label for="mk-m">Months paid for</label><input id="mk-m" type="text" inputmode="numeric" maxlength="2" value="${markPlan}">
           <label for="mk-a">Amount received (₦)</label><input id="mk-a" ${moneyAttrs} value="${PRICE_MONTH * markPlan}">
           <label for="mk-n">Note (optional)</label><input id="mk-n" placeholder="e.g. transfer to Ordiventa account" autocomplete="off">
@@ -963,6 +970,19 @@ function renderAdmin() {
   $("#dref").onclick = () => { dashAt = 0; loadDash(); toast("Refreshing"); };
   view.querySelectorAll("[data-ep]").forEach(b => b.onclick = () => { editFor = b.dataset.ep; renderAdmin(); const f = $("#ep-b"); if (f) { f.scrollIntoView({ block: "center" }); f.focus(); } });
   view.querySelectorAll("[data-epno]").forEach(b => b.onclick = () => { editFor = null; renderAdmin(); });
+  view.querySelectorAll("[data-olog]").forEach(b => b.onclick = () => { ologFor = b.dataset.olog; ologDone = null; renderAdmin(); const f = $("#ol-n"); if (f) f.scrollIntoView({ block: "center" }); });
+  view.querySelectorAll("[data-olno]").forEach(b => b.onclick = () => { ologFor = null; ologDone = null; renderAdmin(); });
+  view.querySelectorAll("[data-olgo]").forEach(b => b.onclick = async () => {
+    const phone = digits($("#ol-p").value), pin = digits($("#ol-n").value), r = dash.find(k => k.id === b.dataset.olgo);
+    if (!/^0\d{10}$/.test(phone)) { toast("Type the 11-digit phone, starting with 0."); return; }
+    if (pin.length !== 6) { toast("The PIN must be 6 digits."); return; }
+    b.disabled = true;
+    const res = await callAdmin({ action: "owner_login", shop_id: b.dataset.olgo, phone, pin });
+    if (!res.ok) { b.disabled = false; toast(res.error === "PHONE_IN_USE" ? "Another Tagbook login already uses that phone." : failMsg({ message: res.error || "" })); return; }
+    const first = String(r && r.owner_name || "").trim().split(/\s+/)[0] || "";
+    ologFor = null; ologDone = { id: b.dataset.olgo, phone, msg: `${greet()}${first ? " " + first : ""}. Here is your Tagbook login:\n\nOpen tagbook.ordiventa.com and tap Log in.\nPhone: ${fmtPhone(phone)}\nPIN: ${pin}\n\nYou can change your PIN anytime in Settings.\n\nBolu, Tagbook team` };
+    if (r) r.owner_phone = phone; renderAdmin();
+  });
   view.querySelectorAll("[data-epgo]").forEach(b => b.onclick = async () => {
     b.disabled = true;
     const v = id => $(id).value || null;
@@ -3488,7 +3508,7 @@ const waitWords = s => { const m = Math.ceil(s / 60); return m >= 60 ? `${Math.c
 /* Forgot PIN: prove the phone by sending a code from its WhatsApp, then choose a new PIN. */
 const RESET_ERR = {
   NO_ACCOUNT: "No Tagbook login uses this number. Check the number, or ask your shop owner.",
-  RESET_OFF: "PIN reset isn't available right now. Ask your shop owner to set a new PIN in Settings.",
+  RESET_OFF: "Staff: ask your shop owner to set a new PIN in Settings. Shop owners: message Tagbook on WhatsApp, 0812 075 6325, and we'll set a new PIN for you.",
   TOO_MANY: "Too many tries. Wait an hour, or ask your shop owner to set a new PIN.",
   NOT_VERIFIED: "We haven't got the code on WhatsApp yet. Tap “Send code on WhatsApp”, send it, then come back.",
   NETWORK: "Can't reach Tagbook. Check your internet and try again.",
