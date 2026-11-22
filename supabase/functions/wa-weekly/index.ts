@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       return json({ status: r.status, body: await r.json() });
     }
     if (b.action === "phone_info") {
-      const r = await fetch(`${G}/${PHONE_ID}?fields=display_phone_number,verified_name,name_status,new_name_status,quality_rating,messaging_limit_tier,is_official_business_account`, { headers: auth });
+      const r = await fetch(`${G}/${PHONE_ID}?fields=display_phone_number,verified_name,name_status,new_name_status,quality_rating,messaging_limit_tier,is_official_business_account,status,code_verification_status,platform_type,account_mode,health_status`, { headers: auth });
       return json({ status: r.status, body: await r.json() });
     }
     if (b.action === "send") {
