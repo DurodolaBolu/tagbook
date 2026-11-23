@@ -2095,7 +2095,10 @@ async function sendInvoice(o, btn, type) {
   if (navigator.canShare && navigator.canShare({ files: [f] })) {
     // Trial (BrightWash only): the full text bill goes with the PDF, so the account number is in the chat too.
     // WhatsApp cuts long captions (about 1,000 characters), so a long bill falls back to the short caption plus bank details.
-    const full = copyLive() ? message(o, type) : "", text = full && full.length <= 1000 ? full : invCaption(o, type) + (copyLive() && owed(o) > 0 ? payTo() : "");
+    const full = copyLive() ? message(o, type) : "";
+    const short = () => { const tot = +o.m.total || calc(o).total, pd = +o.m.paid || 0, due = owed(o);
+      return `${invCaption(o, type)} The full list of clothes is in the invoice.\n\nTotal: ${naira(tot)}${pd ? `\nPaid: ${naira(pd)}` : ""}${due > 0 ? `\nBalance: ${naira(due)}` : ""}` + (due > 0 ? payTo() : ""); };
+    const text = !copyLive() ? invCaption(o, type) : full.length <= 1000 ? full : short();
     try { await navigator.share({ files: [f], text }); logSend("pdf", type); }
     catch (e) {
       // Some phones only allow sharing straight after a tap; the invoice is ready now, so one more tap sends it.
