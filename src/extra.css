@@ -743,3 +743,5 @@ label .opt{font-size:13px}
 .lnpc{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px}
 .lnpc span{display:flex;flex-direction:column;font-size:15px}
 .lnpc small{color:var(--muted);font-size:13px}
+.duty.need{border:1.5px solid var(--owes)}
+.duty.need .dch{color:var(--owes)}

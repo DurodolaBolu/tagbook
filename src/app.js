@@ -1746,7 +1746,9 @@ function renderNew() {
       : (isNew && !d.hasMark) ? "Choose if the customer already has a mark on their clothes."
       : (isNew && d.hasMark === "yes" && !d.mark) ? "Type the customer's mark."
       : clash ? `${clash.mark} is already used by ${clash.name}. Use a different mark.`
-      : !d.items.length ? "Add at least one cloth to the order." : "";
+      : !d.items.length ? "Add at least one cloth to the order."
+      : dutyMissing() ? dutyMissing() : "";
+    if (err && err === dutyMissing()) { dutyOpen = true; renderNew(); window.scrollTo({ top: 0, behavior: "smooth" }); toast(err); return; }
     if (err) { showErr(err); if (!d.cust && d.newMode && d.found === undefined && d.phone.length === 11) lookup(d.phone); return; }
     const mark = d.cust ? d.cust.mark : (d.hasMark === "yes" ? d.mark : suggest(d.name));
     const clean = list => list.map(({ photos, pn, x, ...i }) => { if (!i.note) delete i.note; if (pcsOf(i) < 2) delete i.pcs; return { ...i }; });
@@ -2823,13 +2825,19 @@ const dutyNow = () => {
 function dutyBlock() {
   if (!teamLive() || !crew().length) return "";
   const now = dutyNow();
-  if (!dutyOpen) return `<button class="duty" id="dutyedit"><span>${now ? `On duty: <b>${esc([now.by, andList(now.w)].filter(Boolean).join(" · "))}</b>` : "<b>Who is on duty?</b> Tap to choose"}</span><span class="dch">Change</span></button>`;
+  if (!dutyOpen) return `<button class="duty${dutyMissing() ? " need" : ""}" id="dutyedit"><span>${now ? `On duty: <b>${esc([now.by, andList(now.w)].filter(Boolean).join(" · "))}</b>` : "<b>Who is on duty?</b> Tap to choose"}</span><span class="dch">Change</span></button>`;
   const v = now || { by: "", w: [] }, cs = crew().filter(x => x.r === "c"), as = crew().filter(x => x.r !== "c");
   return `<div class="duty open">
     ${cs.length ? `<label style="margin-top:0">Cashier</label><div class="chips" style="margin:0">${cs.map(x => `<button class="chip" data-dby="${esc(x.n)}" aria-pressed="${v.by === x.n}">${esc(x.n)}</button>`).join("")}</div>` : ""}
     ${as.length ? `<label${cs.length ? "" : ' style="margin-top:0"'}>Laundry attendants</label><div class="chips" style="margin:0">${as.map(x => `<button class="chip" data-dw="${esc(x.n)}" aria-pressed="${v.w.includes(x.n)}">${esc(x.n)}</button>`).join("")}</div>` : ""}
     <button class="mini" id="dutyok" style="margin-top:10px">Close</button></div>`;
 }
+// In shops that added team names, an order can't be saved until the cashier on duty is chosen (or an attendant, if the shop has no cashiers).
+const dutyMissing = () => {
+  if (!teamLive() || !crew().length) return "";
+  const now = dutyNow() || { by: "", w: [] }, hasC = crew().some(x => x.r === "c");
+  return hasC && !now.by ? "Choose the cashier on duty first, at the top of the page." : !hasC && !now.w.length ? "Choose who is on duty first, at the top of the page." : "";
+};
 function wireDuty(again) {
   const e = $("#dutyedit"); if (e) e.onclick = () => { dutyOpen = true; again(); };
   const cur = () => dutyNow() || { by: "", w: [] }, names = () => crew().map(x => x.n);
