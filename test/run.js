@@ -126,6 +126,11 @@ async function handle(route) {
     const ph = db.customer_phones.find(x => x.phone === body.p_phone); const c = ph && db.customers.find(x => x.id === ph.customer_id);
     return send(200, c ? [{ id: c.id, name: c.name, mark: c.mark }] : []);
   }
+  if (p === "/rest/v1/rpc/track_info") {
+    const o = db.orders.find(q => q.track_token === body.p_token); if (!o) return send(200, null);
+    return send(200, { shop: "BrightWash Test", no: o.no, mark: "AD", status: o.status, at: o.created_at || new Date().toISOString(), collect: new Date(Date.now() + 2 * 864e5).toISOString(), picked: null, express: false, wait: false,
+      items: o.items.map(it => ({ n: (db.items.find(i => i.id === it.id) || {}).name || "Item", q: it.qty, note: it.note || null, pcs: it.pcs || 1 })) });
+  }
   if (p === "/rest/v1/rpc/log_order") {
     const x = body.p; const me = db.staff.find(s => s.user_id === current);
     let ph = db.customer_phones.find(c => c.phone === x.phone), c;
@@ -134,7 +139,7 @@ async function handle(route) {
     else { const clash = db.customers.find(cc => cc.mark === x.mark); if (clash) return send(400, { message: "MARK_TAKEN:" + clash.name, code: "P0001" });
       c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, greet: (current === ownerId && x.greet) || null, greet_asked: current === ownerId && "greet" in x, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
     const no = db.shops[0].next_no++; const id = uid();
-    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, duty: x.duty || null, express: x.express, wait_get: !!x.wait_get, collect_at: x.collect_at || null, remarks: x.remarks || null, money_found: x.money_found || null, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
+    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, duty: x.duty || null, track_token: Math.random().toString(16).slice(2, 14).padEnd(12, "0") + "abcdef012345", express: x.express, wait_get: !!x.wait_get, collect_at: x.collect_at || null, remarks: x.remarks || null, money_found: x.money_found || null, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
     let auto = !x.express && !x.pickup, unit = [], total = 0;
     for (const it of x.items) { const item = db.items.find(i => i.id === it.id); const pr = db.item_prices.find(p => p.item_id === it.id); const v = pr && pr.prices[it.svc]; if (!item || item.custom || v == null) { auto = false; unit.push(null); } else { unit.push(v); total += v * it.qty; } }
     let paid = x.paid || 0; if (auto && paid > total) paid = total;
@@ -435,6 +440,9 @@ async function handle(route) {
     const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
     await page.click('details.early [data-pdf="early"]').catch(e => console.log("no pdf btn"));
     const f = await dl; if (f) { const fp = path.join(C, "inv.pdf"); await f.saveAs(fp); console.log("pdf ok", fs.statSync(fp).size); }
+    console.log("track link in list:", /track\?k=[0-9a-f]{24}/.test(txt));
+    await page.goto("http://localhost:8787/track.html?k=" + o.track_token); await page.waitForTimeout(1200); await page.screenshot({ path: path.join(C, "track.png"), fullPage: true });
+    console.log("track page:", (await page.textContent("h1").catch(() => "-")));
     console.log("bill sender saved:", JSON.stringify(db.orders.find(q => q.id === o.id).duty));
     console.log("errors:", errors.slice(0, 5));
     process.exit(0);

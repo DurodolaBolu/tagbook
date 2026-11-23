@@ -150,7 +150,7 @@ async function load() {
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden,pieces", "sort"),
     fetchAll("customers", "id,name,mark,greet,greet_asked,inv_name"),
-    fetchAll("orders", "id,no,customer_id,branch_id,pair_id,items,express,wait_get,pickup,collect_at,remarks,money_found,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by,duty", "no"),
+    fetchAll("orders", "id,no,customer_id,branch_id,pair_id,items,express,wait_get,pickup,collect_at,remarks,money_found,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by,duty,track_token", "no"),
   ]);
   if (base[0].error) throw base[0].error;
   shop = base[0].data; BRANCHES = base[1]; customers = base[3];
@@ -182,7 +182,7 @@ async function load() {
     id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, pair: o.pair_id || null, items: o.items || [], express: o.express, wait: !!o.wait_get, pickup: o.pickup, collect: o.collect_at ? Date.parse(o.collect_at) : 0, remarks: o.remarks || "", money: o.money_found || 0,
     status: o.status, checking: o.checking, checked: o.checked || {}, notified: o.notified, billed: o.billed, settled: o.settled, list_sent: o.list_sent,
     at: Date.parse(o.created_at), m: { ...emptyMoney(), ...(money[o.id] || {}) }, again: {},
-    cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "", duty: o.duty || null,
+    cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "", duty: o.duty || null, track: o.track_token || "",
   }));
   // Cancelled orders stay on record but are left out of every list, total and report.
   orders = all.filter(o => !o.cancelled); cancelledOrders = all.filter(o => o.cancelled);
@@ -1804,7 +1804,7 @@ function message(o, type) {
   const c = cust(o.cid), k = calc(o), hi = hello(c);
   if (type === "list") {
     const list = o.items.map(it => `${it.qty} x ${pname(it)}${pcsTag(it)} (${SERVICES[it.svc]})`).join("\n");
-    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${countTxt(o)}${spTag(o)}\n\n${list}${dutyText(o) ? `\n\n${dutyText(o)}` : ""}${pairLine(o)}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
+    return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${countTxt(o)}${spTag(o)}\n\n${list}${dutyText(o) ? `\n\n${dutyText(o)}` : ""}${pairLine(o)}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.${trackLine(o)}\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
   if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${countTxt(o)}${dutyText(o, true) ? `\n${dutyText(o, true)}` : ""}\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
@@ -2523,6 +2523,9 @@ async function loadPhotos(o) {
 const photoSeen = list => list.map(p => p.notes ? `${p.notes.toLowerCase()} on the ${(p.item || "cloth").toLowerCase()}` : (p.item || "").toLowerCase()).filter((x, i, a) => x && a.indexOf(x) === i);
 const photoLink = list => `https://tagbook.ordiventa.com/photos?t=${list.token}`;
 // The list of clothes carries the photo link, so the customer gets one message at drop-off, not two.
+// A link the customer opens any time to see if their clothes are ready (BrightWash first, everyone from 24 Nov).
+const TRACK_LIVE = Date.parse("2026-11-24T08:00:00+01:00");
+const trackLine = o => o.track && shop && (shop.id === PHOTO_SHOP || Date.now() >= TRACK_LIVE || location.hostname === "localhost") ? `\n\nCheck on your clothes any time:\nhttps://tagbook.ordiventa.com/track?k=${o.track}` : "";
 function listPhotoLine(o) {
   const list = photosOn() && photoCache[o.id];
   if (!list || !list.length || !list.token) return "";

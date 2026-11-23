@@ -12,6 +12,7 @@ cp src/privacy.html site/privacy.html
 cp src/404.html site/404.html
 cp src/photos.html site/photos.html
 cp src/pay.html site/pay.html
+cp src/track.html site/track.html
 GEAR=$(cat src/gear.html)
 MACHINE=$(cat src/machine.svg)
 # iPhone launch screens (made by scripts/splash.js): shown by iOS while the app opens, instead of black

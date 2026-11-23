@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Your clothes</title>
+<style>
+:root{--bg:#F3F5F3;--card:#FFFFFF;--fg:#03191E;--muted:#55605F;--accent:#0F7B5F;--soft:#DDF3EA;--line:#DFE4E1;--warn:#92400E;--warn-soft:#FEF3C7}
+@media (prefers-color-scheme: dark){:root{--bg:#0B1513;--card:#13221F;--fg:#E8F0EE;--muted:#9AB0AA;--accent:#2BB38C;--soft:#16372E;--line:#22332F;--warn:#F5B454;--warn-soft:#3A2A10}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:480px;margin:0 auto;padding:28px 16px 40px}
+.shop{margin:0;font-size:15px;color:var(--muted)}
+h1{margin:2px 0 18px;font-size:26px;line-height:1.2}
+.card{background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--line)}
+.card+.card{margin-top:12px}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{position:relative;padding:0 0 22px 36px;color:var(--muted)}
+.steps li:last-child{padding-bottom:0}
+.steps li::before{content:"";position:absolute;left:0;top:2px;width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:var(--card)}
+.steps li::after{content:"";position:absolute;left:10px;top:24px;bottom:2px;width:2px;background:var(--line)}
+.steps li:last-child::after{display:none}
+.steps li.done{color:var(--fg)}
+.steps li.done::before{background:var(--accent);border-color:var(--accent)}
+.steps li.done::after{background:var(--accent)}
+.steps li.now{color:var(--fg)}
+.steps li.now::before{border-color:var(--accent);box-shadow:inset 0 0 0 4px var(--card);background:var(--accent)}
+.steps b{display:block;font-size:17px}
+.steps span{font-size:14px;color:var(--muted)}
+.due{margin:16px 0 0;padding:12px 14px;border-radius:12px;background:var(--soft);font-size:15px}
+.tag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);font-size:12px;font-weight:700;vertical-align:2px}
+.lbl{font-size:13px;color:var(--muted);margin:0 0 8px}
+.it{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:16px}
+.it:first-of-type{border-top:0;padding-top:0}
+.it small{color:var(--muted);white-space:nowrap}
+.tot{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line);font-weight:600}
+footer{margin-top:28px;color:var(--muted);font-size:13px;text-align:center}
+footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main id="m"></main>
+<script>
+(function () {
+  var m = document.getElementById("m");
+  var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var foot = '<footer>Sent with <a href="https://tagbook.ordiventa.com">Tagbook</a></footer>';
+  var msg = function (t) { m.innerHTML = '<div class="card">' + t + '</div>' + foot; };
+  var k = new URLSearchParams(location.search).get("k") || "";
+  if (!/^[0-9a-f]{24}$/.test(k)) { msg("This link is not complete. Ask the laundry to send it again."); return; }
+  var day = function (v) { return new Date(v).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); };
+  var time = function (v) { return new Date(v).toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true }).replace(" ", "").toLowerCase(); };
+  m.innerHTML = '<p class="shop">Loading…</p>';
+  fetch("https://uungxatdvelljmaugzuz.supabase.co/rest/v1/rpc/track_info", { method: "POST", headers: { "Content-Type": "application/json", apikey: "sb_publishable_oE_-Yt6fovcOpIC01tnrpw_ueK-Zx7v" }, body: JSON.stringify({ p_token: k }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.shop) { msg("We couldn’t find this order. Ask the laundry to send the link again."); return; }
+      document.title = "Your clothes at " + d.shop;
+      if (d.cancelled) { msg("Order #" + esc(d.no) + " at " + esc(d.shop) + " was cancelled. Contact the laundry if you have a question."); return; }
+      if (d.gone) { msg("These clothes were collected a while ago, so this link has closed. Thank you for using " + esc(d.shop) + "."); return; }
+      var ready = d.status === "ready" || d.status === "told", picked = d.status === "picked";
+      var step = picked ? 3 : ready ? 2 : 1;
+      var row = function (n, title, sub) { return '<li class="' + (n <= step ? "done" : "") + '"><b>' + title + '</b>' + (sub ? "<span>" + sub + "</span>" : "") + "</li>"; };
+      var q = 0, p = 0;
+      var items = (d.items || []).map(function (it) {
+        q += it.q; p += it.q * it.pcs;
+        return '<div class="it"><span>' + it.q + " × " + esc(it.n) + (it.note ? " (" + esc(it.note) + ")" : "") + "</span>" + (it.pcs > 1 ? "<small>" + it.q * it.pcs + " pieces</small>" : "") + "</div>";
+      }).join("");
+      var due = !ready && !picked && d.collect ? '<p class="due">Expected ready: <b>' + day(d.collect) + "</b></p>" : "";
+      m.innerHTML = '<p class="shop">' + esc(d.shop) + " · Order #" + esc(d.no) + (d.mark ? " · Mark " + esc(d.mark) : "") + "</p>"
+        + "<h1>" + (picked ? "Your clothes have been collected" : ready ? "Your clothes are ready" : "We’re cleaning your clothes") + (d.express ? '<span class="tag">EXPRESS</span>' : d.wait ? '<span class="tag">WAIT &amp; GET</span>' : "") + "</h1>"
+        + '<div class="card"><ol class="steps">'
+        + row(1, "Received", day(d.at) + ", " + time(d.at))
+        + row(2, "Ready for pickup", ready ? "You can come for them" : picked ? "" : "We’ll message you when they’re ready")
+        + row(3, "Collected", picked && d.picked ? day(d.picked) : "")
+        + "</ol>" + due + "</div>"
+        + (items ? '<div class="card"><p class="lbl">Your clothes</p>' + items + '<p class="tot">' + q + " item" + (q === 1 ? "" : "s") + (p > q ? ", " + p + " pieces" : "") + "</p></div>" : "")
+        + foot;
+    })
+    .catch(function () { msg("Couldn’t load your order. Check your internet and open the link again."); });
+})();
+</script>
+</body>
+</html>
