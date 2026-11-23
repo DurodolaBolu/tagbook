@@ -633,7 +633,7 @@ textarea#rmk,textarea#nrm,textarea#cnote{width:100%;font:inherit;font-size:16px;
 .cpicked{display:flex;justify-content:space-between;align-items:center;background:var(--accent-soft);color:var(--accent-deep);border-radius:10px;padding:8px 12px;margin-top:8px;font-size:14px;font-weight:600}
 .cpicked button{border:0;background:transparent;color:inherit;text-decoration:underline;font:inherit;font-size:13px;padding:6px}
 /* Due soon on Orders */
-.duecard{padding:12px 14px}
+.duecard{padding:12px 14px;margin-bottom:14px}
 .dueg+.dueg{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .dueh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .dueh b{font-size:15px}.dueh b.late{color:var(--owes)}.dueh b.due{color:var(--accent)}
