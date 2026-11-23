@@ -1370,6 +1370,12 @@ async function disablePush() {
   if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); try { await sub.unsubscribe(); } catch (_) { } }
   pushNow = "off";
 }
+// Logging out: stop this login's alerts on this phone, but keep the phone's subscription, so whoever logs in next
+// (often the same owner) gets alerts again straight away. Unsubscribing here used to turn alerts off after every log out.
+async function forgetPushHere() {
+  const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
+  if (sub) await sb.from("push_subs").delete().eq("endpoint", sub.endpoint);
+}
 // keep this phone's subscription saved (the address can change after updates)
 async function syncPush() {
   if (!(own() || newOpts()) || !pushSupported() || Notification.permission !== "granted") return;
@@ -2975,7 +2981,7 @@ function wireAccount() {
     if (!r.ok) { toast(r.msg); return; }
     $("#np").value = ""; toast("New PIN saved. Use it next time you log in.");
   };
-  $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } try { await disablePush(); } catch (_) { } await sb.auth.signOut(); location.hash = ""; location.reload(); };
+  $("#out").onclick = async () => { if (!$("#out").dataset.sure) { $("#out").dataset.sure = "1"; $("#out").textContent = "Tap again to log out"; return; } try { await forgetPushHere(); } catch (_) { } await sb.auth.signOut(); location.hash = ""; location.reload(); };
 }
 function wireBusiness() {
   [["#oc", "collect_dates"], ["#ow", "wait_get_on"]].forEach(([id, k]) => { const el = $(id); if (el) el.onchange = async e => { const v = e.target.checked; shop[k] = v; savedToast(await put("shops", { id: shop.id }, { [k]: v })); markSetup("options"); if (k === "wait_get_on") renderSettings(); }; });
