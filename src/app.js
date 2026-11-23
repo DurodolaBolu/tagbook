@@ -133,7 +133,7 @@ async function fetchAll(table, cols, orderBy) {
 
 async function load() {
   const base = await Promise.all([
-    sb.from("shops").select("id,name,created_at,is_test,staff_prices,collect_dates,wait_get_on").single(),
+    sb.from("shops").select("id,name,created_at,is_test,staff_prices,collect_dates,wait_get_on,pay_token").single(),
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden", "sort"),
     fetchAll("customers", "id,name,mark,greet,greet_asked,inv_name"),
@@ -2011,8 +2011,8 @@ async function invoicePages(o, c = cust(o.cid)) {
       const bw = 300, bh = 64, bx = W - M - 30 - bw, by = y + 58;
       box(bx, by, bw, bh, 32, col);
       text("Tap to copy number", bx + bw / 2, by + 41, F(600, 22), "#fff", "center");
-      const q = new URLSearchParams({ a: p.acct_no, b: p.bank_name.trim(), n: p.acct_name.trim(), s: shopName(), t: String(due), r: invNo(o) });
-      const cv = pages[pages.length - 1]; (cv.tbLinks = cv.tbLinks || []).push({ x: bx, y: by, w: bw, h: bh, W, H, url: "https://tagbook.ordiventa.com/pay.html#" + q.toString() });
+      const q = new URLSearchParams({ k: shop.pay_token, t: String(due), r: invNo(o) });
+      const cv = pages[pages.length - 1]; (cv.tbLinks = cv.tbLinks || []).push({ x: bx, y: by, w: bw, h: bh, W, H, url: "https://tagbook.ordiventa.com/pay.html?" + q.toString() });
     }
     y += 196;
   }
@@ -2752,8 +2752,9 @@ const EXP_LIVE = Date.parse("2026-11-19T18:00:00+01:00");
 const XP_LIVE = Date.parse("2026-11-21T08:00:00+01:00");
 // Staff who can send bills: BrightWash first, everyone from 8am on 22 Nov (asked for by Mr Akiba of Impressions Laundry).
 const BILL_LIVE = Date.parse("2026-11-22T08:00:00+01:00");
-// "Tap to copy number" on invoices: BrightWash only until Bolu approves it for everyone (23 Nov 2026).
-const copyLive = () => !!shop && (shop.id === PHOTO_SHOP || location.hostname === "localhost");
+// "Tap to copy number" on invoices and the full text bill with the PDF: approved for every shop on 23 Nov 2026.
+// The link carries only the shop's pay token; the page looks up the account number, so a link can't be edited to show another account.
+const copyLive = () => !!shop && !!shop.pay_token;
 const billLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= BILL_LIVE || location.hostname === "localhost");
 const xpLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= XP_LIVE || location.hostname === "localhost");
 const expOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || Date.now() >= EXP_LIVE || location.hostname === "localhost");

@@ -34,19 +34,28 @@ footer a{color:var(--accent)}
   var m = document.getElementById("m");
   var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var foot = '<footer>Sent with <a href="https://tagbook.ordiventa.com">Tagbook</a></footer>';
-  // Details travel in the link after "#", so they are never sent to our server.
-  var q = new URLSearchParams(location.hash.slice(1));
-  var a = (q.get("a") || "").replace(/\D/g, ""), b = q.get("b") || "", n = q.get("n") || "", s = q.get("s") || "", r = q.get("r") || "";
-  var t = parseInt(q.get("t") || "0", 10) || 0;
-  if (a.length !== 10) { m.innerHTML = '<div class="card">This link is not complete. Ask the laundry to send the bill again.</div>' + foot; return; }
-  var naira = function (v) { return "₦" + v.toLocaleString("en-NG"); };
-  document.title = "Pay " + (s || "the laundry");
-  m.innerHTML = '<p class="shop">' + esc(s) + (r ? " · " + esc(r) : "") + '</p><h1>Pay by transfer</h1>'
-    + '<div class="card"><p class="lbl">Account number</p><p class="acct">' + esc(a) + '</p>'
-    + '<p class="bank">' + esc(b) + '<br>' + esc(n) + '</p>'
-    + '<button id="ca">Copy account number</button>'
-    + (t > 0 ? '<div class="amt"><span>Amount to pay</span><b>' + naira(t) + '</b></div><button class="ghost" id="ct">Copy amount</button>' : "")
-    + '</div><p class="hint">After paying, send your payment receipt to ' + esc(s || "the laundry") + ' on WhatsApp.</p>' + foot;
+  // The link carries the shop's pay token; the account details come from Tagbook, so the link can't be edited to show another account.
+  var q = new URLSearchParams(location.search);
+  var k = q.get("k") || "", r = (q.get("r") || "").slice(0, 20), t = parseInt(q.get("t") || "0", 10) || 0;
+  if (!/^[0-9a-f]{24}$/.test(k)) { m.innerHTML = '<div class="card">This link is not complete. Ask the laundry to send the bill again.</div>' + foot; return; }
+  var naira = function (v) { return "\u20A6" + v.toLocaleString("en-NG"); };
+  m.innerHTML = '<p class="shop">Loading\u2026</p>';
+  fetch("https://uungxatdvelljmaugzuz.supabase.co/rest/v1/rpc/pay_info", { method: "POST", headers: { "Content-Type": "application/json", apikey: "sb_publishable_oE_-Yt6fovcOpIC01tnrpw_ueK-Zx7v" }, body: JSON.stringify({ p_token: k }) })
+    .then(function (res) { return res.json(); })
+    .then(function (d) {
+      if (!d || !d.acct) { m.innerHTML = '<div class="card">We couldn\u2019t find these payment details. Ask the laundry to send the bill again.</div>' + foot; return; }
+      var a = String(d.acct), s = d.shop || "the laundry";
+      document.title = "Pay " + s;
+      m.innerHTML = '<p class="shop">' + esc(s) + (r ? " \u00B7 " + esc(r) : "") + '</p><h1>Pay by transfer</h1>'
+        + '<div class="card"><p class="lbl">Account number</p><p class="acct">' + esc(a) + '</p>'
+        + '<p class="bank">' + esc(d.bank) + '<br>' + esc(d.name) + '</p>'
+        + '<button id="ca">Copy account number</button>'
+        + (t > 0 ? '<div class="amt"><span>Amount to pay</span><b>' + naira(t) + '</b></div><button class="ghost" id="ct">Copy amount</button>' : "")
+        + '</div><p class="hint">After paying, send your payment receipt to ' + esc(s) + ' on WhatsApp.</p>' + foot;
+      document.getElementById("ca").onclick = function () { copy(a, this, "Copy account number"); };
+      var ct = document.getElementById("ct"); if (ct) ct.onclick = function () { copy(String(t), this, "Copy amount"); };
+    })
+    .catch(function () { m.innerHTML = '<div class="card">Couldn\u2019t load the payment details. Check your internet and open the link again.</div>' + foot; });
   var copy = function (txt, btn, label) {
     var ok = function () { btn.textContent = "Copied ✓"; btn.classList.add("done"); setTimeout(function () { btn.textContent = label; btn.classList.remove("done"); }, 2500); };
     var old = function () {
@@ -58,8 +67,6 @@ footer a{color:var(--accent)}
     };
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(ok, old); else old();
   };
-  document.getElementById("ca").onclick = function () { copy(a, this, "Copy account number"); };
-  var ct = document.getElementById("ct"); if (ct) ct.onclick = function () { copy(String(t), this, "Copy amount"); };
 })();
 </script>
 </body>
