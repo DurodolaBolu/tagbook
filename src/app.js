@@ -1572,7 +1572,7 @@ function lineEditor(it, i) {
   const nm = it.label || (item(it.id) || {}).name || "item";
   return `<div class="lned">
     <label for="lnn" style="margin-top:0">Colour or note</label><input id="lnn" maxlength="30" placeholder="e.g. green, or with stripes" value="${esc(it.note || "")}" autocomplete="off">
-    <div class="lnpc"><span>Pieces in one ${esc(nm)}<small>A senator (top and trouser) is 2. A bed sheet with 5 pillow cases is 6.</small></span>
+    <div class="lnpc"><span>Pieces in one ${esc(nm)}</span>
       <div class="qty"><button type="button" data-pcd aria-label="One piece less">−</button><b style="min-width:22px;text-align:center">${pcsOf(it)}</b><button type="button" data-pci aria-label="One piece more">+</button></div></div>
     ${it.qty > 1 ? `<button type="button" class="lnbtn" id="lnsplit">One ${esc(nm)} is a different colour? Put it on its own line</button>` : ""}
     <button type="button" class="btn btn-ghost" id="lndone" style="margin-top:6px">Done</button></div>`;
@@ -2150,7 +2150,7 @@ async function sendInvoice(o, btn, type) {
     // WhatsApp cuts long captions (about 1,000 characters), so a long bill falls back to the short caption plus bank details.
     const full = copyLive() ? message(o, type) : "";
     const short = () => { const tot = +o.m.total || calc(o).total, pd = +o.m.paid || 0, due = owed(o);
-      return `${invCaption(o, type)} The full list of clothes is in the invoice.\n\nTotal: ${naira(tot)}${pd ? `\nPaid: ${naira(pd)}` : ""}${due > 0 ? `\nBalance: ${naira(due)}` : ""}` + (due > 0 ? payTo() : ""); };
+      return `${invCaption(o, type)} The full list of clothes is in the invoice.${dutyText(o, true) ? `\n\n${dutyText(o, true)}` : ""}\n\nTotal: ${naira(tot)}${pd ? `\nPaid: ${naira(pd)}` : ""}${due > 0 ? `\nBalance: ${naira(due)}` : ""}` + (due > 0 ? payTo() : ""); };
     const text = !copyLive() ? invCaption(o, type) : full.length <= 1000 ? full : short();
     try { await navigator.share({ files: [f], text }); logSend("pdf", type); stampBill(o); }
     catch (e) {
