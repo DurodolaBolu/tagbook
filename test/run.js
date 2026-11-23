@@ -392,9 +392,6 @@ async function handle(route) {
     const C = process.env.TEAM_TEST; await page.setViewportSize({ width: 390, height: 1700 });
     await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(1000);
     await page.click('[data-st="staff"]'); await page.waitForTimeout(400);
-    await page.click('[data-crr="a"]'); await page.click('[data-crs="Grace"]'); await page.waitForTimeout(300);
-    console.log("staff chip added:", JSON.stringify(db.shops[0].crew), "| Grace chip gone:", !(await page.$('[data-crs="Grace"]')));
-    db.shops[0].crew = []; await page.reload(); await page.waitForTimeout(900); await page.click('[data-st="staff"]').catch(() => {}); await page.waitForTimeout(300);
     for (const [n, r] of [["Inyene", "c"], ["Effiong", "a"], ["Eke", "a"], ["Abas", "a"]]) { await page.click(`[data-crr="${r}"]`); await page.fill("#crn", n); await page.click("#cra"); await page.waitForTimeout(300); }
     console.log("crew saved:", JSON.stringify(db.shops[0].crew));
     await page.screenshot({ path: path.join(C, "team-settings.png"), fullPage: true });
