@@ -124,7 +124,12 @@ const pieceCount = items => (items || []).reduce((s, it) => s + it.qty * pcsOf(i
 const countTxt = o => { const n = o.items.reduce((s, it) => s + it.qty, 0), p = pieceCount(o.items); return `${n} item${n === 1 ? "" : "s"}${p > n ? `, ${p} pieces` : ""}`; };
 const andList = a => a.length < 2 ? (a[0] || "") : a.slice(0, -1).join(", ") + " & " + a[a.length - 1];
 // Who was on duty when the order was logged (names only, picked on the shop's phone each day).
-const dutyText = o => { const u = o.duty; if (!u) return ""; const w = (u.w || []).filter(Boolean); return [u.by ? `Prepared by ${u.by}` : "", w.length ? `Laundry attendant${w.length > 1 ? "s" : ""}: ${andList(w)}` : ""].filter(Boolean).join("\n"); };
+// The cashier who prepares and sends the bill: whoever is on duty on this phone now, else whoever sent it last.
+const billBy = o => (canBill() && typeof dutyNow === "function" && dutyNow() && dutyNow().by) || (o.duty && o.duty.bill) || "";
+const dutyText = (o, bill) => { const u = o.duty || {}, w = (u.w || []).filter(Boolean), by = bill ? billBy(o) : u.by;
+  return [by ? `${bill ? "Prepared by" : "Received by"} ${by}` : "", w.length ? `Laundry attendant${w.length > 1 ? "s" : ""}: ${andList(w)}` : ""].filter(Boolean).join("\n"); };
+// When a bill goes out, remember which cashier sent it.
+const stampBill = o => { const by = canBill() && dutyNow() && dutyNow().by; if (!by || !o || o.id === "sample" || (o.duty && o.duty.bill === by)) return; o.duty = { ...(o.duty || {}), bill: by }; put("orders", { id: o.id }, { duty: o.duty }); };
 const emptyMoney = () => ({ unit: null, custom: {}, delivery: 0, discount: 0, total: 0, billed_at: null, paid: 0, payments: [], express_amt: 0 });
 
 async function fetchAll(table, cols, orderBy) {
@@ -1792,7 +1797,7 @@ function comboBill(o, c, hi) {
   const parts = [o, o.combo].sort((a, b) => (b.express ? 1 : 0) - (a.express ? 1 : 0));
   const total = parts.reduce((s, q) => s + partTotal(q), 0), paid = parts.reduce((s, q) => s + (+q.m.paid || 0), 0), due = Math.max(0, total - paid);
   const sec = q => `${q.express ? "⚡ EXPRESS" : "NORMAL"} (Order #${q.no})${q.collect ? ` · Ready ${fmtDay(q.collect)}` : ""}\n${billLines(q)}`;
-  return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE ${invNo(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})${dutyText(o) ? `\n${dutyText(o)}` : ""}\n\n${parts.map(sec).join("\n\n")}\n\nTotal: ${naira(total)}${paid ? `\nPaid: ${naira(paid)}` : ""}${due ? `\nAmount to pay: ${naira(due)}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as each order is ready.\n\n_Sent with Tagbook_`;
+  return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE ${invNo(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})${dutyText(o, true) ? `\n${dutyText(o, true)}` : ""}\n\n${parts.map(sec).join("\n\n")}\n\nTotal: ${naira(total)}${paid ? `\nPaid: ${naira(paid)}` : ""}${due ? `\nAmount to pay: ${naira(due)}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as each order is ready.\n\n_Sent with Tagbook_`;
 }
 function billLines(o) {
   const k = calc(o);
@@ -1806,9 +1811,9 @@ function message(o, type) {
     return `${hi}, ${shopName()} has received your clothes.\nOrder #${o.no} · Mark ${c.mark} · ${countTxt(o)}${spTag(o)}\n\n${list}${dutyText(o) ? `\n\n${dutyText(o)}` : ""}${pairLine(o)}${o.remarks ? `\n\nNoted on your clothes: ${o.remarks.split("; ").join(", ")}` : ""}${o.money ? `\nMoney found in your pocket: ${naira(o.money)}. We will return it when you collect.` : ""}${listPhotoLine(o)}${o.collect ? `\n\nCollection: ${fmtCollect(o.collect)}` : ""}${o.m.paid ? `\n\nPayment received: ${naira(o.m.paid)}` : ""}\n\nWe will let you know when your clothes are ready, and send your bill with it.\n\n_Sent with Tagbook_`;
   }
   const where = liveBranches().length > 1 && branchName(o.branch) ? `\nCollect at: ${branchName(o.branch)}` : "";
-  if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${countTxt(o)}${dutyText(o) ? `\n${dutyText(o)}` : ""}\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
+  if (type === "ready") return `${hi}, your clothes are ready at ${shopName()}.${where}\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${countTxt(o)}${dutyText(o, true) ? `\n${dutyText(o, true)}` : ""}\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\n_Sent with Tagbook_`;
   if (type === "early" && o.combo) return comboBill(o, c, hi);
-  if (type === "early") return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${countTxt(o)}${dutyText(o) ? `\n${dutyText(o)}` : ""}\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as they are ready.\n\n_Sent with Tagbook_`;
+  if (type === "early") return `${hi}, here is your bill from ${shopName()}.\n\nINVOICE INV-${o.no}${spTag(o)}\nDropped: ${fmtDay(o.at)}\nDate: ${fmtDay(Date.now())}\nCustomer: ${c.greet ? "" : `${c.name} `}(Mark ${c.mark})\n${countTxt(o)}${dutyText(o, true) ? `\n${dutyText(o, true)}` : ""}\n\n${billLines(o)}\n\nTotal: ${naira(o.m.total)}${o.m.paid ? `\nPaid: ${naira(o.m.paid)}` : ""}${owed(o) ? `\nAmount to pay: ${naira(owed(o))}${payTo()}` : "\nFully paid. Thank you."}\n\nYour clothes are being cleaned. We will let you know as soon as they are ready.\n\n_Sent with Tagbook_`;
   return `${hi}, a reminder from ${shopName()}: invoice INV-${o.no} (clothes dropped ${fmtDay(o.at)}) has ${naira(owed(o))} still to pay.${payTo()}\n\nThank you.\n_Sent with Tagbook_`;
 }
 const waFmt = t => esc(t).replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<i>$2</i>").replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g, "$1<b>$2</b>");
@@ -1855,7 +1860,7 @@ function receiptHtml(o) {
   const bank = priced && due && hasBank() ? (() => { const b = sPriv(); return `<div class="rsep"></div><div class="rc">Pay by transfer to<br><b>${esc(b.bank_name.trim())}</b><br><b>${esc(b.acct_no)}</b><br>${esc(b.acct_name.trim())}</div>`; })() : "";
   return `<div class="rhead"><b>${esc(shop.name)}</b>${liveBranches().length > 1 ? `<span>${esc(branchName(o.branch))}</span>` : ""}</div>
     <div class="rsep"></div>
-    ${row("Receipt no.", "#" + o.no)}${row("Customer", esc(c.name))}${row("Tag mark", esc(c.mark))}${row("Dropped", fmtDay(o.at))}${o.collect ? row("Collection", esc(fmtCollect(o.collect))) : ""}${o.wait ? row("Service", "Wait & get") : ""}${row("Printed", fmtDay(Date.now()))}${o.duty && o.duty.by ? row("Prepared by", esc(o.duty.by)) : ""}${o.duty && (o.duty.w || []).length ? row("Attendants", esc(andList(o.duty.w))) : ""}
+    ${row("Receipt no.", "#" + o.no)}${row("Customer", esc(c.name))}${row("Tag mark", esc(c.mark))}${row("Dropped", fmtDay(o.at))}${o.collect ? row("Collection", esc(fmtCollect(o.collect))) : ""}${o.wait ? row("Service", "Wait & get") : ""}${row("Printed", fmtDay(Date.now()))}${billBy(o) ? row("Prepared by", esc(billBy(o))) : ""}${o.duty && (o.duty.w || []).length ? row("Attendants", esc(andList(o.duty.w))) : ""}
     <div class="rsep"></div>
     ${o.items.map((it, i) => `<div class="ri"><div class="rr"><span>${it.qty} × ${esc(pname(it) + pcsTag(it))}</span><span>${priced ? naira(unitPrice(o, it, i) * it.qty) : ""}</span></div><small>${SERVICES[it.svc]}</small></div>`).join("")}
     <div class="rsep"></div>
@@ -1997,7 +2002,7 @@ async function invoicePages(o, c = cust(o.cid)) {
   const kv = (kk, v) => { text(kk, c2, ry, F(400, 22), MUTED); if (v) text(v, c2 + 200, ry, F(600, 22)); ry += 36; };
   kv("Invoice no.", invNo(o)); kv("Dropped off", fmtDate(o.at)); kv("Invoice date", fmtDate(Date.now()));
   kv("Items", countTxt({ items: parts.flatMap(q => q.items) }));
-  if (o.duty && o.duty.by) kv("Prepared by", fit(o.duty.by, W - M - c2 - 200, F(600, 22)));
+  if (billBy(o)) kv("Prepared by", fit(billBy(o), W - M - c2 - 200, F(600, 22)));
   if (o.duty && (o.duty.w || []).length) kv("Attendants", fit(andList(o.duty.w), W - M - c2 - 200, F(600, 22)));
   if (o.express || o.wait) kv("Service", o.wait ? "Wait & get" : "Express");
   kv("Clothes", o.status === "picked" ? "Collected" : o.status === "ready" || o.status === "told" ? "Ready for pickup" : "Being cleaned");
@@ -2131,7 +2136,7 @@ const BILL_STAGES = ["ready", "owe", "early"];
 function logSend(kind, stage) { if (!canBill() || !shop || !BILL_STAGES.includes(stage)) return; sb.from("send_log").insert({ shop_id: shop.id, kind, stage }).then(() => { }, () => { }); }
 let earlyOpen = null; // order whose "send the bill now" panel is open // the last invoice made, so a second tap shares at once
 async function sendInvoice(o, btn, type) {
-  const key = [o.id, o.status, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length].join(":"), label = "Send invoice (PDF)";
+  const key = [o.id, o.status, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length, billBy(o)].join(":"), label = "Send invoice (PDF)";
   let f = invReady && invReady.key === key ? invReady.file : null;
   if (!f) {
     btn.disabled = true; btn.textContent = "Making the invoice…";
@@ -2145,7 +2150,7 @@ async function sendInvoice(o, btn, type) {
     const short = () => { const tot = +o.m.total || calc(o).total, pd = +o.m.paid || 0, due = owed(o);
       return `${invCaption(o, type)} The full list of clothes is in the invoice.\n\nTotal: ${naira(tot)}${pd ? `\nPaid: ${naira(pd)}` : ""}${due > 0 ? `\nBalance: ${naira(due)}` : ""}` + (due > 0 ? payTo() : ""); };
     const text = !copyLive() ? invCaption(o, type) : full.length <= 1000 ? full : short();
-    try { await navigator.share({ files: [f], text }); logSend("pdf", type); }
+    try { await navigator.share({ files: [f], text }); logSend("pdf", type); stampBill(o); }
     catch (e) {
       // Some phones only allow sharing straight after a tap; the invoice is ready now, so one more tap sends it.
       if (e && e.name === "NotAllowedError") { btn.textContent = "Invoice ready. Tap to send"; return; }
@@ -2153,7 +2158,7 @@ async function sendInvoice(o, btn, type) {
     }
     return;
   }
-  saveFile(f); logSend("pdf", type); toast("Invoice saved to your downloads. Attach it in WhatsApp.");
+  saveFile(f); logSend("pdf", type); stampBill(o); toast("Invoice saved to your downloads. Attach it in WhatsApp.");
 }
 
 /* Settings, Invoice tab (owner only) */
@@ -2676,7 +2681,7 @@ function openOrder(no) {
     <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b>
       <span>${canBill() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${speedLabel(o) ? " · " + speedLabel(o) : ""}</span></div></div>
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
-    <p class="hint">Dropped ${fmtDay(o.at)}${dutyText(o) ? "<br>" + esc(dutyText(o)).replace("\n", "<br>") : ""}</p>
+    <p class="hint">Dropped ${fmtDay(o.at)}${o.duty && o.duty.by ? "<br>Received by " + esc(o.duty.by) : ""}${o.duty && o.duty.bill ? "<br>Bill sent by " + esc(o.duty.bill) : ""}${o.duty && (o.duty.w || []).length ? "<br>Laundry attendants: " + esc(andList(o.duty.w)) : ""}</p>
     ${noteBlock(o)}
     ${photoBlock(o)}
     ${html}
@@ -2706,9 +2711,9 @@ function openOrder(no) {
     if (await put("customers", { id: c.id }, { inv_name: keep })) { c.inv_name = keep; invReady = null; toast("Saved"); }
     btEdit = null; openOrder(o.no);
   };
-  sh.querySelectorAll("[data-wtxt]").forEach(a => a.addEventListener("click", () => logSend("text", a.dataset.wtxt)));
+  sh.querySelectorAll("[data-wtxt]").forEach(a => a.addEventListener("click", () => { logSend("text", a.dataset.wtxt); if (BILL_STAGES.includes(a.dataset.wtxt)) stampBill(o); }));
   sh.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
-    const t = message(o, b.dataset.copy); logSend("text", b.dataset.copy);
+    const t = message(o, b.dataset.copy); logSend("text", b.dataset.copy); if (BILL_STAGES.includes(b.dataset.copy)) stampBill(o);
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast("Message copied")).catch(() => {
       const r = document.createRange(); r.selectNodeContents($("#wamsg-" + b.dataset.copy)); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Message selected. Copy it.");
     });

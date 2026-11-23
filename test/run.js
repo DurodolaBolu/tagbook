@@ -413,6 +413,7 @@ async function handle(route) {
     console.log("saved items:", JSON.stringify(o.items), "| duty:", JSON.stringify(o.duty));
     await page.goto("http://localhost:8787/#order-" + o.no); await page.reload(); await page.waitForTimeout(1200);
     await page.screenshot({ path: path.join(C, "order.png"), fullPage: true });
+    db.shops[0].crew.push({ n: "Ada", r: "c" }); await page.evaluate(id => localStorage.setItem("tb-duty-" + id, JSON.stringify({ by: "Ada", w: ["Effiong", "Eke", "Abas"] })), db.shops[0].id);
     db.customers.forEach(c => { c.greet_asked = true; }); await page.reload(); await page.waitForTimeout(1200);
     await page.click("details.early summary").catch(() => {}); await page.waitForTimeout(300); await page.click("details.early .wtext summary").catch(() => {}); await page.waitForTimeout(200);
     const txt = await page.evaluate(() => [...document.querySelectorAll(".wa")].map(x => x.innerText).join("\n----\n"));
@@ -421,6 +422,7 @@ async function handle(route) {
     const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
     await page.click('details.early [data-pdf="early"]').catch(e => console.log("no pdf btn"));
     const f = await dl; if (f) { const fp = path.join(C, "inv.pdf"); await f.saveAs(fp); console.log("pdf ok", fs.statSync(fp).size); }
+    console.log("bill sender saved:", JSON.stringify(db.orders.find(q => q.id === o.id).duty));
     console.log("errors:", errors.slice(0, 5));
     process.exit(0);
   }
