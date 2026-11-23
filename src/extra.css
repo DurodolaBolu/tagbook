@@ -39,12 +39,12 @@ h2.ptitle{font-size:24px;font-weight:700;margin:4px 0 6px}
 .pedit label:first-child{margin-top:0}
 .pedit .row .mini{flex:none}.pedit .row{justify-content:space-between}
 /* Price list: laptop table */
-.ptable{border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.ptable .ph,.ptable .pr{display:grid;grid-template-columns:minmax(160px,1.6fr) repeat(4,minmax(90px,1fr)) 84px;gap:8px;align-items:center;padding:6px 10px}
+.ptable{border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.ptable .ph,.ptable .pr{display:grid;grid-template-columns:minmax(120px,1.5fr) repeat(var(--nsvc,5),minmax(60px,1fr)) var(--pcol,0px) 58px;gap:4px;align-items:center;padding:6px 10px}
 .ptable .ph{background:var(--bg);font-size:13px;font-weight:600;color:var(--muted);padding-block:10px}
 .ptable .pr{border-top:1px solid var(--line)}
 .ptable .pr:hover{background:var(--bg)}
-.ptable input{padding:6px 8px;font-size:15px;border-color:transparent;background:transparent}
+.ptable input{padding:6px 4px;font-size:15px;border-color:transparent;background:transparent}
 .ptable input:hover{border-color:var(--line);background:var(--card)}
 .ptable input:focus{background:var(--card)}
 .ptable input[data-pp]{text-align:right;font-variant-numeric:tabular-nums}
@@ -520,7 +520,7 @@ details.wtext[open] summary::after{content:" ▴"}
 .lnew{margin:18px 0 0;font-size:15px;color:var(--muted);text-align:center}
 .lform{display:flex;flex-direction:column;width:100%;max-width:420px;text-align:left;margin-top:8px}
 .lform label{font-size:14px;font-weight:500;margin:16px 0 6px}
-.lform input{min-height:50px;padding:12px 14px;font-size:16px;border:1px solid var(--line,#D5DCD9);border-radius:10px;background:var(--card);color:var(--fg);box-sizing:border-box;width:100%}
+.lform input{min-height:50px;padding:12px 14px;font-size:16px;border:1.5px solid var(--edge);border-radius:10px;background:var(--card);color:var(--fg);box-sizing:border-box;width:100%}
 .lform .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .lform .btn{margin-top:14px}
 .lform .hint{margin:6px 0 0;font-size:13px}
@@ -745,3 +745,5 @@ label .opt{font-size:13px}
 .lnpc small{color:var(--muted);font-size:13px}
 .duty.need{border:1.5px solid var(--owes)}
 .duty.need .dch{color:var(--owes)}
+.ptable input[data-ppc]{text-align:right}
+.scard .ptable input{min-height:0;padding:6px 4px}

@@ -1722,15 +1722,8 @@ function renderNew() {
     view.querySelector("[data-pcd]").onclick = () => setPcs(pcsOf(it) - 1);
     view.querySelector("[data-pci]").onclick = () => setPcs(pcsOf(it) + 1);
     const sp = $("#lnsplit"); if (sp) sp.onclick = () => { it.qty--; const { photos, pn, x, note, ...rest } = it; d.items.splice(d.ed + 1, 0, { ...rest, qty: 1 }); d.ed = d.ed + 1; renderNew(); const n = $("#lnn"); if (n) n.focus(); };
-    $("#lndone").onclick = async () => {
-      if (!it.note) delete it.note;
-      d.ed = null; renderNew();
-      // The owner's choice of pieces becomes the default for that item on new orders.
-      const p = item(it.id);
-      if (own() && p && !it.label && !p.custom && (+p.pieces || 1) !== pcsOf(it) && await put("items", { id: p.id }, { pieces: pcsOf(it) })) {
-        p.pieces = pcsOf(it); toast(`${p.name} now counts as ${pcsOf(it)} piece${pcsOf(it) === 1 ? "" : "s"} on new orders`);
-      }
-    };
+    // Pieces changed here are for this order only; the usual number for each item is set in the price list.
+    $("#lndone").onclick = () => { if (!it.note) delete it.note; d.ed = null; renderNew(); };
   } else d.ed = null;
   $("#clr").onclick = () => { reset(); renderNew(); };
   $("#save").onclick = async () => {
@@ -3370,11 +3363,12 @@ function priceListHtml() {
   const editor = x => `<div class="pedit">
       <label for="pn-${x.id}">Item name</label><input id="pn-${x.id}" data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off">
       <div class="pgrid">${Object.entries(SERVICES).map(([k, l]) => `<div><label for="pp-${x.id}-${k}">${l} (₦)</label><input id="pp-${x.id}-${k}" data-pp="${x.id}" data-k="${k}" ${moneyAttrs} value="${x.p[k] != null ? x.p[k] : ""}" placeholder="Not offered"></div>`).join("")}</div>
+      ${teamLive() ? `<div class="pgrid"><div><label for="pc-${x.id}">Pieces in one</label><input id="pc-${x.id}" data-ppc="${x.id}" inputmode="numeric" maxlength="2" value="${x.pieces || 1}"></div></div>` : ""}
       <div class="row" style="margin-top:10px"><button class="mini danger" data-prm="${x.id}">Remove item</button><button class="mini" data-pclose>Done</button></div></div>`;
-  const summary = x => Object.keys(SERVICES).filter(k => x.p[k] != null).map(k => `${shortSvc[k]} ${naira(x.p[k])}`).join(" · ") || "No prices yet";
+  const summary = x => (Object.keys(SERVICES).filter(k => x.p[k] != null).map(k => `${shortSvc[k]} ${naira(x.p[k])}`).join(" · ") || "No prices yet") + (teamLive() && x.pieces > 1 ? ` · ${x.pieces} pieces` : "");
   const rows = wide.matches
-    ? `<div class="ptable" role="table"><div class="ph" role="row"><span>Item</span>${Object.values(SERVICES).map(l => `<span>${l}</span>`).join("")}<span></span></div>
-        ${list.map(x => `<div class="pr" role="row"><input data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off" aria-label="Item name">${Object.keys(SERVICES).map(k => cell(x, k)).join("")}<button class="plink" data-prm="${x.id}" aria-label="Remove ${esc(x.name)}">Remove</button></div>`).join("")}</div>`
+    ? `<div class="ptable" role="table" style="--nsvc:${Object.keys(SERVICES).length};--pcol:${teamLive() ? "48px" : "0px"}"><div class="ph" role="row"><span>Item</span>${Object.values(SERVICES).map(l => `<span>${l}</span>`).join("")}${teamLive() ? "<span>Pieces</span>" : "<span></span>"}<span></span></div>
+        ${list.map(x => `<div class="pr" role="row"><input data-pn="${x.id}" value="${esc(x.name)}" autocomplete="off" aria-label="Item name">${Object.keys(SERVICES).map(k => cell(x, k)).join("")}${teamLive() ? `<input data-ppc="${x.id}" inputmode="numeric" maxlength="2" value="${x.pieces || 1}" aria-label="Pieces in one ${esc(x.name)}">` : "<span></span>"}<button class="plink" data-prm="${x.id}" aria-label="Remove ${esc(x.name)}">Remove</button></div>`).join("")}</div>`
     : `<div class="plist">${list.map(x => priceOpen === x.id ? `<div class="pli open">${editor(x)}</div>`
         : `<button class="pli" data-popen="${x.id}"><b>${esc(x.name)}</b><span>${summary(x)}</span></button>`).join("")}</div>`;
   const guide = own() && !setupState().prices ? `<div class="pguide"><b>Your prices aren't set yet.</b> Tap each item and type what your shop charges. The step ticks by itself once you save a price.<br>Have your price list on paper? <a href="https://wa.me/2348120756325?text=${encodeURIComponent("Hello, here is my price list for Tagbook")}" target="_blank" rel="noopener">Send us a photo on WhatsApp</a> and we'll put it in for you.</div>` : "";
@@ -3384,7 +3378,7 @@ function priceListHtml() {
     + (!addOpen ? `<button class="btn btn-ghost" id="addopen">+ Add an item</button><p class="hint">Special items, like a wedding gown, get their price when you make the bill.</p>`
     : card("Add an item", "Special items, like a wedding gown, get their price when you make the bill.",
       `<label for="ni">Item name</label><input id="ni" placeholder="e.g. Curtain (per panel)" autocomplete="off">
-       <div class="pgrid">${Object.entries(SERVICES).map(([k, l]) => `<div><label for="na-${k}">${l} (₦)</label><input id="na-${k}" data-na="${k}" ${moneyAttrs} placeholder="Not offered"></div>`).join("")}</div>
+       <div class="pgrid">${Object.entries(SERVICES).map(([k, l]) => `<div><label for="na-${k}">${l} (₦)</label><input id="na-${k}" data-na="${k}" ${moneyAttrs} placeholder="Not offered"></div>`).join("")}${teamLive() ? `<div><label for="npc">Pieces in one</label><input id="npc" inputmode="numeric" maxlength="2" value="1"></div>` : ""}</div>
        <div class="row"><button class="btn btn-ghost" id="addclose">Cancel</button><button class="btn btn-primary" id="nadd">Add to price list</button></div>`));
 }
 function wirePrices() {
@@ -3401,6 +3395,10 @@ function wirePrices() {
   view.querySelectorAll("[data-pclose]").forEach(b => b.onclick = () => { priceOpen = null; renderSettings(); });
   view.querySelectorAll("[data-pn]").forEach(i => i.onchange = () => { const x = item(i.dataset.pn); const v = i.value.trim().slice(0, 40); if (!v) { i.value = x.name; return; } x.name = v; savePrice(x); });
   view.querySelectorAll("[data-pp]").forEach(i => { moneyInput(i, () => { }); i.onchange = () => { const x = item(i.dataset.pp); x.p = { ...x.p, [i.dataset.k]: i.value === "" ? null : num(i.value) }; savePrice(x); }; });
+  view.querySelectorAll("[data-ppc]").forEach(i => {
+    i.oninput = () => { const v = i.value.replace(/\D/g, ""); if (v !== i.value) i.value = v; };
+    i.onchange = async () => { const x = item(i.dataset.ppc), n = Math.max(1, Math.min(50, parseInt(i.value, 10) || 1)); i.value = n; if (n === (x.pieces || 1)) return; x.pieces = n; savedToast(await put("items", { id: x.id }, { pieces: n })); };
+  });
   view.querySelectorAll("[data-prm]").forEach(b => b.onclick = async () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = wide.matches ? "Sure?" : "Tap again to remove"; return; } const x = item(b.dataset.prm); x.hidden = true; priceOpen = null; renderSettings(); if (await put("items", { id: x.id }, { hidden: true })) toast("Item removed from the price list"); });
   if ($("#addopen")) { $("#addopen").onclick = () => { addOpen = true; renderSettings(); $("#ni").focus(); }; return; }
   $("#addclose").onclick = () => { addOpen = false; renderSettings(); };
@@ -3411,7 +3409,8 @@ function wirePrices() {
     if (!any) { toast("Set a price for at least one service"); return; }
     $("#nadd").disabled = true;
     const sort = Math.max(0, ...PRICES.filter(x => !x.custom).map(x => x.sort)) + 1;
-    const { data, error } = await sb.from("items").insert({ shop_id: shop.id, name: n.slice(0, 40), services: Object.keys(pr).filter(k => pr[k] != null), sort }).select("id").single();
+    const pcs = $("#npc") ? Math.max(1, Math.min(50, parseInt($("#npc").value, 10) || 1)) : 1;
+    const { data, error } = await sb.from("items").insert({ shop_id: shop.id, name: n.slice(0, 40), services: Object.keys(pr).filter(k => pr[k] != null), sort, ...(pcs > 1 ? { pieces: pcs } : {}) }).select("id").single();
     if (error) { toast(failMsg(error)); $("#nadd").disabled = false; return; }
     const r2 = await sb.from("item_prices").insert({ item_id: data.id, shop_id: shop.id, prices: pr });
     if (r2.error) toast(failMsg(r2.error)); else { toast(`${n} added`); markSetup("prices"); }

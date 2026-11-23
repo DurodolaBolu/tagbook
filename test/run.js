@@ -395,6 +395,13 @@ async function handle(route) {
     for (const [n, r] of [["Inyene", "c"], ["Effiong", "a"], ["Eke", "a"], ["Abas", "a"]]) { await page.click(`[data-crr="${r}"]`); await page.fill("#crn", n); await page.click("#cra"); await page.waitForTimeout(300); }
     console.log("crew saved:", JSON.stringify(db.shops[0].crew));
     await page.screenshot({ path: path.join(C, "team-settings.png"), fullPage: true });
+    db.items.find(i => i.id === "it2").pieces = 2;
+    await page.click('[data-st="prices"]'); await page.waitForTimeout(400); await page.click('[data-popen="it2"]').catch(() => {}); await page.waitForTimeout(300);
+    await page.fill('[data-ppc="it2"]', "3"); await page.press('[data-ppc="it2"]', "Tab"); await page.waitForTimeout(400);
+    console.log("pieces from price list:", db.items.find(i => i.id === "it2").pieces); db.items.find(i => i.id === "it2").pieces = 2;
+    await page.screenshot({ path: path.join(C, "prices.png"), fullPage: true });
+    await page.setViewportSize({ width: 1200, height: 900 }); await page.reload(); await page.waitForTimeout(900); await page.click('[data-st="prices"]').catch(() => {}); await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(C, "prices-wide.png") }); console.log("ptable:", JSON.stringify(await page.evaluate(() => { const r = document.querySelector(".ptable .pr"); const cs = getComputedStyle(r); return { cols: cs.gridTemplateColumns, w: r.clientWidth, inp: [...r.querySelectorAll("input")].map(i => [i.clientWidth, getComputedStyle(i).paddingRight, i.scrollWidth]) }; }))); await page.setViewportSize({ width: 390, height: 1700 });
     await page.goto("http://localhost:8787/#log"); await page.reload(); await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(C, "duty-pick.png") });
     { const n0 = db.orders.length; await page.click("[data-pick] >> nth=0"); await page.waitForTimeout(300); await page.click('[data-add="it0"]'); await page.click("#save"); await page.waitForTimeout(800);
@@ -404,10 +411,9 @@ async function handle(route) {
     console.log("duty bar:", (await page.textContent(".duty")).replace(/\s+/g, " "));
     await page.click("[data-pick] >> nth=0"); await page.waitForTimeout(300);
     await page.click('[data-add="it2"]'); await page.click('[data-add="it0"]'); await page.click('[data-add="it0"]'); await page.waitForTimeout(200);
-    await page.click('[data-ed="0"]'); await page.fill("#lnn", "up and down"); await page.click("[data-pci]"); await page.waitForTimeout(150);
+    await page.click('[data-ed="0"]'); await page.fill("#lnn", "up and down"); await page.waitForTimeout(150);
     await page.screenshot({ path: path.join(C, "line-edit.png"), fullPage: true });
     await page.click("#lndone"); await page.waitForTimeout(400);
-    console.log("default pieces saved:", db.items.find(i => i.id === "it2").pieces);
     await page.click('[data-ed="1"]'); await page.fill("#lnn", "white"); await page.click("#lnsplit"); await page.fill("#lnn", "green"); await page.click("#lndone"); await page.waitForTimeout(200);
     await page.screenshot({ path: path.join(C, "log-lines.png"), fullPage: true });
     await page.click("#save"); await page.waitForTimeout(1500);
