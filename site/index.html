@@ -25,18 +25,18 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261123153110";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261123155041";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
-  --bg:#F3F5F3; --card:#FFFFFF; --fg:#03191E; --muted:#55605F; --line:#DFE4E1; --field:#7E8A86;
+  --bg:#F3F5F3; --card:#FFFFFF; --fg:#03191E; --muted:#55605F; --line:#DFE4E1; --field:#7E8A86; --edge:#B7C1BD;
   --accent:#0F7B5F; --accent-ink:#FFFFFF; --accent-soft:#DDF3EA; --accent-deep:#0B4F3D;
   --warn:#92400E; --warn-soft:#FEF3C7; --owes:#B42318; --owes-soft:#FDECEA; --wait-soft:#ECEFED; --wa:#E7FFDB; --wa-ink:#111B21;
   --font:"IBM Plex Sans","Segoe UI",system-ui,sans-serif; color-scheme:light;
 }
 /* Light by default whatever the phone is set to; dark only when chosen in Settings */
 :root[data-tb="dark"]{
-  --bg:#0C1513; --card:#15211E; --fg:#E8EEEC; --muted:#9AA7A3; --line:#26332F; --field:#62726D;
+  --bg:#0C1513; --card:#15211E; --fg:#E8EEEC; --muted:#9AA7A3; --line:#26332F; --field:#62726D; --edge:#3E504A;
   --accent:#2BB38C; --accent-ink:#04201A; --accent-soft:#16372E; --accent-deep:#8FE0C6;
   --warn:#F5B454; --warn-soft:#3A2A10; --owes:#F2877C; --owes-soft:#3A1714; --wait-soft:#1F2B28; --wa:#173A2A; --wa-ink:#E3F5E8; color-scheme:dark}
 *{box-sizing:border-box}
@@ -55,7 +55,7 @@ header{display:flex;justify-content:space-between;align-items:center;gap:12px;pa
 .role button{flex:1;border:0;background:transparent;font:inherit;font-size:16px;padding:8px;border-radius:9px;color:var(--muted);cursor:pointer}
 .role button[aria-pressed="true"]{background:var(--fg);color:var(--bg);font-weight:600}
 .role-note{font-size:13px;color:var(--muted);margin:-8px 0 14px}
-select,input{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+select,input,textarea{font:inherit;color:var(--fg);background:var(--card);border:1.5px solid var(--edge);border-radius:10px;padding:10px 12px;width:100%}
 select:focus,input:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .alert{background:var(--accent-soft);color:var(--accent-deep);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:16px;display:flex;justify-content:space-between;gap:10px;align-items:center}
 .alert button{border:0;background:var(--accent);color:var(--accent-ink);font:inherit;font-size:15px;font-weight:600;border-radius:8px;padding:6px 10px;cursor:pointer;white-space:nowrap}
@@ -683,7 +683,7 @@ details.wtext[open] summary::after{content:" ▴"}
 .iswatch button[aria-pressed=true]{box-shadow:0 0 0 3px var(--c)}
 .iprev{border:1px solid var(--line,#D5DCD9);border-radius:10px;overflow:hidden;background:#fff;max-width:420px}
 .iprev img{display:block;width:100%;min-height:200px}
-.scard textarea{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--line,#D5DCD9);border-radius:10px;resize:vertical;box-sizing:border-box;background:var(--card);color:var(--fg)}
+.scard textarea{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1.5px solid var(--edge);border-radius:10px;resize:vertical;box-sizing:border-box;background:var(--card);color:var(--fg)}
 .billto{margin:8px 0 2px;font-size:15px;color:var(--muted)}
 .billto b{color:var(--fg)}
 .billto button{border:0;background:none;color:var(--accent);font:inherit;font-weight:500;text-decoration:underline;padding:6px 4px;cursor:pointer}
@@ -785,7 +785,7 @@ details.early[open]>summary::after{content:" ▴"}
 .toggle input{flex:none}
 .cwhen{gap:8px}.cwhen input{flex:1;min-width:0;margin:0}
 label .opt{font-weight:400;color:var(--muted)}
-textarea#rmk,textarea#nrm,textarea#cnote{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);resize:vertical}
+textarea#rmk,textarea#nrm,textarea#cnote{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--edge);background:var(--card);color:var(--fg);resize:vertical}
 .onotes{margin:6px 0 4px;font-size:15px}.onotes p{margin:2px 0}.onotes .mini{margin-top:6px}
 .onoteedit{margin-top:8px}
 .who .due{color:var(--accent)}.who .late{color:var(--owes)}
@@ -948,7 +948,7 @@ label .opt{font-size:13px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261123153110"></script>
+<script src="/app.js?v=20261123155041"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

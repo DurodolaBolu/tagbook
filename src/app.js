@@ -1544,12 +1544,12 @@ function customerBlock() {
   // new customer: phone first (it might still be someone we know), then name and mark
   const existing = d.phone.length === 11 && d.found && d.found !== "loading" ? d.found : null;
   let b = `<div class="newc"><div class="row" style="justify-content:space-between;align-items:center"><b>New customer</b><button class="mini" id="cback">Back to search</button></div>
-    <label for="ph">Phone number</label><input id="ph" type="text" inputmode="tel" placeholder="0803 412 7790" value="${d.phone}" autocomplete="off">`;
+    <label for="ph">Phone number</label><input id="ph" type="text" inputmode="tel" value="${d.phone}" autocomplete="off">`;
   if (d.phone.length === 11 && d.found === "loading") b += `<p class="hint">Checking this number…</p>`;
   else if (existing) b += `<div class="found">This number is already a customer: <b>${esc(existing.name)}</b>, mark <b>${esc(existing.mark)}</b>. <button class="mini" id="cuse" style="margin-left:6px">Use</button></div>`;
   else if (d.phone.length === 11 && d.found === null) {
     const clash = d.hasMark === "yes" && d.mark && markTaken(d.mark);
-    b += `<label for="nm">Customer name</label><input id="nm" placeholder="e.g. Bola Ogun" value="${esc(d.name)}" autocomplete="off">
+    b += `<label for="nm">Customer name</label><input id="nm" value="${esc(d.name)}" autocomplete="off">
       ${own() ? `<label>How do you greet them in messages?</label>${greetChips(d.greet, "data-gr", d.greetOther)}
       <p class="gprev" id="gprev">Messages will start: <b>${d.greet ? `${hello({ greet: d.greet })},` : d.greetOther ? "Hello …," : `Hello ${esc((d.name.trim() || "Bola").split(" ")[0])},`}</b></p>` : ""}
       <label>Does this customer already have a mark on their clothes?</label>
@@ -1779,6 +1779,9 @@ function renderNew() {
   function showErr(err) { const e = $("#saveerr"); e.textContent = err; e.hidden = false; toast(err); e.scrollIntoView({ block: "center", behavior: "smooth" }); }
 }
 
+/* Phone fields take numbers only (spaces and + are kept for 0803 412 7790 and +234 numbers). */
+document.addEventListener("input", e => { const t = e.target; if (t && t.matches && t.matches('input[inputmode="tel"]')) { const v = t.value.replace(/[^\d +]/g, ""); if (v !== t.value) { const p = Math.max(0, (t.selectionStart || v.length) - (t.value.length - v.length)); t.value = v; try { t.setSelectionRange(p, p); } catch (_) { } } } }, true);
+
 /* Names typed or pasted in: drop invisible characters WhatsApp copies along, squeeze spaces. */
 const tidy = v => String(v || "").replace(/[\u200B-\u200F\u2060\uFEFF]/g, "").replace(/\s+/g, " ").trim();
 const NAME_MAX = 50;
@@ -1943,7 +1946,7 @@ const partTotal = q => q.billed ? +q.m.total || 0 : calc(q).total;
 const billName = c => (c.inv_name || "").trim() || c.name;
 let btEdit = null; // id of the customer whose invoice name is being edited
 const billToLine = c => btEdit === c.id
-  ? `<label for="btn-in" class="wa-label" style="margin-top:10px">Name on the invoice</label><div class="row srow"><input id="btn-in" maxlength="60" value="${esc(billName(c))}" placeholder="e.g. Mrs. Adaeze Okafor" autocomplete="off"><button class="mini" id="btn-save">Save</button></div>
+  ? `<label for="btn-in" class="wa-label" style="margin-top:10px">Name on the invoice</label><div class="row srow"><input id="btn-in" maxlength="60" value="${esc(billName(c))}" autocomplete="off"><button class="mini" id="btn-save">Save</button></div>
      <p class="hint">Put Mr., Mrs., Miss or Dr. in front, the way you'd address them. This only changes the invoice. You'll still find them as ${esc(c.name)}.</p>`
   : `<p class="billto">Bill to: <b>${esc(billName(c))}</b> <button data-bt>Change</button></p>${(c.inv_name || "").trim() ? "" : `<p class="billnote">Is “${esc(c.name)}” their real name? If not, tap Change and type their real name with Mr., Mrs., Miss or Dr. in front. Don't know their name? Send it as a text message instead.</p><button class="mini" data-btok>Yes, it's their real name</button>`}`;
 const PAY_WORD = { cash: "cash", transfer: "transfer", pos: "POS" };
@@ -2171,9 +2174,9 @@ function invoiceSettingsHtml() {
       `<div class="iprev"><img id="iprev" alt="Sample invoice"></div><button class="btn btn-ghost" id="isample">Download sample PDF</button>`)
     + card("Details on the invoice", "Leave any of these empty to hide it.",
       `<label for="itg">Short line under your name</label><input id="itg" maxlength="60" value="${esc(p.inv_tagline || "")}" placeholder="e.g. Dry cleaning and laundry" autocomplete="off">
-       <label for="iad">Address</label><input id="iad" maxlength="120" value="${esc(p.inv_address || "")}" placeholder="e.g. 12 Oba Adesida Road, Akure" autocomplete="off">
-       <label for="iph">WhatsApp number</label><input id="iph" type="text" inputmode="tel" maxlength="13" value="${esc(fmtPhone(p.inv_phone || ""))}" placeholder="${esc(fmtPhone(me.phone))}" autocomplete="off">
-       <label for="iem">Email</label><input id="iem" type="email" maxlength="80" value="${esc(p.inv_email || "")}" placeholder="e.g. hello@yourlaundry.com" autocomplete="off">`)
+       <label for="iad">Address</label><input id="iad" maxlength="120" value="${esc(p.inv_address || "")}" autocomplete="off">
+       <label for="iph">WhatsApp number</label><input id="iph" type="text" inputmode="tel" maxlength="13" value="${esc(fmtPhone(p.inv_phone || ""))}" autocomplete="off">
+       <label for="iem">Email</label><input id="iem" type="email" maxlength="80" value="${esc(p.inv_email || "")}" autocomplete="off">`)
     + card("Terms", "Printed near the bottom of every invoice. Leave it empty if you don't want any.",
       `<textarea id="itm" rows="4" maxlength="400" placeholder="e.g. Clothes not collected within 30 days may be given away. Please check your pockets before drop-off.">${esc(p.inv_terms || "")}</textarea>`);
 }
@@ -2834,7 +2837,7 @@ function wireDuty(again) {
 }
 const crewCard = () => !teamLive() ? "" : card("Team on duty", "Names for your bills: which cashier prepared the bill and which laundry attendants were on duty. Names only, no logins. Each day, the shop's phone picks who is on duty on the Log clothes page.",
   `${crew().map((x, i) => `<div class="staff-row"><div><b>${esc(x.n)}</b><span>${x.r === "c" ? "Cashier" : "Laundry attendant"}</span></div><div class="acts"><button class="mini danger" data-crm="${i}">Remove</button></div></div>`).join("") || `<p class="hint">No names yet. Add your cashiers and laundry attendants.</p>`}
-   <label for="crn">Name</label><input id="crn" placeholder="e.g. Inyene" maxlength="30" autocomplete="off" value="${esc(crewName)}">
+   <label for="crn">Name</label><input id="crn" maxlength="30" autocomplete="off" value="${esc(crewName)}">
    <div class="chips" style="margin:8px 0 0"><button class="chip" data-crr="c" aria-pressed="${crewRole === "c"}">Cashier</button><button class="chip" data-crr="a" aria-pressed="${crewRole === "a"}">Laundry attendant</button></div>
    <button class="btn btn-ghost" id="cra" style="margin-top:10px">+ Add name</button>`);
 function wireCrew() {
@@ -3020,12 +3023,12 @@ function renderSettings() {
     + `<button class="logout" id="out"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>Log out</button>`;
   if (setTab === "business") { const p = sPriv(); body =
     card("Business name", "Shown at the top of the app and in every WhatsApp message.",
-      `<input id="sn" maxlength="${NAME_MAX}" value="${esc(shop.name)}" placeholder="e.g. BrightWash Laundry" autocomplete="off" aria-label="Business name">`)
+      `<input id="sn" maxlength="${NAME_MAX}" value="${esc(shop.name)}" autocomplete="off" aria-label="Business name">`)
     + card("Bank account for payments", "Added to every invoice and payment reminder, so customers know where to pay.",
       `<label for="bn">Bank name</label><input id="bn" list="banks-shop" value="${esc(p.bank_name)}" placeholder="Start typing, e.g. GTBank or Opay" autocomplete="off">${bankList("banks-shop")}
-       <label for="an">Account number</label><input id="an" ${moneyAttrs} maxlength="10" value="${esc(p.acct_no)}" placeholder="10 digits">
+       <label for="an">Account number</label><input id="an" ${moneyAttrs} maxlength="10" value="${esc(p.acct_no)}">
        <p class="hint" id="anx">${p.acct_no.length === 10 ? "" : "Account number must be 10 digits."}</p>
-       <label for="am">Account name</label><input id="am" value="${esc(p.acct_name)}" placeholder="Name on the account" autocomplete="off">`)
+       <label for="am">Account name</label><input id="am" value="${esc(p.acct_name)}" autocomplete="off">`)
     + card("Express delivery charge", "Added to the bill when an order is marked express delivery.",
       `<div class="chips" style="margin:0 0 4px"><button class="chip" data-et="manual" aria-pressed="${p.express_type === "manual"}">Type it each time</button><button class="chip" data-et="percent" aria-pressed="${p.express_type === "percent"}">Percentage extra</button><button class="chip" data-et="times" aria-pressed="${p.express_type === "times"}">Times the bill (2×)</button><button class="chip" data-et="fixed" aria-pressed="${p.express_type === "fixed"}">Fixed amount</button></div>
        ${p.express_type === "manual" ? `<p class="hint">You type the express amount on each order's bill, depending on the job.</p>` : `<label for="ev">${p.express_type === "percent" ? "Extra percentage (%)" : p.express_type === "times" ? "Multiply the bill by" : "Extra amount per order (₦)"}</label>
@@ -3051,8 +3054,8 @@ function renderSettings() {
        <a class="btn btn-primary" id="nsfwa" target="_blank" rel="noopener" href="${waLink(newStaff.phone, newStaff.msg)}">Send on WhatsApp</a>
        <div class="row"><button class="btn btn-ghost" id="nsfcopy">Copy message</button><button class="btn btn-ghost" id="nsfdone">Done</button></div>`)
     : card("Add a staff login", "After adding, you can send them their login on WhatsApp. They can change their PIN in their own Settings.",
-      `<div class="sgrid"><div><label for="sfn">Name</label><input id="sfn" placeholder="e.g. Grace" autocomplete="off"></div>
-       <div><label for="sfp">Phone number</label><input id="sfp" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
+      `<div class="sgrid"><div><label for="sfn">Name</label><input id="sfn" autocomplete="off"></div>
+       <div><label for="sfp">Phone number</label><input id="sfp" type="text" inputmode="tel" autocomplete="off"></div>
        <div><label for="sfk">6-digit PIN for them</label><input id="sfk" class="pin" ${genPinAttrs()}></div></div>
        <button class="btn btn-primary" id="sfa">Add staff login</button>`))
     + card("Price list for staff", "Lets staff see your prices so they can answer customers who ask. They can't change prices or see any bill.",
@@ -3183,8 +3186,8 @@ function bankHtml(e) {
   return `<h3 class="stitle" style="margin-top:14px">Where we pay you</h3>
     <p class="hint">${b ? "Bolu gets a message when you change this." : "Add the account we should send your money to."}</p>
     <label for="bk-b">Bank</label><input id="bk-b" list="banks-agent" placeholder="Start typing, e.g. Opay or GTBank" autocomplete="off" value="${esc(b ? b.bank : "")}">${bankList("banks-agent")}
-    <label for="bk-n">Account number</label><input id="bk-n" type="text" inputmode="numeric" maxlength="10" placeholder="10 digits" autocomplete="off" value="${esc(b ? b.no : "")}">
-    <label for="bk-a">Account name</label><input id="bk-a" placeholder="Name on the account" autocomplete="off" value="${esc(b ? b.name : "")}">
+    <label for="bk-n">Account number</label><input id="bk-n" type="text" inputmode="numeric" maxlength="10" autocomplete="off" value="${esc(b ? b.no : "")}">
+    <label for="bk-a">Account name</label><input id="bk-a" autocomplete="off" value="${esc(b ? b.name : "")}">
     <div class="row">${b ? `<button class="btn btn-ghost" id="bk-no">Cancel</button>` : ""}<button class="btn btn-primary" id="bk-go">Save bank details</button></div>`;
 }
 function wireBank() {
@@ -3288,12 +3291,12 @@ function shopsHtml() {
        <a class="btn btn-primary" target="_blank" rel="noopener" href="https://wa.me/234${newShop.phone.slice(1)}?text=${encodeURIComponent(newShop.msg)}">Send on WhatsApp</a>
        <div class="row"><button class="btn btn-ghost" id="nscopy">Copy</button><button class="btn btn-ghost" id="nsagain">Add another shop</button></div>`) : "";
   const form = newShop ? "" : card("Add a shop", "Creates the shop with the standard price list. The owner can change prices, add branches and staff in their own Settings.",
-      `<label for="as-n">Shop name</label><input id="as-n" placeholder="e.g. Saheed Dry Cleaners" autocomplete="off" maxlength="${NAME_MAX}"><p class="hint">Up to ${NAME_MAX} letters. It shows at the top of their app and on every bill, so shorter reads better ("&amp;" instead of "and", no "services").</p>
+      `<label for="as-n">Shop name</label><input id="as-n" autocomplete="off" maxlength="${NAME_MAX}"><p class="hint">Up to ${NAME_MAX} letters. It shows at the top of their app and on every bill, so shorter reads better ("&amp;" instead of "and", no "services").</p>
        <div class="sgrid"><div><label for="as-st">State</label><select id="as-st">${stateOpts("")}</select></div>
-       <div><label for="as-tw">Town or area</label><input id="as-tw" maxlength="60" placeholder="e.g. Akure" autocomplete="off"></div></div>
+       <div><label for="as-tw">Town or area</label><input id="as-tw" maxlength="60" autocomplete="off"></div></div>
        <label for="as-b">Branches</label><input id="as-b" placeholder="Main branch" autocomplete="off"><p class="hint">Separate with commas, e.g. Main branch, Awule point, Oke-Ijebu point.</p>
-       <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" placeholder="e.g. Saheed" autocomplete="off" maxlength="40"></div>
-       <div><label for="as-op">Owner's phone</label><input id="as-op" type="text" inputmode="tel" placeholder="0803 412 7790" autocomplete="off"></div>
+       <div class="sgrid"><div><label for="as-on">Owner's name</label><input id="as-on" autocomplete="off" maxlength="40"></div>
+       <div><label for="as-op">Owner's phone</label><input id="as-op" type="text" inputmode="tel" autocomplete="off"></div>
        <div><label for="as-pin">6-digit PIN for the owner</label><input id="as-pin" class="pin" ${genPinAttrs()}></div></div>
        <div class="sgrid">${agentMode() ? "" : `<div><label for="as-t">Free trial ends</label><input id="as-t" type="date" value="${trial}"></div>`}
        <div><label for="as-no">First order number</label><input id="as-no" ${moneyAttrs} value="1"><p class="hint">Use their book's next number if they want to continue it.</p></div></div>
@@ -3488,11 +3491,11 @@ function drawSignup() {
       : `<h1 class="lname">Start your free month</h1>
         <p class="lask">Set up your laundry on Tagbook in 1 minute. No payment now.</p>
         <form class="lform" id="sform" novalidate>
-          ${f("su-shop", "Shop name", S.shop, `maxlength="${NAME_MAX}" autocomplete="organization" placeholder="e.g. Bright Wash Laundry"`)}
-          ${f("su-name", "Your name", S.name, `maxlength="40" autocomplete="name" placeholder="e.g. Adaeze Okafor"`)}
-          ${f("su-phone", "Your phone number", S.phone ? fmtPhone(S.phone) : "", `inputmode="tel" autocomplete="tel" maxlength="13" placeholder="11 digits, starting with 0"`, "You'll log in with this number.")}
+          ${f("su-shop", "Shop name", S.shop, `maxlength="${NAME_MAX}" autocomplete="organization"`)}
+          ${f("su-name", "Your name", S.name, `maxlength="40" autocomplete="name"`)}
+          ${f("su-phone", "Your phone number", S.phone ? fmtPhone(S.phone) : "", `inputmode="tel" autocomplete="tel" maxlength="13"`, "You'll log in with this number.")}
           <label for="su-state">State</label><select id="su-state">${stateOpts(S.state)}</select>
-          ${f("su-area", "Town or area", S.area, `maxlength="60" placeholder="e.g. Akure"`)}
+          ${f("su-area", "Town or area", S.area, `maxlength="60"`)}
           <div class="sgrid">
             <div>${f("su-pin", "Choose a 6-digit PIN", S.pin, `type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" class="pin"`)}</div>
             <div>${f("su-pin2", "Type the PIN again", S.pin2, `type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" class="pin"`)}</div>
