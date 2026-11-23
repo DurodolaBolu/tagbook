@@ -134,7 +134,7 @@ async function handle(route) {
     else { const clash = db.customers.find(cc => cc.mark === x.mark); if (clash) return send(400, { message: "MARK_TAKEN:" + clash.name, code: "P0001" });
       c = { id: uid(), shop_id: shopId, name: x.name, mark: x.mark, greet: (current === ownerId && x.greet) || null, greet_asked: current === ownerId && "greet" in x, created_at: new Date().toISOString() }; db.customers.push(c); db.customer_phones.push({ customer_id: c.id, shop_id: shopId, phone: x.phone }); }
     const no = db.shops[0].next_no++; const id = uid();
-    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, express: x.express, wait_get: !!x.wait_get, collect_at: x.collect_at || null, remarks: x.remarks || null, money_found: x.money_found || null, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
+    db.orders.push({ id, shop_id: shopId, no, customer_id: c.id, branch_id: x.branch_id, items: x.items, duty: x.duty || null, express: x.express, wait_get: !!x.wait_get, collect_at: x.collect_at || null, remarks: x.remarks || null, money_found: x.money_found || null, pickup: x.pickup, status: "new", list_sent: false, checking: false, checked: {}, notified: me.role === "owner", billed: false, settled: false, created_at: new Date().toISOString() });
     let auto = !x.express && !x.pickup, unit = [], total = 0;
     for (const it of x.items) { const item = db.items.find(i => i.id === it.id); const pr = db.item_prices.find(p => p.item_id === it.id); const v = pr && pr.prices[it.svc]; if (!item || item.custom || v == null) { auto = false; unit.push(null); } else { unit.push(v); total += v * it.qty; } }
     let paid = x.paid || 0; if (auto && paid > total) paid = total;
@@ -386,6 +386,41 @@ async function handle(route) {
     const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
     await page.click('details.early [data-pdf="early"]');
     const f = await dl; if (!f) console.log("pdf: no download"); else { const fp = path.join(process.env.XP_TEST, "combo.pdf"); await f.saveAs(fp); console.log("pdf:", f.suggestedFilename(), fs.statSync(fp).size); }
+    process.exit(0);
+  }
+  if (process.env.TEAM_TEST) { // team on duty, colour per cloth, pieces (Impressions Laundry)
+    const C = process.env.TEAM_TEST; await page.setViewportSize({ width: 390, height: 1700 });
+    await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(1000);
+    await page.click('[data-st="staff"]'); await page.waitForTimeout(400);
+    for (const [n, r] of [["Inyene", "c"], ["Effiong", "a"], ["Eke", "a"], ["Abas", "a"]]) { await page.click(`[data-crr="${r}"]`); await page.fill("#crn", n); await page.click("#cra"); await page.waitForTimeout(300); }
+    console.log("crew saved:", JSON.stringify(db.shops[0].crew));
+    await page.screenshot({ path: path.join(C, "team-settings.png"), fullPage: true });
+    await page.goto("http://localhost:8787/#log"); await page.reload(); await page.waitForTimeout(1000);
+    await page.screenshot({ path: path.join(C, "duty-pick.png") });
+    await page.click('[data-dby="Inyene"]'); for (const n of ["Effiong", "Eke", "Abas"]) await page.click(`[data-dw="${n}"]`); await page.click("#dutyok"); await page.waitForTimeout(200);
+    console.log("duty bar:", (await page.textContent(".duty")).replace(/\s+/g, " "));
+    await page.click("[data-pick] >> nth=0"); await page.waitForTimeout(300);
+    await page.click('[data-add="it2"]'); await page.click('[data-add="it0"]'); await page.click('[data-add="it0"]'); await page.waitForTimeout(200);
+    await page.click('[data-ed="0"]'); await page.fill("#lnn", "up and down"); await page.click("[data-pci]"); await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(C, "line-edit.png"), fullPage: true });
+    await page.click("#lndone"); await page.waitForTimeout(400);
+    console.log("default pieces saved:", db.items.find(i => i.id === "it2").pieces);
+    await page.click('[data-ed="1"]'); await page.fill("#lnn", "white"); await page.click("#lnsplit"); await page.fill("#lnn", "green"); await page.click("#lndone"); await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(C, "log-lines.png"), fullPage: true });
+    await page.click("#save"); await page.waitForTimeout(1500);
+    const o = db.orders[db.orders.length - 1];
+    console.log("saved items:", JSON.stringify(o.items), "| duty:", JSON.stringify(o.duty));
+    await page.goto("http://localhost:8787/#order-" + o.no); await page.reload(); await page.waitForTimeout(1200);
+    await page.screenshot({ path: path.join(C, "order.png"), fullPage: true });
+    db.customers.forEach(c => { c.greet_asked = true; }); await page.reload(); await page.waitForTimeout(1200);
+    await page.click("details.early summary").catch(() => {}); await page.waitForTimeout(300); await page.click("details.early .wtext summary").catch(() => {}); await page.waitForTimeout(200);
+    const txt = await page.evaluate(() => [...document.querySelectorAll(".wa")].map(x => x.innerText).join("\n----\n"));
+    console.log("messages:\n" + txt);
+    await page.evaluate(() => { try { delete navigator.share; navigator.canShare = () => false; } catch (_) { } });
+    const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
+    await page.click('details.early [data-pdf="early"]').catch(e => console.log("no pdf btn"));
+    const f = await dl; if (f) { const fp = path.join(C, "inv.pdf"); await f.saveAs(fp); console.log("pdf ok", fs.statSync(fp).size); }
+    console.log("errors:", errors.slice(0, 5));
     process.exit(0);
   }
   if (process.env.BILL_TEST) { // owner lets a front desk staff send bills; staff can't discount; owner can remove a wrong payment
