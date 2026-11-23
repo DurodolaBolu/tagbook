@@ -733,10 +733,9 @@ label .opt{font-size:13px}
 .sbill small{display:block;color:var(--muted);font-size:13px;margin-top:2px;line-height:1.4}
 #unpay{display:block;margin:6px 0 2px}
 /* Team on duty (Log clothes) */
-.duty{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:4px 0 6px}
-.duty>span{display:flex;flex-direction:column;font-size:15px}
-.duty small{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-.duty.open{display:block}
+.duty{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:4px 0 8px;font:inherit;font-size:15px;text-align:left;cursor:pointer}
+.duty .dch{color:var(--accent);font-weight:600;flex:none}
+.duty.open{display:block;cursor:default}
 .duty.open label{margin-top:10px}
 /* Colour or note, and pieces, for one line of clothes */
 .lnbtn{margin-top:6px;border:0;background:none;color:var(--accent);font:inherit;font-size:14px;padding:2px 0;cursor:pointer;text-align:left}

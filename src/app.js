@@ -1446,6 +1446,7 @@ function renderOrders() {
     ${dueCard()}
     ${setupHtml || installCard()}
     ${askPush ? `<div class="alert push"><span>${own() ? "Get a buzz when staff log clothes, even when Tagbook is closed." : "Get a reminder when clothes are due tomorrow, due today or late, even when Tagbook is closed."}</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
+    ${dutyBlock()}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
     ${setupHtml ? "" : refLine()}
     ${own() ? `<div class="stats">
@@ -1476,7 +1477,7 @@ function renderOrders() {
   view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; page = 0; renderOrders(); });
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
-  wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine();
+  wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine(); wireDuty(renderOrders);
   if ($("#wlog")) $("#wlog").onclick = () => go("log");
   if ($("#wprices")) $("#wprices").onclick = () => { setTab = "prices"; go("shop"); };
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
@@ -2804,36 +2805,32 @@ const copyLive = () => !!shop && !!shop.pay_token;
 const TEAM_LIVE = Date.parse("2026-11-24T08:00:00+01:00");
 const teamLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= TEAM_LIVE || location.hostname === "localhost");
 const crew = () => Array.isArray(shop && shop.crew) ? shop.crew.filter(x => x && x.n) : [];
-let dutyMem = null, dutyOpen = false, dutyDraft = null, crewRole = "c", crewName = "";
+let dutyMem = null, dutyOpen = false, crewRole = "c", crewName = "";
 const dutyGet = () => { try { return JSON.parse(localStorage.getItem("tb-duty-" + shop.id) || "null") || dutyMem; } catch (_) { return dutyMem; } };
 const dutySet = v => { dutyMem = v; try { localStorage.setItem("tb-duty-" + shop.id, JSON.stringify(v)); } catch (_) { } };
-// Today's pick on this phone, keeping only names still on the team.
+// Who is on duty on this phone. It stays until someone changes it (no daily reset), keeping only names still on the team.
 const dutyNow = () => {
   if (!teamLive() || !crew().length) return null;
-  const v = dutyGet(); if (!v || v.day !== localDate(Date.now())) return null;
-  const names = crew().map(x => x.n), by = names.includes(v.by) ? v.by : "", w = (v.w || []).filter(n => names.includes(n));
+  const v = dutyGet() || {}, names = crew().map(x => x.n), by = names.includes(v.by) ? v.by : "", w = (v.w || []).filter(n => names.includes(n));
   return by || w.length ? { by, w } : null;
 };
+// A small bar on Orders and Log clothes, only in shops that added team names. Tapping a name saves it straight away.
 function dutyBlock() {
   if (!teamLive() || !crew().length) return "";
   const now = dutyNow();
-  if (now && !dutyOpen) return `<div class="duty"><span><small>On duty today</small>${now.by ? `<b>${esc(now.by)}</b>` : ""}${now.w.length ? `<span>${now.by ? "Attendants: " : ""}${esc(andList(now.w))}</span>` : ""}</span><button class="mini" id="dutyedit">Change</button></div>`;
-  if (!dutyDraft) { const v = dutyGet() || {}; dutyDraft = { by: v.by || "", w: v.w || [] }; }
-  const cs = crew().filter(x => x.r === "c"), as = crew().filter(x => x.r !== "c");
-  return `<div class="duty open"><b>Who is on duty today?</b><p class="hint" style="margin:2px 0 0">Their names go on today's lists and bills. This phone remembers it for the day.</p>
-    ${cs.length ? `<label>Cashier</label><div class="chips" style="margin:0">${cs.map(x => `<button class="chip" data-dby="${esc(x.n)}" aria-pressed="${dutyDraft.by === x.n}">${esc(x.n)}</button>`).join("")}</div>` : ""}
-    ${as.length ? `<label>Laundry attendants</label><div class="chips" style="margin:0">${as.map(x => `<button class="chip" data-dw="${esc(x.n)}" aria-pressed="${dutyDraft.w.includes(x.n)}">${esc(x.n)}</button>`).join("")}</div>` : ""}
-    <button class="btn btn-primary" id="dutyok" style="margin-top:12px">Done</button></div>`;
+  if (!dutyOpen) return `<button class="duty" id="dutyedit"><span>${now ? `On duty: <b>${esc([now.by, andList(now.w)].filter(Boolean).join(" · "))}</b>` : "<b>Who is on duty?</b> Tap to choose"}</span><span class="dch">Change</span></button>`;
+  const v = now || { by: "", w: [] }, cs = crew().filter(x => x.r === "c"), as = crew().filter(x => x.r !== "c");
+  return `<div class="duty open">
+    ${cs.length ? `<label style="margin-top:0">Cashier</label><div class="chips" style="margin:0">${cs.map(x => `<button class="chip" data-dby="${esc(x.n)}" aria-pressed="${v.by === x.n}">${esc(x.n)}</button>`).join("")}</div>` : ""}
+    ${as.length ? `<label${cs.length ? "" : ' style="margin-top:0"'}>Laundry attendants</label><div class="chips" style="margin:0">${as.map(x => `<button class="chip" data-dw="${esc(x.n)}" aria-pressed="${v.w.includes(x.n)}">${esc(x.n)}</button>`).join("")}</div>` : ""}
+    <button class="mini" id="dutyok" style="margin-top:10px">Close</button></div>`;
 }
 function wireDuty(again) {
-  const e = $("#dutyedit"); if (e) e.onclick = () => { dutyOpen = true; dutyDraft = null; again(); };
-  view.querySelectorAll("[data-dby]").forEach(b => b.onclick = () => { dutyDraft.by = dutyDraft.by === b.dataset.dby ? "" : b.dataset.dby; again(); });
-  view.querySelectorAll("[data-dw]").forEach(b => b.onclick = () => { const n = b.dataset.dw; dutyDraft.w = dutyDraft.w.includes(n) ? dutyDraft.w.filter(x => x !== n) : [...dutyDraft.w, n]; again(); });
-  const ok = $("#dutyok"); if (ok) ok.onclick = () => {
-    if (!dutyDraft.by && !dutyDraft.w.length) { toast("Tap the names of who is on duty"); return; }
-    const names = crew().map(x => x.n);
-    dutySet({ day: localDate(Date.now()), by: dutyDraft.by, w: names.filter(n => dutyDraft.w.includes(n)) }); dutyOpen = false; dutyDraft = null; again();
-  };
+  const e = $("#dutyedit"); if (e) e.onclick = () => { dutyOpen = true; again(); };
+  const cur = () => dutyNow() || { by: "", w: [] }, names = () => crew().map(x => x.n);
+  view.querySelectorAll("[data-dby]").forEach(b => b.onclick = () => { const v = cur(), n = b.dataset.dby; dutySet({ by: v.by === n ? "" : n, w: v.w }); again(); });
+  view.querySelectorAll("[data-dw]").forEach(b => b.onclick = () => { const v = cur(), n = b.dataset.dw, w = v.w.includes(n) ? v.w.filter(x => x !== n) : [...v.w, n]; dutySet({ by: v.by, w: names().filter(x => w.includes(x)) }); again(); });
+  const ok = $("#dutyok"); if (ok) ok.onclick = () => { dutyOpen = false; again(); };
 }
 const crewCard = () => !teamLive() ? "" : card("Team on duty", "Names for your bills: which cashier prepared the bill and which laundry attendants were on duty. Names only, no logins. Each day, the shop's phone picks who is on duty on the Log clothes page.",
   `${crew().map((x, i) => `<div class="staff-row"><div><b>${esc(x.n)}</b><span>${x.r === "c" ? "Cashier" : "Laundry attendant"}</span></div><div class="acts"><button class="mini danger" data-crm="${i}">Remove</button></div></div>`).join("") || `<p class="hint">No names yet. Add your cashiers and laundry attendants.</p>`}

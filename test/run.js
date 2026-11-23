@@ -397,7 +397,8 @@ async function handle(route) {
     await page.screenshot({ path: path.join(C, "team-settings.png"), fullPage: true });
     await page.goto("http://localhost:8787/#log"); await page.reload(); await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(C, "duty-pick.png") });
-    await page.click('[data-dby="Inyene"]'); for (const n of ["Effiong", "Eke", "Abas"]) await page.click(`[data-dw="${n}"]`); await page.click("#dutyok"); await page.waitForTimeout(200);
+    await page.click("#dutyedit"); await page.waitForTimeout(150);
+    await page.click('[data-dby="Inyene"]'); for (const n of ["Effiong", "Eke", "Abas"]) await page.click(`[data-dw="${n}"]`); await page.screenshot({ path: path.join(C, "duty-open.png") }); await page.click("#dutyok"); await page.waitForTimeout(200);
     console.log("duty bar:", (await page.textContent(".duty")).replace(/\s+/g, " "));
     await page.click("[data-pick] >> nth=0"); await page.waitForTimeout(300);
     await page.click('[data-add="it2"]'); await page.click('[data-add="it0"]'); await page.click('[data-add="it0"]'); await page.waitForTimeout(200);
