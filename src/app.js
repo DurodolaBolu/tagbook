@@ -2834,6 +2834,9 @@ function wireDuty(again) {
 }
 const crewCard = () => !teamLive() ? "" : card("Team on duty", "Names for your bills: which cashier prepared the bill and which laundry attendants were on duty. Names only, no logins. Each day, the shop's phone picks who is on duty on the Log clothes page.",
   `${crew().map((x, i) => `<div class="staff-row"><div><b>${esc(x.n)}</b><span>${x.r === "c" ? "Cashier" : "Laundry attendant"}</span></div><div class="acts"><button class="mini danger" data-crm="${i}">Remove</button></div></div>`).join("") || `<p class="hint">No names yet. Add your cashiers and laundry attendants.</p>`}
+   ${(() => { const left = staffList.filter(x => x.name && !crew().some(c => c.n.toLowerCase() === x.name.trim().slice(0, 30).toLowerCase()));
+     return left.length ? `<label>Add from your staff logins</label><div class="chips" style="margin:0">${left.map(x => `<button class="chip" data-crs="${esc(x.name)}">+ ${esc(x.name)}${x.user_id === me.user_id ? " (you)" : ""}</button>`).join("")}</div>
+       <p class="hint" style="margin:6px 0 0">Choose Cashier or Laundry attendant below first, then tap the name. For someone without a login, type their name.</p>` : ""; })()}
    <label for="crn">Name</label><input id="crn" placeholder="e.g. Inyene" maxlength="30" autocomplete="off" value="${esc(crewName)}">
    <div class="chips" style="margin:8px 0 0"><button class="chip" data-crr="c" aria-pressed="${crewRole === "c"}">Cashier</button><button class="chip" data-crr="a" aria-pressed="${crewRole === "a"}">Laundry attendant</button></div>
    <button class="btn btn-ghost" id="cra" style="margin-top:10px">+ Add name</button>`);
@@ -2842,13 +2845,15 @@ function wireCrew() {
   const save = async next => { const old = shop.crew; shop.crew = next; renderSettings(); const ok = await put("shops", { id: shop.id }, { crew: next }); if (!ok) { shop.crew = old; renderSettings(); } else savedToast(ok); };
   $("#crn").oninput = e => { crewName = e.target.value; };
   view.querySelectorAll("[data-crr]").forEach(b => b.onclick = () => { crewRole = b.dataset.crr; renderSettings(); });
-  $("#cra").onclick = () => {
-    const n = tidy(crewName).slice(0, 30);
+  const add = (n, typed) => {
     if (!n) { toast("Type the name first"); $("#crn").focus(); return; }
     if (crew().some(x => x.n.toLowerCase() === n.toLowerCase())) { toast(`${n} is already on the list`); return; }
     if (crew().length >= 30) { toast("That's the most names for now"); return; }
-    crewName = ""; save([...crew(), { n, r: crewRole }]);
+    if (typed) crewName = "";
+    save([...crew(), { n, r: crewRole }]);
   };
+  $("#cra").onclick = () => add(tidy(crewName).slice(0, 30), true);
+  view.querySelectorAll("[data-crs]").forEach(b => b.onclick = () => add(tidy(b.dataset.crs).slice(0, 30)));
   view.querySelectorAll("[data-crm]").forEach(b => b.onclick = () => { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Tap again"; return; } save(crew().filter((_, j) => j !== +b.dataset.crm)); });
 }
 const billLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= BILL_LIVE || location.hostname === "localhost");
