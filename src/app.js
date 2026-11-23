@@ -1986,6 +1986,14 @@ async function invoicePages(o, c = cust(o.cid)) {
     text(p.acct_no, M + 30, y + 98, F(700, 36));
     text(fit(`${p.bank_name.trim()}  ·  ${p.acct_name.trim()}`, W - 2 * M - 60, F(500, 23)), M + 30, y + 136, F(500, 23));
     text(fit(`Use ${invNo(o)} as the reference, then send your payment receipt on WhatsApp.`, W - 2 * M - 60, F(400, 20)), M + 30, y + 172, F(400, 20), MUTED);
+    // Trial (BrightWash only): a tappable button that opens a page with "Copy account number".
+    if (copyLive()) {
+      const bw = 300, bh = 64, bx = W - M - 30 - bw, by = y + 58;
+      box(bx, by, bw, bh, 32, col);
+      text("Tap to copy number", bx + bw / 2, by + 41, F(600, 22), "#fff", "center");
+      const q = new URLSearchParams({ a: p.acct_no, b: p.bank_name.trim(), n: p.acct_name.trim(), s: shopName(), t: String(due), r: invNo(o) });
+      const cv = pages[pages.length - 1]; (cv.tbLinks = cv.tbLinks || []).push({ x: bx, y: by, w: bw, h: bh, W, H, url: "https://tagbook.ordiventa.com/pay.html#" + q.toString() });
+    }
     y += 196;
   }
   // Terms
@@ -2020,16 +2028,24 @@ async function pagesToPdf(pages) {
   const add = d => { const u = typeof d === "string" ? enc.encode(d) : new Uint8Array(d); parts.push(u); len += u.length; };
   const obj = (n, body) => { offs[n] = len; add(`${n} 0 obj\n`); body(); add("\nendobj\n"); };
   const n = pages.length, PW = 595.28, PH = 841.89;
+  // Clickable links (e.g. the copy-number button) become link annotations after the page objects.
+  let nextObj = 3 + 3 * n; const annots = pages.map(cv => (cv.tbLinks || []).map(l => ({ id: nextObj++, l })));
   add("%PDF-1.4\n%âã\n");
   obj(1, () => add("<< /Type /Catalog /Pages 2 0 R >>"));
   obj(2, () => add(`<< /Type /Pages /Kids [${pages.map((_, i) => `${3 + 3 * i} 0 R`).join(" ")}] /Count ${n} >>`));
   imgs.forEach((jpg, i) => {
     const pg = 3 + 3 * i, cs = `q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`;
-    obj(pg, () => add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${pg + 2} 0 R >> >> /Contents ${pg + 1} 0 R >>`));
+    const an = annots[i].length ? ` /Annots [${annots[i].map(a => a.id + " 0 R").join(" ")}]` : "";
+    obj(pg, () => add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${pg + 2} 0 R >> >> /Contents ${pg + 1} 0 R${an} >>`));
     obj(pg + 1, () => add(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
     obj(pg + 2, () => { add(`<< /Type /XObject /Subtype /Image /Width ${pages[i].width} /Height ${pages[i].height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.byteLength} >>\nstream\n`); add(jpg); add("\nendstream"); });
   });
-  const size = 3 + 3 * n, xref = len;
+  annots.flat().forEach(({ id, l }) => {
+    const sx = PW / l.W, sy = PH / l.H, x1 = (l.x * sx).toFixed(2), x2 = ((l.x + l.w) * sx).toFixed(2), y1 = (PH - (l.y + l.h) * sy).toFixed(2), y2 = (PH - l.y * sy).toFixed(2);
+    const uri = l.url.replace(/[\\()]/g, m => "\\" + m);
+    obj(id, () => add(`<< /Type /Annot /Subtype /Link /Rect [${x1} ${y1} ${x2} ${y2}] /Border [0 0 0] /A << /S /URI /URI (${uri}) >> >>`));
+  });
+  const size = nextObj, xref = len;
   add(`xref\n0 ${size}\n0000000000 65535 f \n${offs.slice(1).map(v => String(v).padStart(10, "0") + " 00000 n \n").join("")}trailer\n<< /Size ${size} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts, { type: "application/pdf" });
 }
@@ -2710,6 +2726,8 @@ const EXP_LIVE = Date.parse("2026-11-19T18:00:00+01:00");
 const XP_LIVE = Date.parse("2026-11-21T08:00:00+01:00");
 // Staff who can send bills: BrightWash first, everyone from 8am on 22 Nov (asked for by Mr Akiba of Impressions Laundry).
 const BILL_LIVE = Date.parse("2026-11-22T08:00:00+01:00");
+// "Tap to copy number" on invoices: BrightWash only until Bolu approves it for everyone (23 Nov 2026).
+const copyLive = () => !!shop && (shop.id === PHOTO_SHOP || location.hostname === "localhost");
 const billLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= BILL_LIVE || location.hostname === "localhost");
 const xpLive = () => !!shop && (shop.id === PHOTO_SHOP || Date.now() >= XP_LIVE || location.hostname === "localhost");
 const expOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || Date.now() >= EXP_LIVE || location.hostname === "localhost");

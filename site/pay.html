@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pay by transfer</title>
+<style>
+:root{--bg:#F3F5F3;--card:#FFFFFF;--fg:#03191E;--muted:#55605F;--accent:#0F7B5F;--line:#DFE4E1;--ok:#E6F4EF}
+@media (prefers-color-scheme: dark){:root{--bg:#0B1513;--card:#13221F;--fg:#E8F0EE;--muted:#9AB0AA;--accent:#2BB38C;--line:#22332F;--ok:#163A31}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:480px;margin:0 auto;padding:28px 16px 40px}
+.shop{margin:0;font-size:15px;color:var(--muted)}
+h1{margin:2px 0 18px;font-size:24px}
+.card{background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--line)}
+.lbl{font-size:13px;color:var(--muted);margin:0}
+.acct{font-size:34px;font-weight:700;letter-spacing:2px;margin:2px 0 4px;font-variant-numeric:tabular-nums}
+.bank{margin:0 0 18px;font-size:16px}
+button{width:100%;border:0;border-radius:12px;padding:16px;font-size:18px;font-weight:600;background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);font-size:16px;padding:13px;margin-top:10px}
+button.done{background:var(--ok);color:var(--accent)}
+.amt{display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 0;padding-top:16px;border-top:1px solid var(--line)}
+.amt b{font-size:22px}
+.hint{color:var(--muted);font-size:14px;margin:16px 2px 0}
+footer{margin-top:28px;color:var(--muted);font-size:13px;text-align:center}
+footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main id="m"></main>
+<script>
+(function () {
+  var m = document.getElementById("m");
+  var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var foot = '<footer>Sent with <a href="https://tagbook.ordiventa.com">Tagbook</a></footer>';
+  // Details travel in the link after "#", so they are never sent to our server.
+  var q = new URLSearchParams(location.hash.slice(1));
+  var a = (q.get("a") || "").replace(/\D/g, ""), b = q.get("b") || "", n = q.get("n") || "", s = q.get("s") || "", r = q.get("r") || "";
+  var t = parseInt(q.get("t") || "0", 10) || 0;
+  if (a.length !== 10) { m.innerHTML = '<div class="card">This link is not complete. Ask the laundry to send the bill again.</div>' + foot; return; }
+  var naira = function (v) { return "₦" + v.toLocaleString("en-NG"); };
+  document.title = "Pay " + (s || "the laundry");
+  m.innerHTML = '<p class="shop">' + esc(s) + (r ? " · " + esc(r) : "") + '</p><h1>Pay by transfer</h1>'
+    + '<div class="card"><p class="lbl">Account number</p><p class="acct">' + esc(a) + '</p>'
+    + '<p class="bank">' + esc(b) + '<br>' + esc(n) + '</p>'
+    + '<button id="ca">Copy account number</button>'
+    + (t > 0 ? '<div class="amt"><span>Amount to pay</span><b>' + naira(t) + '</b></div><button class="ghost" id="ct">Copy amount</button>' : "")
+    + '</div><p class="hint">After paying, send your payment receipt to ' + esc(s || "the laundry") + ' on WhatsApp.</p>' + foot;
+  var copy = function (txt, btn, label) {
+    var ok = function () { btn.textContent = "Copied ✓"; btn.classList.add("done"); setTimeout(function () { btn.textContent = label; btn.classList.remove("done"); }, 2500); };
+    var old = function () {
+      var x = document.createElement("textarea"); x.value = txt; x.setAttribute("readonly", ""); x.style.position = "fixed"; x.style.opacity = "0";
+      document.body.appendChild(x); x.select(); x.setSelectionRange(0, 99);
+      var done = false; try { done = document.execCommand("copy"); } catch (e) { }
+      document.body.removeChild(x);
+      if (done) ok(); else btn.textContent = "Press and hold the number to copy";
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(ok, old); else old();
+  };
+  document.getElementById("ca").onclick = function () { copy(a, this, "Copy account number"); };
+  var ct = document.getElementById("ct"); if (ct) ct.onclick = function () { copy(String(t), this, "Copy amount"); };
+})();
+</script>
+</body>
+</html>
