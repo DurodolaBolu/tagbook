@@ -1363,12 +1363,12 @@ async function enablePush() {
   try { if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) }); }
   catch (_) { toast("Couldn't turn on notifications. Try again."); return false; }
   if (!await saveSub(sub)) { toast("Not saved. Check your internet and try again."); return false; }
-  pushNow = "on"; toast("Notifications are on"); return true;
+  pushNow = "on"; pushWasOn(true); pushLog("turned_on", `${isIOS ? "iOS" : "other"} ${standalone() ? "app" : "browser"}`); toast("Notifications are on"); return true;
 }
 async function disablePush() {
   const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
   if (sub) { await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); try { await sub.unsubscribe(); } catch (_) { } }
-  pushNow = "off";
+  pushNow = "off"; pushWasOn(false); pushLog("turned_off", "");
 }
 // Logging out: stop this login's alerts on this phone, but keep the phone's subscription, so whoever logs in next
 // (often the same owner) gets alerts again straight away. Unsubscribing here used to turn alerts off after every log out.
@@ -1377,10 +1377,24 @@ async function forgetPushHere() {
   if (sub) await sb.from("push_subs").delete().eq("endpoint", sub.endpoint);
 }
 // keep this phone's subscription saved (the address can change after updates)
+// Self-repair: if alerts were on for this login and the phone has lost them, turn them back on quietly
+// (only works when the phone still allows notifications). Every switch-off is written to push_log so we can see why.
+const pushWasOn = v => { const k = "tb-push-on-" + (me && me.user_id); try { if (v === undefined) return localStorage.getItem(k) === "1"; v ? localStorage.setItem(k, "1") : localStorage.removeItem(k); } catch (_) { return false; } };
+const pushLog = (kind, detail) => { try { sb.from("push_log").insert({ user_id: me.user_id, shop_id: shop.id, kind, detail: String(detail || "").slice(0, 200) }).then(() => { }, () => { }); } catch (_) { } };
 async function syncPush() {
-  if (!(own() || newOpts()) || !pushSupported() || Notification.permission !== "granted") return;
-  const reg = await swReg(); const sub = reg && await reg.pushManager.getSubscription();
-  if (sub) saveSub(sub);
+  if (!(own() || newOpts()) || !pushSupported()) return;
+  const was = pushWasOn(), env = `${isIOS ? "iOS" : "other"} ${standalone() ? "app" : "browser"}`;
+  if (Notification.permission !== "granted") {
+    if (was) { pushLog("permission_lost", `${Notification.permission} · ${env}`); pushWasOn(false); }
+    return;
+  }
+  const reg = await swReg(); let sub = reg && await reg.pushManager.getSubscription();
+  if (!sub && was && reg) {
+    try { await navigator.serviceWorker.ready; sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) }); pushLog("resubscribed", env); }
+    catch (e) { pushLog("resubscribe_failed", `${(e && e.name) || "error"} · ${env}`); pushLog("lost_on_phone", env); pushWasOn(false); return; }
+    if (pushNow === "off") { pushNow = "on"; if (tab === "orders") keepTyped(renderOrders); }
+  }
+  if (sub) { if (await saveSub(sub)) pushWasOn(true); }
 }
 // "Not now" hides the banner for 7 days, then it comes back until alerts are on (it used to hide it forever).
 const pushDismissed = () => { try { const v = +localStorage.getItem("tb-push-later") || 0; return v > 1 && Date.now() - v < 7 * 864e5; } catch (_) { return false; } };
