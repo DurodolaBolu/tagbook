@@ -1448,10 +1448,10 @@ function renderOrders() {
   view.innerHTML = `
     ${planBanner()}
     ${welcomeCard()}
+    ${dutyBlock()}
     ${dueCard()}
     ${setupHtml || installCard()}
     ${askPush ? `<div class="alert push"><span>${own() ? "Get a buzz when staff log clothes, even when Tagbook is closed." : "Get a reminder when clothes are due tomorrow, due today or late, even when Tagbook is closed."}</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
-    ${dutyBlock()}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
     ${setupHtml ? "" : refLine()}
     ${own() ? `<div class="stats">
@@ -1483,6 +1483,7 @@ function renderOrders() {
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
   wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine(); wireDuty(renderOrders);
+  view.querySelectorAll("[data-dmore]").forEach(b => b.onclick = () => { dueOpen[b.dataset.dmore] = !dueOpen[b.dataset.dmore]; renderOrders(); });
   if ($("#wlog")) $("#wlog").onclick = () => go("log");
   if ($("#wprices")) $("#wprices").onclick = () => { setTab = "prices"; go("shop"); };
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
@@ -2447,13 +2448,15 @@ function moneyPop(cur, done) {
   p.querySelector("#mp-ok").onclick = () => { const v = Math.min(num(digits(inp.value)), 10000000); if (!v) { toast("Type the amount found"); inp.focus(); return; } close(v); };
 }
 // Orders not marked ready that are late, due today or due tomorrow (same groups as the 8am reminder).
+let dueOpen = {};
 function dueCard() {
   const today = localDate(Date.now()), tom = localDate(dayAt(1));
   const open = orders.filter(o => o.collect && !o.cancelled && (o.status === "new" || o.status === "listed"));
   const groups = [["Late", open.filter(o => localDate(o.collect) < today), "late"], ["Due today", open.filter(o => localDate(o.collect) === today), "due"], ["Due tomorrow", open.filter(o => localDate(o.collect) === tom), ""]].filter(g => g[1].length);
   if (!groups.length) return "";
-  return `<section class="scard duecard">${groups.map(([t, list, cls]) => `<div class="dueg"><div class="dueh"><b class="${cls}">${t}</b><span>${list.length} order${list.length > 1 ? "s" : ""}</span></div>
-    ${list.map(o => { const c = cust(o.cid); return `<button class="order duerow" data-no="${o.no}"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${calc(o).count} items${o.express ? " · express" : o.wait ? " · wait & get" : ""}${cls === "late" ? " · was due " + esc(fmtDay(o.collect)) : ""}</span></div></button>`; }).join("")}</div>`).join("")}</section>`;
+  // Only the first 2 of each group show, so a long list doesn't push everything else down.
+  return `<section class="scard duecard">${groups.map(([t, list, cls]) => { const key = cls || "tom", all = dueOpen[key] || list.length <= 2; return `<div class="dueg"><div class="dueh"><b class="${cls}">${t}</b><span class="dcount ${cls}">${list.length}</span></div>
+    ${(all ? list : list.slice(0, 2)).map(o => { const c = cust(o.cid); return `<button class="order duerow" data-no="${o.no}"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${calc(o).count} items${o.express ? " · express" : o.wait ? " · wait & get" : ""}${cls === "late" ? " · was due " + esc(fmtDay(o.collect)) : ""}</span></div></button>`; }).join("")}${list.length > 2 ? `<button class="duemore" data-dmore="${key}">${dueOpen[key] ? "Show less" : `Show all ${list.length}`}</button>` : ""}</div>`; }).join("")}</section>`;
 }
 function collectTag(o) {
   if (!o.collect || o.cancelled || o.status === "picked") return "";
@@ -2818,12 +2821,13 @@ const dutyNow = () => {
 function dutyBlock() {
   if (!teamLive() || !crew().length) return "";
   const now = dutyNow();
-  if (!dutyOpen) return `<button class="duty${dutyMissing() ? " need" : ""}" id="dutyedit"><span>${now ? `On duty: <b>${esc([now.by, andList(now.w)].filter(Boolean).join(" · "))}</b>` : "<b>Who is on duty?</b> Tap to choose"}</span><span class="dch">Change</span></button>`;
+  if (!dutyOpen) return now
+    ? `<button class="duty" id="dutyedit"><span class="dlab">On duty</span><span class="dnames">${esc([now.by, andList(now.w)].filter(Boolean).join(" · "))}</span><span class="dch">Change</span></button>`
+    : `<button class="duty need" id="dutyedit"><span class="dnames">Choose who is on duty today</span><span class="dch">Choose</span></button>`;
   const v = now || { by: "", w: [] }, cs = crew().filter(x => x.r === "c"), as = crew().filter(x => x.r !== "c");
-  return `<div class="duty open">
-    ${cs.length ? `<label style="margin-top:0">Cashier</label><div class="chips" style="margin:0">${cs.map(x => `<button class="chip" data-dby="${esc(x.n)}" aria-pressed="${v.by === x.n}">${esc(x.n)}</button>`).join("")}</div>` : ""}
-    ${as.length ? `<label${cs.length ? "" : ' style="margin-top:0"'}>Laundry attendants</label><div class="chips" style="margin:0">${as.map(x => `<button class="chip" data-dw="${esc(x.n)}" aria-pressed="${v.w.includes(x.n)}">${esc(x.n)}</button>`).join("")}</div>` : ""}
-    <button class="mini" id="dutyok" style="margin-top:10px">Close</button></div>`;
+  const group = (t, list, attr, on) => list.length ? `<p class="dsub">${t}</p><div class="chips" style="margin:0">${list.map(x => `<button class="chip" ${attr}="${esc(x.n)}" aria-pressed="${on(x.n)}">${esc(x.n)}</button>`).join("")}</div>` : "";
+  return `<div class="duty open"><div class="dtop"><b>Who is on duty?</b><button class="dch" id="dutyok">Done</button></div>
+    ${group("Cashier", cs, "data-dby", n => v.by === n)}${group("Laundry attendants", as, "data-dw", n => v.w.includes(n))}</div>`;
 }
 // In shops that added team names, an order can't be saved until the cashier on duty is chosen (or an attendant, if the shop has no cashiers).
 const dutyMissing = () => {

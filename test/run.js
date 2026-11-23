@@ -395,6 +395,11 @@ async function handle(route) {
     for (const [n, r] of [["Inyene", "c"], ["Effiong", "a"], ["Eke", "a"], ["Abas", "a"]]) { await page.click(`[data-crr="${r}"]`); await page.fill("#crn", n); await page.click("#cra"); await page.waitForTimeout(300); }
     console.log("crew saved:", JSON.stringify(db.shops[0].crew));
     await page.screenshot({ path: path.join(C, "team-settings.png"), fullPage: true });
+    { const late = new Date(Date.now() - 3 * 864e5).toISOString(); const base = db.orders.find(o => !o.cancelled_at); for (let k = 0; k < 5; k++) { const id = "late" + k; db.orders.push({ ...base, id, no: 900 + k, collect_at: late, status: "new", cancelled_at: null }); db.order_money.push({ ...(db.order_money.find(m => m.order_id === base.id) || {}), order_id: id }); }
+      await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1000); await page.screenshot({ path: path.join(C, "home.png") });
+      await page.click('[data-dmore="late"]').catch(() => console.log("no show-all")); await page.waitForTimeout(200); console.log("late rows after show all:", (await page.$$(".duerow")).length);
+      await page.click("#dutyedit"); await page.waitForTimeout(150); await page.screenshot({ path: path.join(C, "home-duty-open.png") }); await page.click("#dutyok");
+      await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(900); await page.click('[data-st="staff"]').catch(() => {}); await page.waitForTimeout(300); }
     db.items.find(i => i.id === "it2").pieces = 2;
     await page.click('[data-st="prices"]'); await page.waitForTimeout(400); await page.click('[data-popen="it2"]').catch(() => {}); await page.waitForTimeout(300);
     await page.fill('[data-ppc="it2"]', "3"); await page.press('[data-ppc="it2"]', "Tab"); await page.waitForTimeout(400);

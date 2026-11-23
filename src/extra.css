@@ -637,7 +637,9 @@ textarea#rmk,textarea#nrm,textarea#cnote{width:100%;font:inherit;font-size:16px;
 .dueg+.dueg{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .dueh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .dueh b{font-size:15px}.dueh b.late{color:var(--owes)}.dueh b.due{color:var(--accent)}
-.dueh span{font-size:13px;color:var(--muted)}
+.dueh .dcount{font-size:13px;font-weight:700;min-width:24px;text-align:center;padding:1px 8px;border-radius:999px;background:var(--bg);color:var(--muted)}
+.dueh .dcount.late{background:var(--owes-soft);color:var(--owes)}.dueh .dcount.due{background:var(--accent-soft);color:var(--accent-deep)}
+.duemore{display:block;width:100%;margin-top:4px;padding:8px 0;border:0;background:none;color:var(--accent);font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
 .duerow{background:transparent;box-shadow:none;padding:6px 0;margin:0}
 /* Form headings easy to see (Log clothes and everywhere): dark, a bit bigger, bold */
 label{font-size:15px;color:var(--fg);font-weight:700;letter-spacing:0;margin:20px 0 8px}
@@ -733,17 +735,20 @@ label .opt{font-size:13px}
 .sbill small{display:block;color:var(--muted);font-size:13px;margin-top:2px;line-height:1.4}
 #unpay{display:block;margin:6px 0 2px}
 /* Team on duty (Log clothes) */
-.duty{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:4px 0 8px;font:inherit;font-size:15px;text-align:left;cursor:pointer}
-.duty .dch{color:var(--accent);font-weight:600;flex:none}
-.duty.open{display:block;cursor:default}
-.duty.open label{margin-top:10px}
+.duty{display:flex;align-items:center;gap:10px;width:100%;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:2px 0 10px;font:inherit;font-size:15px;text-align:left;cursor:pointer}
+.duty .dlab{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;flex:none}
+.duty .dnames{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.duty .dch{color:var(--accent);font-weight:600;flex:none;background:none;border:0;font:inherit;font-size:15px;padding:0;cursor:pointer}
+.duty.need{background:var(--warn-soft);border-color:transparent}
+.duty.need .dnames{font-weight:600}
+.duty.open{display:block;cursor:default;padding:12px 14px}
+.duty .dtop{display:flex;justify-content:space-between;align-items:center}
+.duty .dsub{margin:12px 0 6px;font-size:13px;color:var(--muted)}
 /* Colour or note, and pieces, for one line of clothes */
 .lnbtn{margin-top:6px;border:0;background:none;color:var(--accent);font:inherit;font-size:14px;padding:2px 0;cursor:pointer;text-align:left}
 .lned{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;padding:8px 0 4px;border-top:1px solid var(--line);margin-top:4px}
 .lnpc{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px}
 .lnpc span{display:flex;flex-direction:column;font-size:15px}
 .lnpc small{color:var(--muted);font-size:13px}
-.duty.need{border:1.5px solid var(--owes)}
-.duty.need .dch{color:var(--owes)}
 .ptable input[data-ppc]{text-align:right}
 .scard .ptable input{min-height:0;padding:6px 4px}
