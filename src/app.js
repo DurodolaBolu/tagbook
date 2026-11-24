@@ -840,6 +840,7 @@ function renderLeads() {
   });
 }
 
+let followN = 0, followAt = 0;
 function renderAdmin() {
   if (!isAdmin) return go("orders");
   if (adminView === "leads") return renderLeads();
@@ -938,7 +939,8 @@ function renderAdmin() {
         <div class="row"><button class="btn btn-ghost" id="ag-no">Cancel</button><button class="btn btn-primary" id="ag-go">Add to team</button></div></div>`
       : `<button class="btn btn-ghost" id="ag-add">+ Add an agent</button>`}
   </section>`;
-  view.innerHTML = `${adminSeg()}<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
+  if (Date.now() - followAt > 60e3) { followAt = Date.now(); sb.from("outreach_leads").select("id", { count: "exact", head: true }).eq("status", "called").then(({ count }) => { if (count != null && count !== followN) { followN = count; if (tab === "admin" && adminView === "shops") renderAdmin(); } }); }
+  view.innerHTML = `${adminSeg()}${followN ? `<div class="alert"><span><b>${followN} shop${followN > 1 ? "s" : ""} to follow up.</b> Called and interested. Send the after-call message on WhatsApp.</span><button id="gofollow">Open</button></div>` : ""}<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
       <div class="row"><button class="btn btn-ghost" id="dref">Refresh</button><button class="btn btn-primary" id="dadd">Add a shop</button></div></div>
     <div class="stats dstats">
       <div class="stat"><b>${real.length}</b><span>Shops</span></div>
@@ -976,7 +978,7 @@ function renderAdmin() {
     ${refHtml}
     ${agentHtml}
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
-  wireAdminSeg();
+  wireAdminSeg(); if ($("#gofollow")) $("#gofollow").onclick = () => { adminView = "leads"; oStatus = "called"; oCity = "all"; try { localStorage.setItem("tb-admin-view", "leads"); } catch (_) { } renderAdmin(); };
   view.querySelectorAll("[data-dseg]").forEach(b => b.onclick = () => { dSeg = b.dataset.dseg; dOpen = null; renderAdmin(); const h = $("#dlisth"); if (h) h.scrollIntoView({ block: "start" }); });
   view.querySelectorAll("[data-dopen]").forEach(b => b.onclick = () => { dOpen = b.dataset.dopen || null; renderAdmin(); });
   const dq = $("#dq"); if (dq) dq.oninput = () => { dQ = dq.value; const pos = dq.selectionStart; renderAdmin(); const n = $("#dq"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) { } } };
@@ -1079,6 +1081,8 @@ function route() {
   const m = h.match(/^order-(\d+)$/);
   if (m && (orders.some(o => o.no === +m[1]) || cancelledOrders.some(o => o.no === +m[1]))) { tab = "orders"; openNo = +m[1]; }
   else if (h === "plan") { openNo = null; tab = "prices"; setTab = own() ? "plan" : "account"; }
+  // From a "Tolu called …" notification: straight to the shops waiting for the after-call message, in every city.
+  else if (h === "followup" && isAdmin) { openNo = null; tab = "admin"; adminView = "leads"; oStatus = "called"; oCity = "all"; }
   else if (h === "help" || h.startsWith("help-")) { openNo = null; tab = "help"; helpPlay = h.startsWith("help-") ? h.slice(5) : null; }
   else { openNo = null; tab = h === "log" ? "new" : h === "shop" ? "prices" : (h === "reports" && own()) ? "reports" : (h === "admin" && isAdmin) ? "admin" : (h === "setup" && isAgent) ? "agent" : "orders"; }
   render();
