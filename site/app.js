@@ -186,7 +186,7 @@ Since we're in Akure, we can also come by and set it up for you.`:"")}function _
 3. Log your first customer's clothes: tap + Log clothes
 4. Turn on notifications: \u2699\uFE0F \u2192 Account
 
-This short video shows how to log clothes: https://youtu.be/${s}`,l="Please save this number. It's where we'll send you Tagbook updates and new features, and you can message us here anytime you need help.";return t.self_signup?`${n}
+This short video shows how to log clothes: https://youtu.be/${s}`,l="Please save this number. If anything is not clear, or you need help with anything, just message us here or send a voice note, and we'll guide you step by step. We'll also send you Tagbook updates here.";return t.self_signup?`${n}
 
 Thank you for signing up ${t.name} on Tagbook! Your first month is free.
 
