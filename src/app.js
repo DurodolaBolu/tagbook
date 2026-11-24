@@ -1532,6 +1532,21 @@ function searchCustomers(q) {
   return customers.map(c => [score(c), c]).filter(([s]) => s < 9).sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name)).slice(0, 8).map(([, c]) => c);
 }
 let lookupFor = "";
+// Owner only: fill a new customer's phone and name from the phone's contacts (Android Chrome; iPhone has no contact picker for web apps).
+// Asked for by Bran Neuw Services. BrightWash first, everyone from 25 Nov.
+const PICK_LIVE = Date.parse("2026-11-25T08:00:00+01:00");
+const canPick = () => own() && "contacts" in navigator && "ContactsManager" in window && !!shop && (shop.id === PHOTO_SHOP || Date.now() >= PICK_LIVE || location.hostname === "localhost");
+const toLocal = t => { let n = digits(t); if (n.startsWith("234")) n = "0" + n.slice(3); else if (n.length === 10 && /^[789]/.test(n)) n = "0" + n; return /^0\d{10}$/.test(n) ? n : ""; };
+async function pickContact() {
+  let r; try { r = await navigator.contacts.select(["name", "tel"], { multiple: false }); } catch (_) { return; }
+  const c = r && r[0]; if (!c) return;
+  const ph = (c.tel || []).map(toLocal).find(Boolean);
+  if (!ph) { toast("That contact has no Nigerian phone number"); return; }
+  d.phone = ph; d.found = undefined;
+  const nm = String((c.name || [])[0] || "").replace(/[^a-z\s'-]/gi, " ").replace(/\s+/g, " ").trim();
+  if (nm && !d.name) d.name = nm.slice(0, 40);
+  renderNew(); lookup(ph);
+}
 async function lookup(phone) {
   lookupFor = phone; d.found = "loading";
   const { data, error } = await sb.rpc("find_customer", { p_phone: phone });
@@ -1555,7 +1570,7 @@ function customerBlock() {
   // new customer: phone first (it might still be someone we know), then name and mark
   const existing = d.phone.length === 11 && d.found && d.found !== "loading" ? d.found : null;
   let b = `<div class="newc"><div class="row" style="justify-content:space-between;align-items:center"><b>New customer</b><button class="mini" id="cback">Back to search</button></div>
-    <label for="ph">Phone number</label><input id="ph" type="text" inputmode="tel" value="${d.phone}" autocomplete="off">`;
+    <label for="ph">Phone number</label><input id="ph" type="text" inputmode="tel" value="${d.phone}" autocomplete="off">${canPick() ? `<button class="lnbtn" id="cpick" type="button">Pick from my contacts</button>` : ""}`;
   if (d.phone.length === 11 && d.found === "loading") b += `<p class="hint">Checking this number…</p>`;
   else if (existing) b += `<div class="found">This number is already a customer: <b>${esc(existing.name)}</b>, mark <b>${esc(existing.mark)}</b>. <button class="mini" id="cuse" style="margin-left:6px">Use</button></div>`;
   else if (d.phone.length === 11 && d.found === null) {
@@ -1658,6 +1673,7 @@ function renderNew() {
   view.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const c = customers.find(x => x.id === b.dataset.pick); d.cust = { id: c.id, name: c.name, mark: c.mark }; d.q = ""; renderNew(); });
   if ($("#cchange")) $("#cchange").onclick = () => { d.cust = null; renderNew(); const q = $("#cq"); if (q) q.focus(); };
   if ($("#cnew")) $("#cnew").onclick = () => { d.newMode = true; const dg = digits(d.q); if (/^0\d{10}$/.test(dg)) { d.phone = dg; lookup(dg); } d.q = ""; renderNew(); const p = $("#ph"); if (p) p.focus(); };
+  if ($("#cpick")) $("#cpick").onclick = pickContact;
   if ($("#cback")) $("#cback").onclick = () => { d.newMode = false; d.phone = ""; d.found = undefined; d.name = ""; d.hasMark = null; d.mark = ""; renderNew(); };
   if ($("#cuse")) $("#cuse").onclick = () => { const f = d.found; d.cust = { id: f.id, name: f.name, mark: f.mark }; d.newMode = false; d.phone = ""; d.found = undefined; renderNew(); };
   keep("#ph", v => { const nv = digits(v).slice(0, 11); if (nv !== d.phone) { d.phone = nv; d.found = undefined; if (nv.length === 11) lookup(nv); } });
