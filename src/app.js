@@ -2131,6 +2131,16 @@ let invReady = null;
 const BILL_STAGES = ["ready", "owe", "early"];
 function logSend(kind, stage) { if (!canBill() || !shop || !BILL_STAGES.includes(stage)) return; sb.from("send_log").insert({ shop_id: shop.id, kind, stage }).then(() => { }, () => { }); }
 let earlyOpen = null; // order whose "send the bill now" panel is open // the last invoice made, so a second tap shares at once
+// When the phone confirms the ready invoice was shared, move the order to Told, so nobody has to tap "I've sent it".
+// BrightWash first (asked for by Impressions Laundry), everyone from 25 Nov.
+const TOLD_LIVE = Date.parse("2026-11-25T08:00:00+01:00");
+function autoTold(o, type) {
+  if (type !== "ready" || o.status !== "ready" || !canBill() || !(shop.id === PHOTO_SHOP || Date.now() >= TOLD_LIVE || location.hostname === "localhost")) return;
+  o.status = "told"; if (o.again) o.again.ready = false;
+  put("orders", { id: o.id }, { status: "told" });
+  toast("Sent. The order is now marked as told.");
+  if (oFor === o.no && !$("#sheet").hidden) openOrder(o.no); else if (typeof render === "function") render();
+}
 async function sendInvoice(o, btn, type) {
   const key = [o.id, o.status, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length, billBy(o)].join(":"), label = "Send invoice (PDF)";
   let f = invReady && invReady.key === key ? invReady.file : null;
@@ -2146,7 +2156,7 @@ async function sendInvoice(o, btn, type) {
     const short = () => { const tot = +o.m.total || calc(o).total, pd = +o.m.paid || 0, due = owed(o);
       return `${invCaption(o, type)} The full list of clothes is in the invoice.${dutyText(o, true) ? `\n\n${dutyText(o, true)}` : ""}\n\nTotal: ${naira(tot)}${pd ? `\nPaid: ${naira(pd)}` : ""}${due > 0 ? `\nBalance: ${naira(due)}` : ""}` + (due > 0 ? payTo() : ""); };
     const text = !copyLive() ? invCaption(o, type) : full.length <= 1000 ? full : short();
-    try { await navigator.share({ files: [f], text }); logSend("pdf", type); stampBill(o); }
+    try { await navigator.share({ files: [f], text }); logSend("pdf", type); stampBill(o); autoTold(o, type); }
     catch (e) {
       // Some phones only allow sharing straight after a tap; the invoice is ready now, so one more tap sends it.
       if (e && e.name === "NotAllowedError") { btn.textContent = "Invoice ready. Tap to send"; return; }

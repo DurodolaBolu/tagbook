@@ -443,6 +443,10 @@ async function handle(route) {
     console.log("track link in list:", /track\?k=[0-9a-f]{24}/.test(txt));
     await page.goto("http://localhost:8787/track.html?k=" + o.track_token); await page.waitForTimeout(1200); await page.screenshot({ path: path.join(C, "track.png"), fullPage: true });
     console.log("track page:", (await page.textContent("h1").catch(() => "-")));
+    { const q = db.orders.find(x => x.id === o.id); q.status = "ready"; await page.goto("http://localhost:8787/#order-" + o.no); await page.reload(); await page.waitForTimeout(1200);
+      await page.evaluate(() => { navigator.canShare = () => true; navigator.share = async () => {}; });
+      await page.click('[data-pdf="ready"]').catch(e => console.log("no ready pdf", e.message.slice(0, 80))); await page.waitForTimeout(4000);
+      console.log("auto told:", db.orders.find(x => x.id === o.id).status); }
     console.log("bill sender saved:", JSON.stringify(db.orders.find(q => q.id === o.id).duty));
     console.log("errors:", errors.slice(0, 5));
     process.exit(0);
