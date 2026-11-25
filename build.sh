@@ -13,6 +13,8 @@ cp src/404.html site/404.html
 cp src/photos.html site/photos.html
 cp src/pay.html site/pay.html
 cp src/track.html site/track.html
+# Android app (Google Play): proves the Play app and this website belong together, so it opens without a browser bar
+if [ -f src/assetlinks.json ]; then mkdir -p site/.well-known && cp src/assetlinks.json site/.well-known/assetlinks.json; fi
 GEAR=$(cat src/gear.html)
 MACHINE=$(cat src/machine.svg)
 # iPhone launch screens (made by scripts/splash.js): shown by iOS while the app opens, instead of black
@@ -69,6 +71,7 @@ cat > site/manifest.webmanifest <<'JSON'
   "name": "Tagbook",
   "short_name": "Tagbook",
   "description": "Every cloth, accounted for.",
+  "id": "/",
   "start_url": "/#orders",
   "scope": "/",
   "display": "standalone",

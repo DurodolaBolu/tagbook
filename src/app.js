@@ -633,6 +633,12 @@ async function loadPlan() {
   return plan;
 }
 const planEnded = () => !!plan && plan.state === "ended";
+// Opened from the Google Play app (start URL has ?src=play, or Android hands over the referrer). The Play version
+// shows no payment screen or prices (Google's rules for apps that don't use Play billing); paying stays on the website.
+const inPlay = (() => {
+  const hit = /[?&]src=play\b/.test(location.search) || String(document.referrer || "").startsWith("android-app://");
+  try { if (hit) localStorage.setItem("tb-play", "1"); return localStorage.getItem("tb-play") === "1"; } catch (_) { return hit; }
+})();
 function planBanner() {
   if (!plan || plan.state === "free") return "";
   const d = plan.days_left, pay = own() ? `<button data-gopay>Pay now</button>` : "";
@@ -640,7 +646,10 @@ function planBanner() {
   if (plan.state === "ended") t = own() ? "New orders are paused. Your records are safe. Pay to start logging clothes again." : "New orders are paused. Ask the owner to pay for Tagbook.";
   else if (plan.state === "grace") t = own() ? `Your Tagbook plan ended on ${longDay(plan.until)}. Pay by ${longDay(plan.grace_until)} to keep logging clothes.` : `The Tagbook plan has ended. Ask the owner to pay by ${longDay(plan.grace_until)}, or logging will pause.`;
   else if (own() && d <= 7) t = plan.state === "trial" ? `Your free trial ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}. ${yearFirst() ? `Pay ${naira(plan.prices && plan.prices.m12 || PRICE_MONTH * 10)} once for the whole year and get 2 months free, or ${naira(PRICE_MONTH)} a month.` : `It's ${naira(PRICE_MONTH)} a month, or pay for 6 months or 1 year and get free months.`}` : `Your Tagbook plan ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
-  return t ? `<div class="alert ${plan.state === "ended" || plan.state === "grace" ? "planwarn" : ""}"><span>${t}</span>${pay}</div>` : "";
+  if (inPlay && t) t = plan.state === "ended" ? (own() ? "New orders are paused. Your records are safe. See your plan." : "New orders are paused. Ask the owner.")
+    : plan.state === "grace" ? `Your Tagbook plan ended on ${longDay(plan.until)}. Logging pauses after ${longDay(plan.grace_until)}.`
+    : `Your ${plan.state === "trial" ? "free trial" : "plan"} ends ${d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}.`;
+  return t ? `<div class="alert ${plan.state === "ended" || plan.state === "grace" ? "planwarn" : ""}"><span>${t}</span>${inPlay && pay ? `<button data-gopay>See plan</button>` : pay}</div>` : "";
 }
 function wirePlanBanner(root) { root.querySelectorAll("[data-gopay]").forEach(b => b.onclick = () => go("plan")); }
 async function billingCall(body) {
@@ -670,7 +679,7 @@ function planHtml() {
       <span class="hint">${k === "m1" ? "Pay every month" : `${PLAN_INFO[k][2]} (save ${naira(save(k))})`}</span></button>`).join("");
   const refs = p.referrals || [];
   return card("Your plan", "", `<p class="pstate"><b>${status[0]}</b><span>${status[1]}</span></p>`)
-    + (p.state === "free" && !isAdmin ? "" : card("Choose a plan", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : "",
+    + (inPlay || (p.state === "free" && !isAdmin) ? "" : card("Choose a plan", p.state === "free" ? "Test shop: paying here is only for trying the payment. It doesn't change anything for real shops." : "",
       `<p class="hint" style="margin-top:0">${yf && p.prices.m12 ? `Pay once for the whole year and get 2 months free. Or pay ${naira(p.prices.m1)} every month. No extra charges.` : `${naira(p.prices.m1)} a month for every shop, with no extra charges. Pay ahead and get free months.`}</p>
        <div class="plans">${opts}</div>
        <button class="btn btn-primary" id="paygo">Pay ${naira(p.prices[pick])} with Paystack</button>
@@ -1335,6 +1344,7 @@ const isPhone = () => /Android|iPhone|iPod/i.test(navigator.userAgent);
 const device = () => isPhone() ? "phone" : isIOS || /Android/i.test(navigator.userAgent) ? "tablet" : "laptop";
 const installCardLater = () => { try { return Date.now() - (+localStorage.getItem("tb-install-card") || 0) < 864e5; } catch (_) { return false; } };
 function installCard() {
+  if (inPlay) return "";
   if (standalone() || installCardLater() || (!installEvt && !isPhone())) return "";
   const steps = installEvt ? "" : installSteps();
   return `<section class="scard icard"><div class="ihead"><img src="/icon-192.png" alt=""><div><b>Install Tagbook on this ${device()}</b><span>It opens like an app, stays logged in and can send you notifications.</span></div></div>

@@ -2,6 +2,7 @@
   "name": "Tagbook",
   "short_name": "Tagbook",
   "description": "Every cloth, accounted for.",
+  "id": "/",
   "start_url": "/#orders",
   "scope": "/",
   "display": "standalone",
