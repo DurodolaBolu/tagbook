@@ -752,3 +752,37 @@ label .opt{font-size:13px}
 .lnpc small{color:var(--muted);font-size:13px}
 .ptable input[data-ppc]{text-align:right}
 .scard .ptable input{min-height:0;padding:6px 4px}
+/* Order page: one next step on top, then clear sections */
+.oview .hint{margin-top:6px}
+.ocard{display:block;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-top:12px}
+.ocard h3{margin:0 0 10px;font-size:17px;display:flex;align-items:center;gap:8px}
+.ocard h3 .olink{margin-left:auto}
+.ocard .lines{margin-top:0;padding:0;background:transparent}
+.onext{background:var(--accent-soft);border-color:transparent}
+.onext small{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-deep)}
+.onext h2{margin:2px 0 4px;font-size:20px}
+.onext>p{margin:0 0 12px;color:var(--fg)}
+.onext .wa-label{display:none}
+.onext .check{background:var(--card)}
+.olink{border:0;background:none;color:var(--accent);font:inherit;font-weight:600;font-size:15px;padding:0;cursor:pointer;text-decoration:none}
+.mtiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;text-align:center;font-variant-numeric:tabular-nums}
+.mtiles div{background:var(--bg);border-radius:10px;padding:10px 4px}
+.mtiles b{display:block;font-size:17px}.mtiles span{font-size:12px;color:var(--muted)}
+.mtiles .owe{background:var(--owes-soft)}.mtiles .owe b{color:var(--owes)}
+.mtiles .ok{background:var(--accent-soft)}.mtiles .ok b{color:var(--accent-deep)}
+.ocard .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ocard .two .btn{margin-top:0;padding-left:6px;padding-right:6px}
+.ocard .two .btn:only-child{grid-column:1/-1}
+.ppbox{margin-top:10px}
+.phist{margin-top:12px;font-size:14px;color:var(--muted)}
+.phist summary{display:flex;justify-content:space-between;cursor:pointer;list-style:none}
+.phist summary::-webkit-details-marker{display:none}
+.phist summary span{color:var(--accent);font-weight:600}
+.owho .lbl{margin:0 0 4px;font-size:13px;color:var(--muted)}
+.owho p:last-child{margin:0;font-size:14px;color:var(--muted);line-height:1.6}
+.oprint summary{cursor:pointer;font-weight:600;color:var(--accent)}
+.oview .sent{margin-top:10px}
+.ocard .phblock{background:none;border:0;box-shadow:none;padding:0;margin:12px 0 0}
+.ocard .phblock>b{font-size:14px;color:var(--muted);font-weight:600}
+.ocard .phblock>.hint{display:none}
+.onext .gask .wa-label{display:block}

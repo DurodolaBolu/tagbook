@@ -433,10 +433,15 @@ async function handle(route) {
     console.log("saved items:", JSON.stringify(o.items), "| duty:", JSON.stringify(o.duty));
     await page.goto("http://localhost:8787/#order-" + o.no); await page.reload(); await page.waitForTimeout(1200);
     await page.screenshot({ path: path.join(C, "order.png"), fullPage: true });
+    { await page.setViewportSize({ width: 390, height: 1800 }); await page.screenshot({ path: path.join(C, "new-list.png") }); await page.setViewportSize({ width: 390, height: 1700 });
+      page.context().once("page", p2 => p2.close().catch(() => {}));
+      db.customers.forEach(c => { c.greet_asked = true; }); await page.reload(); await page.waitForTimeout(1000);
+      await page.click('[data-wtxt="list"]').catch(e => console.log("no list btn", e.message.slice(0, 60))); await page.waitForTimeout(1200);
+      console.log("list auto-marked sent:", JSON.stringify(db.orders.find(q => q.id === o.id).list_sent), db.orders.find(q => q.id === o.id).status); }
     db.shops[0].crew.push({ n: "Ada", r: "c" }); await page.evaluate(id => localStorage.setItem("tb-duty-" + id, JSON.stringify({ by: "Ada", w: ["Effiong", "Eke", "Abas"] })), db.shops[0].id);
     db.customers.forEach(c => { c.greet_asked = true; }); await page.reload(); await page.waitForTimeout(1200);
     await page.click("details.early summary").catch(() => {}); await page.waitForTimeout(300); await page.click("details.early .wtext summary").catch(() => {}); await page.waitForTimeout(200);
-    const txt = await page.evaluate(() => [...document.querySelectorAll(".wa")].map(x => x.innerText).join("\n----\n"));
+    const txt = await page.evaluate(() => [...document.querySelectorAll(".wa")].map(x => x.textContent).join("\n----\n"));
     console.log("messages:\n" + txt);
     await page.evaluate(() => { try { delete navigator.share; navigator.canShare = () => false; } catch (_) { } });
     const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
@@ -791,12 +796,12 @@ async function handle(route) {
   await T('#sheet [data-og="__other"]'); await page.fill("#data-og-txt", "Alhaji"); await T("#og-save"); await page.waitForTimeout(300); console.log("greet saved:", db.customers[0].greet, db.customers[0].greet_asked);
   const waText = await page.textContent("#sheet");
   console.log("ready msg has invoice:", waText.includes("INVOICE INV-1"), "greets Alhaji:", waText.includes("Hello Alhaji,"), "no name line:", !waText.includes("Customer: Ade"), "has bank:", waText.includes("0123456789"));
-  await T('[data-done="ready"]'); console.log("status:", db.orders[0].status);
-  await page.fill("#pay", "5000"); await T("#pp"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(300);
+  page.context().once("page", p2 => p2.close().catch(() => {})); await page.evaluate(() => document.querySelector('[data-wtxt="ready"]').click()); await page.waitForTimeout(1000); console.log("status:", db.orders[0].status);
+  await T("#ppart"); await page.fill("#pay", "5000"); await T("#pp"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(300);
   console.log("money after part pay:", db.order_money[0].paid, "settled:", db.orders[0].settled);
   await page.$eval("#ppall", e => e.scrollIntoView({ block: "center" })); await page.screenshot({ path: path.join(out, "09b-pay-form.png") });
   await page.evaluate(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
-  console.log("print button:", await page.textContent("#prt")); await T("#prt"); await page.waitForTimeout(200);
+  console.log("print button:", await page.textContent("#prt")); await T(".oprint summary"); await T("#prt"); await page.waitForTimeout(200);
   console.log("print called:", await page.evaluate(() => window.__printed), "| receipt has total:", (await page.textContent("#receipt")).includes("TOTAL"));
   await page.emulateMedia({ media: "print" }); await page.evaluate(() => document.body.classList.add("printing"));
   await page.locator("#receipt").screenshot({ path: path.join(out, "30-receipt-80.png") });
@@ -813,7 +818,7 @@ async function handle(route) {
   await shot("11-owner-order2");
   await page.evaluate(() => { const s = document.querySelector("#sheet"); s.scrollTop = 520; }); await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(out, "11d-owner-order2-bill.png") });
-  console.log("auto-billed order shows:", (await page.textContent("#bill")).trim());
+  console.log("auto-billed order shows:", (await page.textContent("#billcard h3")).trim());
   await T("#sheet [data-back]");
   // owner logs a special item with a price: it lands on the price list
   {

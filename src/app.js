@@ -1845,23 +1845,18 @@ function waBlock(o, type, markable) {
   if (own() && c.id && !c.greet_asked) return `<div class="gask"><p class="wa-label" style="margin-top:0;color:var(--fg);font-size:15px">Before you send: how do you greet ${esc(c.name)} in messages?</p>
     ${greetChips("-", "data-og", ogOther)}${ogOther ? `<button class="btn btn-primary" id="og-save" style="margin-top:8px">Save</button>` : ""}<p class="hint">Asked once per customer. You can change it later under More, Edit customer.</p></div>`;
   const text = `<div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div>
-    <a class="btn btn-${type === "list" ? "primary" : "ghost"}" data-wtxt="${type}" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>`;
+    <a class="btn btn-ghost" data-wtxt="${type}" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>`;
   const bankNote = (type === "ready" || type === "owe" || type === "early") && owed(o) && !hasBank() ? `<p class="bad">Add your bank account in Settings so the invoice tells the customer where to pay.</p>` : "";
-  // Bills go out as a PDF invoice; the plain text message stays one tap away for customers who prefer it.
+  // Bills go out as a PDF invoice; the plain text message stays one tap away. Tapping send counts as sent (no "I've sent it").
   if (type === "ready" || type === "owe" || type === "early") return `<p class="wa-label">Invoice for the customer: ${type === "ready" ? "clothes ready" : type === "early" ? "before the clothes are ready" : "payment reminder"}</p>
     ${billToLine(c)}
-    <button class="btn btn-primary" data-pdf="${type}">Send invoice (PDF)</button>
+    <button class="btn btn-primary" data-pdf="${type}">Send bill on WhatsApp</button>
     <p class="hint">Your phone asks where to send it. Pick WhatsApp, then ${esc(c.name.split(" ")[0])}'s chat.</p>
-    <details class="wtext"><summary>Or send it as a text message</summary>${text}<div class="row"><button class="btn btn-ghost" data-copy="${type}">Copy</button></div></details>
-    ${markable ? `<button class="btn btn-ghost" data-done="${type}">I've sent it</button>` : ""}
-    ${bankNote}
-    ${markable ? `<p class="hint">After sending, tap “I've sent it”. Until then this stays here.</p>` : ""}`;
+    <details class="wtext"><summary>Send as a text message instead</summary>${text}<div class="row"><button class="btn btn-ghost" data-copy="${type}">Copy</button></div></details>
+    ${bankNote}`;
   return `<p class="wa-label">WhatsApp to customer: ${MSG_NAMES[type]}</p>
-    <div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div>
-    <a class="btn btn-primary" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Open in WhatsApp</a>
-    <div class="row"><button class="btn btn-ghost" data-copy="${type}">Copy</button>${markable ? `<button class="btn btn-ghost" data-done="${type}">I've sent it</button>` : ""}</div>
-    ${(type === "ready" || type === "owe") && owed(o) && !hasBank() ? `<p class="bad">Add your bank account in Settings so the invoice tells the customer where to pay.</p>` : ""}
-    ${markable ? `<p class="hint">After sending, tap “I've sent it”. Until then this message stays here.</p>` : ""}`;
+    <a class="btn btn-primary" data-wtxt="${type}" href="${wa(o, message(o, type))}" target="_blank" rel="noopener">Send ${type === "list" ? "list" : "message"} on WhatsApp</a>
+    <details class="wtext"><summary>See or copy the message</summary><div class="wa" id="wamsg-${type}">${waFmt(message(o, type))}</div><div class="row"><button class="btn btn-ghost" data-copy="${type}">Copy</button></div></details>`;
 }
 const sentLine = (o, type, text) => o.again[type] ? waBlock(o, type, false) : `<div class="sent"><span>${text}</span><button data-again="${type}">Send again</button></div>`;
 
@@ -2641,84 +2636,108 @@ function wireNote(sh, o) {
     again();
   };
 }
+let billEdit = null, partOpen = null;
+// Tapping a send button counts as sent: the order moves on, and "Send again" stays available.
+function markSent(o, type) {
+  if (type === "list" && !o.list_sent) { o.list_sent = true; const st = o.status === "new" ? "listed" : o.status; o.status = st; put("orders", { id: o.id }, { list_sent: true, status: st }); }
+  else if (type === "ready" && o.status === "ready") { o.status = "told"; put("orders", { id: o.id }, { status: "told" }); }
+  else return;
+  if (o.again) o.again[type] = false;
+  setTimeout(() => { if (oFor === o.no && !$("#sheet").hidden) openOrder(o.no); }, 600);
+}
 function openOrder(no) {
   const o = orders.find(x => x.no === no) || cancelledOrders.find(x => x.no === no); if (!o) { go("orders"); return; }
-  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; if (phAdd) { URL.revokeObjectURL(phAdd.url); phAdd = null; } }
+  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; billEdit = null; partOpen = null; if (phAdd) { URL.revokeObjectURL(phAdd.url); phAdd = null; } }
   if (o.cancelled || oMode) { fixView(o); return; }
   const c = cust(o.cid), k = calc(o), sh = $("#sheet");
   if (canBill() && !o.notified) { o.notified = true; put("orders", { id: o.id }, { notified: true }); }
   const idx = STEPS.findIndex(s => s[0] === o.status);
   const allChecked = o.items.every((_, i) => o.checked[i]);
   const canEditBill = canBill() && o.status !== "picked";
-  let html = "";
+  const first = esc(c.name.split(" ")[0]);
   const checkHtml = () => {
     if (!(o.status === "new" || o.status === "listed")) return "";
     return o.checking ? `<div class="check"><p><b>Check before bagging.</b> Gather every cloth with mark <b>${esc(c.mark)}</b> inside, and tick each one. If something is missing, you find out now, not when the customer comes.</p>
         ${o.items.map((it, i) => `<label class="ck"><input type="checkbox" data-ck="${i}" ${o.checked[i] ? "checked" : ""}> ${it.qty} × ${esc(pname(it) + pcsTag(it))}</label>`).join("")}
         <button class="btn btn-primary" id="rd" ${allChecked ? "" : "disabled"}>All here. Mark ready</button></div>`
-      : `<button class="btn ${canBill() ? "btn-ghost" : "btn-primary"}" id="washed" style="margin-top:16px">Clothes are washed and ironed</button>
-        <p class="hint">Tap this when the work is done. You'll check every cloth with mark ${esc(c.mark)} before bagging.</p>`;
+      : `<button class="btn btn-primary" id="washed">Clothes are washed and ironed</button>
+        <p class="hint">You'll then tick each cloth with mark ${esc(c.mark)} before bagging.</p>`;
   };
+  // One clear "next step" at the top; everything else sits in its own section below.
+  const card = (h, p, body) => `<section class="ocard onext"><small>Next step</small><h2>${h}</h2>${p ? `<p>${p}</p>` : ""}${body}</section>`;
+  const still = owed(o) ? ` ${naira(owed(o))} still to pay.` : "";
+  let next = "";
   if (canBill()) {
-    if (o.status === "new" && !o.list_sent) html += waBlock(o, "list", true); else if (o.list_sent) html += sentLine(o, "list", "List of clothes sent.");
-    if (o.status === "ready") html += o.billed ? waBlock(o, "ready", true) : `<p class="bad">Clothes are packed and ready. Save the bill below first so the message can include it.</p>`;
-    if (o.status === "told" || (o.status === "picked" && o.billed)) html += sentLine(o, "ready", "Ready message and invoice sent.");
-    if (partner(o)) { const q = partner(o); html += `<p class="pairnote">Dropped together with <a href="#order-${q.no}">order #${q.no}</a>${q.express ? " (⚡ express)" : ""}. You can send the customer one bill for both, below.</p>`; }
-    html += `<h2 style="margin-top:18px">Bill ${o.billed ? `<span class="pill p-ready" style="vertical-align:middle">Saved</span>` : ""}</h2>`;
-    if (canEditBill) {
-      html += `<div class="lines">
+    if (o.status === "picked") next = owed(o) ? card(`${first} still owes ${naira(owed(o))}`, "Send a payment reminder with the invoice.", waBlock(o, "owe")) : "";
+    else if (o.status === "told") next = card(`Has ${first} picked up the clothes?`, still.trim(), `<button class="btn btn-primary" id="pick">Clothes picked up</button>`) ;
+    else if (o.status === "ready") next = o.billed ? card(`Tell ${first} the clothes are ready`, `Sends the bill with the ready message.${still}`, waBlock(o, "ready") + `<button class="olink" id="pick" style="margin-top:10px">Already picked up?</button>`)
+      : card("Save the bill first", "The ready message goes out with the bill.", `<button class="btn btn-primary" id="gobill">Open the bill</button>`);
+    else if (o.status === "new" && !o.list_sent) next = card(`Send ${first} the list of clothes`, `So ${first} has a record of the ${countTxt(o)} dropped off.`, waBlock(o, "list"));
+    else next = card("When the clothes are washed and ironed", "", checkHtml());
+  } else {
+    if (o.status === "new" || o.status === "listed") next = card("When the clothes are washed and ironed", "", checkHtml());
+    else if (o.status === "ready") next = card("Ready and bagged", "Waiting for the owner to tell the customer.", `<button class="btn btn-ghost" id="pick">Clothes picked up</button>`);
+    else if (o.status === "told") next = card(`Has ${first} picked up the clothes?`, "", `<button class="btn btn-primary" id="pick">Clothes picked up</button>`);
+  }
+  // Messages already sent, with a way to send again.
+  let sent = "";
+  if (canBill()) {
+    if (o.list_sent && !(o.status === "new" && !o.list_sent)) sent += sentLine(o, "list", "List of clothes sent.");
+    if (o.status === "told" || (o.status === "picked" && o.billed)) sent += sentLine(o, "ready", "Ready message and bill sent.");
+  }
+  let payHtml = "", billHtml = "";
+  if (canBill()) {
+    const editing = canEditBill && (!o.billed || billEdit === o.id);
+    const pairNote = partner(o) ? (q => `<p class="pairnote">Dropped together with <a href="#order-${q.no}">order #${q.no}</a>${q.express ? " (⚡ express)" : ""}. You can send the customer one bill for both.</p>`)(partner(o)) : "";
+    billHtml = `<section class="ocard" id="billcard"><h3>Clothes and bill ${o.billed ? `<span class="pill p-ready">Saved</span>` : ""}${o.billed && canEditBill && !editing ? `<button class="olink" id="billedit">Edit</button>` : ""}</h3>`;
+    if (editing) {
+      billHtml += `<div class="lines">
         ${o.items.map((it, i) => { const p = item(it.id) || {}; return `<div><span>${it.qty} × ${esc(pname(it) + pcsTag(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}</small></span>${p.custom ? `<input data-cp="${i}" ${moneyAttrs} placeholder="Set price" value="${o.m.custom[i] || ""}" aria-label="Price for ${esc(pname(it))}">` : !unitPrice(o, it, i) ? !own() ? `<span class="bad">No price yet</span>` : `<input data-np="${i}" ${moneyAttrs} placeholder="Price not set" aria-label="Price for one ${esc(pname(it))}">` : `<span>${naira(unitPrice(o, it, i) * it.qty)}</span>`}</div>`; }).join("")}
         ${o.items.some((it, i) => !(item(it.id) || {}).custom && !unitPrice(o, it, i)) ? `<p class="bad" style="margin:4px 0">Some clothes have no price yet. Type the price for one, and it's saved to your price list.</p>` : ""}
         ${o.wait ? `<div><span>Wait &amp; get${spLabel(o)}</span>${spManual(o) ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.m.express_amt || ""}" aria-label="Wait and get amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`
         : `<div><label class="ck" style="margin:0"><input type="checkbox" id="ex" ${o.express ? "checked" : ""}> Express delivery${expressLabel()}</label>${expManual() ? `<input id="exa" ${moneyAttrs} placeholder="Amount" value="${o.express && o.m.express_amt ? o.m.express_amt : ""}" aria-label="Express delivery amount">` : `<span id="exv">${naira(k.exp)}</span>`}</div>`}
         <div><span>Pickup / delivery${o.pickup ? "<br><small style='color:var(--muted)'>Customer asked for it</small>" : ""}</span><input id="dl" ${moneyAttrs} placeholder="0" value="${o.m.delivery || ""}" aria-label="Pickup or delivery cost"></div>
         ${own() ? `<div><span>Discount</span><input id="dc" ${moneyAttrs} placeholder="0" value="${o.m.discount || ""}" aria-label="Discount"></div>` : o.m.discount ? `<div><span>Discount</span><span>−${naira(o.m.discount)}</span></div>` : ""}
-        <div><b>Total</b><b id="tot">${naira(k.total)}</b></div></div>
-        <button class="btn ${o.billed ? "btn-ghost" : "btn-primary"}" id="bill">${o.billed ? "Update bill" : "Save bill"}</button>
-        ${o.status === "new" || o.status === "listed" ? (o.billed
-          ? `<details class="early"${earlyOpen === o.id ? " open" : ""}><summary>${partner(o) ? `Send one bill for both orders (#${Math.min(o.no, partner(o).no)} and #${Math.max(o.no, partner(o).no)}) now` : "Send the bill now, before the clothes are ready"}</summary>${waBlock(o, "early", false)}</details>
-             <p class="hint">For customers who pay first. The bill also goes out with the ready message.</p>`
-          : `<p class="hint">You can save or change the bill any time. Save it to send it now, or it goes with the ready message.</p>`) : ""}`;
+        <div><b>Total · ${countTxt(o)}</b><b id="tot">${naira(k.total)}</b></div></div>
+        <button class="btn btn-primary" id="bill">${o.billed ? "Save changes" : "Save bill"}</button>
+        ${o.billed ? `<button class="olink" id="billcancel" style="margin-top:8px">Cancel</button>` : `<p class="hint">Save the bill to send it now, or it goes out with the ready message.</p>`}`;
     } else {
-      html += `<div class="lines">
-        ${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it) + pcsTag(it))}</span><span>${naira(unitPrice(o, it, i) * it.qty)}</span></div>`).join("")}
+      billHtml += `<div class="lines">
+        ${o.items.map((it, i) => `<div><span>${it.qty} × ${esc(pname(it))}<br><small style="color:var(--muted)">${SERVICES[it.svc]}${pcsOf(it) > 1 ? ` · ${it.qty * pcsOf(it)} pieces` : ""}</small></span><span>${naira(unitPrice(o, it, i) * it.qty)}</span></div>`).join("")}
         ${k.exp ? `<div><span>${spName(o)}</span><span>${naira(k.exp)}</span></div>` : ""}
         ${o.m.delivery ? `<div><span>Pickup / delivery</span><span>${naira(o.m.delivery)}</span></div>` : ""}
         ${o.m.discount ? `<div><span>Discount</span><span>−${naira(o.m.discount)}</span></div>` : ""}
-        <div><b>Total</b><b>${naira(o.billed ? o.m.total : k.total)}</b></div></div>`;
+        <div><b>Total · ${countTxt(o)}</b><b>${naira(o.billed ? o.m.total : k.total)}</b></div></div>`;
+      if ((o.status === "new" || o.status === "listed") && o.billed) billHtml += `<details class="early"${earlyOpen === o.id ? " open" : ""}><summary>${partner(o) ? `Send one bill for both orders (#${Math.min(o.no, partner(o).no)} and #${Math.max(o.no, partner(o).no)}) now` : "Send the bill now, before the clothes are ready"}</summary>${waBlock(o, "early")}</details>`;
     }
-    html += `<h2 style="margin-top:18px">Payment</h2><div class="lines">
-      ${o.billed ? `<div><span>Total</span><span>${naira(o.m.total)}</span></div>` : ""}
-      <div><span>Paid so far</span><span>${naira(o.m.paid)}</span></div>
-      ${o.billed ? `<div><b ${owed(o) ? 'style="color:var(--owes)"' : ""}>Still to pay</b><b ${owed(o) ? 'style="color:var(--owes)"' : ""}>${naira(owed(o))}</b></div>`
-        : `<div><span style="color:var(--muted)">Balance shows once the bill is saved</span><span></span></div>`}</div>
-      ${payList(o)}
-      ${!o.billed || owed(o) ? payForm(owed(o) || "0", o.billed && owed(o) ? owed(o) : 0) + (!o.billed ? `<p class="hint">Use this when a customer pays before the clothes are ready.</p>` : "") : `<p class="hint">Fully paid.</p>`}`;
-    if (o.status === "picked" && owed(o)) html += waBlock(o, "owe", false);
-    html += checkHtml();
+    billHtml += pairNote + `</section>`;
+    const n = (o.m.payments || []).length;
+    payHtml = `<section class="ocard"><h3>Payment</h3>
+      <div class="mtiles"><div><b>${o.billed ? naira(o.m.total) : "–"}</b><span>Total</span></div><div><b>${naira(o.m.paid)}</b><span>Paid</span></div>
+        <div class="${owed(o) ? "owe" : o.billed ? "ok" : ""}"><b>${o.billed ? (owed(o) ? naira(owed(o)) : "Paid") : "–"}</b><span>${o.billed ? (owed(o) ? "Still to pay" : "In full") : "Save the bill"}</span></div></div>
+      ${o.billed && !owed(o) ? "" : `<div class="two">${o.billed ? `<button class="btn btn-primary" id="ppall">Paid ${naira(owed(o))}</button>` : ""}<button class="btn btn-ghost" id="ppart" aria-expanded="${partOpen === o.id}">${o.billed ? "Part payment" : "Customer paid early"}</button></div>
+        ${partOpen === o.id ? `<div class="ppbox"><label for="pay">Amount received (₦)</label><input id="pay" ${moneyAttrs} placeholder="0"><button class="btn btn-primary" id="pp">Record payment</button></div>` : ""}`}
+      ${n ? `<details class="phist"><summary>${n} payment${n > 1 ? "s" : ""} · ${naira(o.m.paid)}<span>See all</span></summary>${payList(o)}</details>` : ""}</section>`;
   } else {
-    html += `<div class="lines">${o.items.map(it => `<div><span>${it.qty} × ${esc(pname(it) + pcsTag(it))}</span><span style="color:var(--muted)">${SERVICES[it.svc]}</span></div>`).join("")}
-      <div><b>Clothes</b><b>${countTxt(o)}</b></div>
-      ${o.billed && (o.status === "told" || o.status === "picked") ? `<div><span>Payment</span><span class="pill ${owed(o) ? "p-owed" : "p-collected"}">${owed(o) ? "Not paid" : "Paid"}</span></div>` : ""}</div>`;
-    html += `<h2 style="margin-top:18px">Payment</h2>` + (o.billed && o.settled ? `<p class="hint"><span class="pill p-collected">Paid in full</span></p>`
-      : payForm("0", o.billed) + `<p class="hint">${o.billed ? "Tap Paid in full if the customer paid everything. Otherwise type what they gave you." : "Type what the customer gave you."} The owner sees it straight away.</p>`);
-    html += checkHtml();
-    if (o.status === "ready") html += `<p class="hint" style="margin-top:12px">Ready and bagged. Waiting for the owner to tell the customer.</p>`;
+    billHtml = `<section class="ocard"><h3>Clothes</h3><div class="lines">${o.items.map(it => `<div><span>${it.qty} × ${esc(pname(it) + pcsTag(it))}</span><span style="color:var(--muted)">${SERVICES[it.svc]}</span></div>`).join("")}
+      <div><b>Clothes</b><b>${countTxt(o)}</b></div></div></section>`;
+    payHtml = `<section class="ocard"><h3>Payment</h3>` + (o.billed && o.settled ? `<p class="hint"><span class="pill p-collected">Paid in full</span></p>`
+      : payForm("0", o.billed) + `<p class="hint">${o.billed ? "Tap Paid in full if the customer paid everything. Otherwise type what they gave you." : "Type what the customer gave you."} The owner sees it straight away.</p>`) + `</section>`;
   }
-  if (o.status === "ready" || o.status === "told") html += `<button class="btn btn-ghost" id="pick" style="margin-top:16px">Clothes picked up</button>
-    <p class="hint">Mark this when the customer takes the clothes${canBill() ? ". Payment is recorded separately, because some customers pay later." : ". Payment is recorded by the owner."}</p>`;
-
-  html += printBlock(o);
+  const whoHtml = o.duty && (o.duty.by || o.duty.bill || (o.duty.w || []).length) ? `<section class="ocard owho"><p class="lbl">Who worked on it</p><p>${[o.duty.by ? "Received by " + esc(o.duty.by) : "", o.duty.bill ? "Bill by " + esc(o.duty.bill) : ""].filter(Boolean).join(" · ")}${(o.duty.w || []).length ? `${o.duty.by || o.duty.bill ? "<br>" : ""}Laundry attendants: ${esc(andList(o.duty.w))}` : ""}</p></section>` : "";
   const y = sh.hidden ? 0 : sh.scrollTop;
-  sh.innerHTML = `<div class="app">
+  sh.innerHTML = `<div class="app oview">
     ${orderTop(o)}
     <div class="dhead"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div><b>${esc(c.name)}</b>
       <span>${canBill() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${speedLabel(o) ? " · " + speedLabel(o) : ""}</span></div></div>
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
-    <p class="hint">Dropped ${fmtDay(o.at)}${o.duty && o.duty.by ? "<br>Received by " + esc(o.duty.by) : ""}${o.duty && o.duty.bill ? "<br>Bill sent by " + esc(o.duty.bill) : ""}${o.duty && (o.duty.w || []).length ? "<br>Laundry attendants: " + esc(andList(o.duty.w)) : ""}</p>
-    ${noteBlock(o)}
-    ${photoBlock(o)}
-    ${html}
+    <p class="hint">Dropped ${fmtDay(o.at)}${o.collect ? ` · ready by ${esc(fmtCollect(o.collect))}` : ""}</p>
+    ${next}${sent}
+    ${payHtml}
+    ${billHtml}
+    <section class="ocard"><h3>Photos and notes</h3>${noteBlock(o)}${photoBlock(o)}</section>
+    ${whoHtml}
+    <details class="ocard oprint"><summary>${canBill() && o.billed ? "Print receipt" : "Print drop-off slip"}</summary>${printBlock(o)}</details>
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
   wireBack(sh); wireFix(sh, o); wireNote(sh, o); wirePhotos(sh, o);
@@ -2745,9 +2764,13 @@ function openOrder(no) {
     if (await put("customers", { id: c.id }, { inv_name: keep })) { c.inv_name = keep; invReady = null; toast("Saved"); }
     btEdit = null; openOrder(o.no);
   };
-  sh.querySelectorAll("[data-wtxt]").forEach(a => a.addEventListener("click", () => { logSend("text", a.dataset.wtxt); if (BILL_STAGES.includes(a.dataset.wtxt)) stampBill(o); }));
+  sh.querySelectorAll("[data-wtxt]").forEach(a => a.addEventListener("click", () => { logSend("text", a.dataset.wtxt); if (BILL_STAGES.includes(a.dataset.wtxt)) stampBill(o); markSent(o, a.dataset.wtxt); }));
+  if ($("#billedit")) $("#billedit").onclick = () => { billEdit = o.id; again(); };
+  if ($("#billcancel")) $("#billcancel").onclick = () => { billEdit = null; again(); };
+  if ($("#gobill")) $("#gobill").onclick = () => { const b = $("#billcard"); if (b) b.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  if ($("#ppart")) $("#ppart").onclick = () => { partOpen = partOpen === o.id ? null : o.id; again(); const i = $("#pay"); if (i) i.focus(); };
   sh.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
-    const t = message(o, b.dataset.copy); logSend("text", b.dataset.copy); if (BILL_STAGES.includes(b.dataset.copy)) stampBill(o);
+    const t = message(o, b.dataset.copy); logSend("text", b.dataset.copy); if (BILL_STAGES.includes(b.dataset.copy)) stampBill(o); markSent(o, b.dataset.copy);
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast("Message copied")).catch(() => {
       const r = document.createRange(); r.selectNodeContents($("#wamsg-" + b.dataset.copy)); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Message selected. Copy it.");
     });
@@ -2791,6 +2814,7 @@ function openOrder(no) {
         if (own() && !known && await toPriceList(tidy(it.label).slice(0, 40), it.svc, +o.m.custom[i])) added.push(it.label);
       }
       toast(added.length ? `Bill saved. Added ${added.join(", ")} to your price list.` : "Bill saved");
+      billEdit = null;
     }
     again();
   };
@@ -2800,7 +2824,7 @@ function openOrder(no) {
     const label = pp.textContent; pp.disabled = true; pp.textContent = "Recording…";
     const { data, error } = await sb.rpc("record_payment", { p_order: o.id, p_amount: v, p_method: payMethod });
     if (error) { toast(/ALREADY_PAID/.test(error.message || "") ? "This order is already fully paid." : failMsg(error)); pp.disabled = false; pp.textContent = label; return; }
-    v = data.added;
+    v = data.added; partOpen = null;
     let extra = ""; const q = partner(o), rest = pp.id === "pp" ? Math.max(0, num(($("#pay") || {}).value || "0") - data.added) : 0;
     if (q && rest > 0 && q.billed && owed(q) > 0) { const r2 = await sb.rpc("record_payment", { p_order: q.id, p_amount: Math.min(rest, owed(q)), p_method: payMethod }); if (!r2.error) extra = ` ${naira(r2.data.added)} went to order #${q.no}, dropped together.`; }
     try { await load(); } catch (_) { }
