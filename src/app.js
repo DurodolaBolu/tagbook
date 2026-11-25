@@ -2277,7 +2277,7 @@ function fixView(o) {
           <label for="fxs">Service</label><select id="fxs">${svcs.map(k => `<option value="${k}" ${k === fxAdd.svc ? "selected" : ""}>${SERVICES[k]}</option>`).join("")}</select>
           <div class="row"><button class="btn btn-ghost" id="fxaddx">Close</button><button class="btn btn-primary" id="fxaddgo">Add</button></div></div>`
         : `<button class="fxaddbtn" id="fxaddopen">+ Add another item</button>`}
-      <div class="lines" style="margin-top:12px"><div><span>${n.items.reduce((s2, it) => s2 + it.qty, 0)} items</span><span></span></div><div><b>${changed ? "New total" : "Total"}</b><b>${naira(next)}</b></div></div>
+      <div class="lines" style="margin-top:12px"><div><span>${(q => `${q} item${q === 1 ? "" : "s"}`)(n.items.reduce((s2, it) => s2 + it.qty, 0))}</span><span></span></div><div><b>${changed ? "New total" : "Total"}</b><b>${naira(next)}</b></div></div>
       ${changed && now !== next ? `<p class="hint">Was ${naira(now)}.${o.m.paid > next ? ` The customer has already paid ${naira(o.m.paid)}, more than the new total.` : ""}</p>` : ""}
       ${n.missing ? `<p class="hint">Set the price for ${esc(pname(n.missing))} on the bill after saving.</p>` : ""}
       ${changed && (o.list_sent || o.status === "told") ? `<p class="fxnote">You already sent ${esc(first)} the ${o.status === "told" ? "bill" : "list of clothes"}. After saving, Tagbook will show the updated one so you can send it again.</p>` : ""}
@@ -2455,7 +2455,7 @@ function dueCard() {
   if (!groups.length) return "";
   // Only the first 2 of each group show, so a long list doesn't push everything else down.
   return `<section class="scard duecard">${groups.map(([t, list, cls]) => { const key = cls || "tom", all = dueOpen[key] || list.length <= 2; return `<div class="dueg"><div class="dueh"><b class="${cls}">${t}</b><span class="dcount ${cls}">${list.length}</span></div>
-    ${(all ? list : list.slice(0, 2)).map(o => { const c = cust(o.cid); return `<button class="order duerow" data-no="${o.no}"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${calc(o).count} items${o.express ? " · express" : o.wait ? " · wait & get" : ""}${cls === "late" ? " · was due " + esc(fmtDay(o.collect)) : ""}</span></div></button>`; }).join("")}${list.length > 2 ? `<button class="duemore" data-dmore="${key}">${dueOpen[key] ? "Show less" : `Show all ${list.length}`}</button>` : ""}</div>`; }).join("")}</section>`;
+    ${(all ? list : list.slice(0, 2)).map(o => { const c = cust(o.cid); return `<button class="order duerow" data-no="${o.no}"><div class="${markCls(c.mark)}">${esc(c.mark)}</div><div class="who"><b>${esc(c.name)}</b><span>#${o.no} · ${calc(o).count} item${calc(o).count === 1 ? "" : "s"}${o.express ? " · express" : o.wait ? " · wait & get" : ""}${cls === "late" ? " · was due " + esc(fmtDay(o.collect)) : ""}</span></div></button>`; }).join("")}${list.length > 2 ? `<button class="duemore" data-dmore="${key}">${dueOpen[key] ? "Show less" : `Show all ${list.length}`}</button>` : ""}</div>`; }).join("")}</section>`;
 }
 function collectTag(o) {
   if (!o.collect || o.cancelled || o.status === "picked") return "";
