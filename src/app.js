@@ -350,11 +350,22 @@ async function loadDash() { if (dashBusy) return; dashBusy = true; try { const [
 /* Quiet shops you've messaged leave "Call these shops" until the next follow-up is due:
    3 days after the first message, 7 days after that. Logging clothes again clears it. */
 let follows = {};
-// Long admin lists show the first 5, with "Show all" to open the rest.
-let listOpen = {};
-const moreList = (key, list, n = 5) => ({ shown: listOpen[key] || list.length <= n ? list : list.slice(0, n),
-  btn: list.length > n ? `<button class="btn btn-ghost omore" data-lmore="${esc(key)}">${listOpen[key] ? "Show less" : `Show all ${list.length}`}</button>` : "" });
-const wireMore = () => view.querySelectorAll("[data-lmore]").forEach(b => b.onclick = () => { listOpen[b.dataset.lmore] = !listOpen[b.dataset.lmore]; renderAdmin(); });
+// Long admin lists show 5 at a time, with page numbers under them.
+let listPage = {};
+const moreList = (key, list, n = 5) => {
+  const pages = Math.ceil(list.length / n), p = Math.min(listPage[key] || 0, Math.max(0, pages - 1));
+  if (pages < 2) return { shown: list, btn: "" };
+  const from = Math.max(0, Math.min(p - 2, pages - 5)), nums = [];
+  for (let i = from; i < Math.min(pages, from + 5); i++) nums.push(i);
+  const b = (i, label, extra = "") => `<button data-lpg="${esc(key)}" data-pg="${i}" ${extra}>${label}</button>`;
+  return { shown: list.slice(p * n, p * n + n),
+    btn: `<nav class="pager" aria-label="Pages">${b(p - 1, "‹", `aria-label="Previous page" ${p ? "" : "disabled"}`)}${nums.map(i => b(i, i + 1, i === p ? 'aria-current="page"' : "")).join("")}${b(p + 1, "›", `aria-label="Next page" ${p < pages - 1 ? "" : "disabled"}`)}</nav>` };
+};
+const wireMore = () => view.querySelectorAll("[data-lpg]").forEach(b => b.onclick = () => {
+  listPage[b.dataset.lpg] = +b.dataset.pg; const top = b.closest("section, .dpage") || b; const y = top.getBoundingClientRect().top;
+  renderAdmin(); const nb = [...view.querySelectorAll("[data-lpg]")].find(x => x.dataset.lpg === b.dataset.lpg); const nt = nb && (nb.closest("section, .dpage") || nb);
+  if (nt && y < 0) nt.scrollIntoView({ block: "start" });
+});
 function followState(r) {
   const f = follows[r.id]; if (!f) return null;
   if (r.last_order && Date.parse(r.last_order) > Date.parse(f.at)) return null; // they're logging again: start fresh
@@ -795,8 +806,8 @@ function renderLeads() {
     <input id="oq" class="search" placeholder="Search name, area or phone" value="${esc(oQ)}" autocomplete="off">
     ${groups.length ? groups.map(([c, ls]) => {
       // On "All" with no search, show a few per city so the page stays quick on a phone.
-      const M = q ? { shown: ls, btn: "" } : moreList("lead:" + oStatus + ":" + c, ls);
-      return `<h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${bySize(M.shown, card)}</div>${M.btn}`;
+      const M = moreList("lead:" + oStatus + ":" + c + ":" + q, ls);
+      return `<div class="dpage"><h3 class="stitle dtest">${esc(c)} <span class="hint">${ls.length}</span></h3><div class="dlist">${bySize(M.shown, card)}</div>${M.btn}</div>`;
     }).join("") : `<p class="hint" style="margin-top:16px">No leads here.</p>`}`;
   wireAdminSeg(); wireMore();
   $("#oscript").onclick = () => { oScriptOpen = !oScriptOpen; try { localStorage.setItem("tb-script-open", oScriptOpen ? "1" : "0"); } catch (_) { } renderAdmin(); };
@@ -992,7 +1003,7 @@ function renderAdmin() {
       return `<h3 class="stitle" id="dlisth">All shops</h3>
       <div class="chips dsegs">${D_SEGS.map(([k, l]) => `<button class="chip" data-dseg="${k}" aria-pressed="${dSeg === k}">${l}<span class="cnt">${real.filter(r => inSeg(r, k)).length}</span></button>`).join("")}</div>
       ${dSeg === "alerts" && list.length ? `<p class="hint">Tap Remind to send the owner a WhatsApp message with the steps to turn notifications on.</p>` : ""}
-      <div class="dlist">${list.map(shopCard).join("") || `<p class="hint">No shops here.</p>`}</div>`; })()}
+      ${(M => `<div class="dpage"><div class="dlist">${M.shown.map(shopCard).join("") || `<p class="hint">No shops here.</p>`}</div>${M.btn}</div>`)(moreList("all:" + dSeg + ":" + q, list))}`; })()}
     ${refHtml}
     ${agentHtml}
     ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`}`;

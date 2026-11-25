@@ -198,6 +198,7 @@ async function handle(route) {
     const C = process.env.CAPTURE_DASH, now = Date.now(), iso = d => new Date(now - d * 864e5).toISOString();
     const row = (name, o) => ({ id: "s-" + name, name, created_at: iso(5), trial_ends: new Date(now + 20 * 864e5).toISOString().slice(0, 10), paid_until: null, founding: true, is_test: false, owner_name: "Owner", owner_phone: "08030000000", owners: 1, staff: 1, push: 1, orders: 12, today: 1, week: 5, prev_week: 4, clothes_week: 30, clothes: 80, last_order: iso(0), last_active: iso(0), referrals: 0, paid_total: 0, free_months: 0, state: "Ondo", area: "Akure", installed: true, ...o });
     global.dashRows = [row("SureClean Dry Cleaning", { installed: false }), row("Ksolo247 Laundry", { push: 0, self_signup: true, confirmed: false, area: "Oba Ile" }), row("Proclean", { state: "Lagos", area: "Lekki", last_order: iso(5) }), row("Kennycare", { last_order: iso(4) }), row("MG Laundry", { installed: false, push: 0, state: "Ekiti", area: "Ado" })];
+    if (process.env.MANY) for (let k = 0; k < 18; k++) global.dashRows.push(row("Shop " + (k + 1), { area: "Akure" }));
     await login("08120756325").catch(() => {});
     await page.setViewportSize({ width: 390, height: 2600 }); await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(1500);
     const errs = []; page.on("pageerror", e => errs.push(e.message));
@@ -205,6 +206,7 @@ async function handle(route) {
     await page.fill("#dq", "proc"); await page.waitForTimeout(300); console.log("search proc:", await page.$$eval(".dlist > *", e => e.length), (await page.textContent("#view")).includes("App and alerts") ? "rest still shown" : "only results");
     await page.screenshot({ path: path.join(C, "dash-search.png") }); await page.fill("#dq", ""); await page.waitForTimeout(300); console.log("cleared, rest back:", (await page.textContent("#view")).includes("App and alerts"));
     { const sec = await page.$("text=New shops to welcome"); if (sec) { await sec.scrollIntoViewIfNeeded(); await page.setViewportSize({ width: 390, height: 1100 }); await page.evaluate(() => { const h = [...document.querySelectorAll("h3")].find(x => /New shops to welcome/.test(x.textContent)); h.scrollIntoView({ block: "start" }); }); await page.screenshot({ path: path.join(C, "dash-welcome.png") }); }
+      if (process.env.MANY) { await page.click('[data-lpg="wel"][data-pg="1"]'); await page.waitForTimeout(300); console.log("welcome page 2 first:", await page.$eval(".dwel b", e => e.textContent)); await page.screenshot({ path: path.join(C, "dash-page2.png") }); }
       console.log("welcome rows:", await page.$$eval(".dwel", e => e.length), "| first link has text:", (await page.getAttribute("[data-wwa]", "href") || "").includes("Tagbook")); }
     await page.setViewportSize({ width: 390, height: 1100 }); await page.click('.dsegs [data-dseg="alerts"]'); await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(C, "dash-alerts.png") });
