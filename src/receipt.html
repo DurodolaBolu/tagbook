@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Receipt</title>
+<style>
+body{margin:0;background:#E9ECEA;font:16px/1.4 system-ui,-apple-system,sans-serif;color:#03191E}
+.bar{max-width:420px;margin:0 auto;padding:16px}
+.bar button{display:block;width:100%;padding:14px;border:0;border-radius:12px;background:#0F7B5F;color:#fff;font:600 17px system-ui,-apple-system,sans-serif}
+.bar p{margin:10px 0 0;font-size:14px;color:#55605F;text-align:center}
+#receipt{margin:0 auto 24px;background:#fff;color:#000;font:12px/1.35 Arial,sans-serif;padding:3mm 3mm 6mm;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+#receipt.p80{width:72mm}#receipt.p58{width:48mm;font-size:10.5px}
+#receipt .rhead{text-align:center}#receipt .rhead b{display:block;font-size:1.35em;line-height:1.2}#receipt .rhead span{display:block}
+#receipt .rsep{border-top:1px dashed #000;margin:2mm 0}
+#receipt .rr{display:flex;justify-content:space-between;gap:2mm}#receipt .rr span:last-child{text-align:right;white-space:nowrap}
+#receipt .ri{margin-bottom:1mm}#receipt .ri small{display:block;font-size:.85em}
+#receipt .rbig{font-size:1.2em;margin:1mm 0}#receipt .rc{text-align:center;margin-top:1mm}
+@media print{body{background:#fff}.bar{display:none}#receipt{margin:0;box-shadow:none}}
+</style>
+<style id="pg"></style>
+</head>
+<body>
+<div class="bar"><button id="go">Print receipt</button><p>If the print screen doesn't open, tap the Share button, then Print.</p></div>
+<div id="receipt"></div>
+<script>
+(function () {
+  // The receipt comes in the link after #, so it never reaches a server. Only plain text and a few safe tags are kept.
+  var q = new URLSearchParams(location.hash.slice(1)), paper = q.get("p") === "58" ? "58" : "80";
+  var src = new DOMParser().parseFromString(q.get("h") || "", "text/html").body;
+  var OK = { DIV: 1, SPAN: 1, B: 1, SMALL: 1, BR: 1 }, CLS = /^(rhead|rsep|rr|ri|rbig|rc)$/;
+  function copy(from, to) {
+    from.childNodes.forEach(function (n) {
+      if (n.nodeType === 3) { to.appendChild(document.createTextNode(n.textContent)); return; }
+      if (n.nodeType !== 1) return;
+      if (/^(SCRIPT|STYLE|TEMPLATE)$/.test(n.tagName)) return;
+      if (!OK[n.tagName]) { copy(n, to); return; }
+      var e = document.createElement(n.tagName.toLowerCase());
+      (n.getAttribute("class") || "").split(/\s+/).forEach(function (c) { if (CLS.test(c)) e.classList.add(c); });
+      copy(n, e); to.appendChild(e);
+    });
+  }
+  var r = document.getElementById("receipt"); r.className = "p" + paper; copy(src, r);
+  document.getElementById("pg").textContent = "@page{size:" + paper + "mm auto;margin:0}";
+  var go = function () { try { window.print(); } catch (_) {} };
+  document.getElementById("go").onclick = go;
+  if (r.textContent.trim()) setTimeout(go, 400);
+})();
+</script>
+</body>
+</html>

@@ -1857,7 +1857,10 @@ function receiptHtml(o) {
     ${bank}
     <div class="rsep"></div><div class="rc">Thank you for your patronage.</div>`;
 }
+// iPhone home screen apps can't open the print screen (Apple blocks it), so there the receipt opens in Safari to print.
+const iosApp = () => /iPad|iPhone|iPod/.test(navigator.userAgent) && (navigator.standalone === true || matchMedia("(display-mode: standalone)").matches);
 function printReceipt(o) {
+  if (iosApp()) { window.open("/receipt.html#" + new URLSearchParams({ p: paper, h: receiptHtml(o) }).toString(), "_blank"); return; }
   let r = document.getElementById("receipt");
   if (!r) { r = document.createElement("div"); r.id = "receipt"; document.body.appendChild(r); }
   r.className = "p" + paper; r.innerHTML = receiptHtml(o);
