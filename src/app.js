@@ -1857,10 +1857,18 @@ function receiptHtml(o) {
     ${bank}
     <div class="rsep"></div><div class="rc">Thank you for your patronage.</div>`;
 }
-// iPhone home screen apps can't open the print screen (Apple blocks it), so there the receipt opens in Safari to print.
-const iosApp = () => /iPad|iPhone|iPod/.test(navigator.userAgent) && (navigator.standalone === true || matchMedia("(display-mode: standalone)").matches);
+// Some phones (seen on an iPhone home screen app) never open the print screen. If it hasn't opened after 2 seconds,
+// offer the same receipt on a plain page in the browser, which prints there.
+const receiptLink = o => "/receipt.html#" + new URLSearchParams({ p: paper, h: receiptHtml(o) }).toString();
 function printReceipt(o) {
-  if (iosApp()) { window.open("/receipt.html#" + new URLSearchParams({ p: paper, h: receiptHtml(o) }).toString(), "_blank"); return; }
+  let opened = false; const seen = () => { opened = true; window.removeEventListener("beforeprint", seen); };
+  window.addEventListener("beforeprint", seen);
+  setTimeout(() => {
+    window.removeEventListener("beforeprint", seen);
+    const box = document.querySelector(".oprint");
+    if (opened || !box || box.querySelector("#prtalt")) return;
+    box.insertAdjacentHTML("beforeend", `<a class="btn btn-primary" id="prtalt" href="${receiptLink(o)}" target="_blank" rel="noopener" style="margin-top:10px">Didn't open? Print from the browser</a>`);
+  }, 2000);
   let r = document.getElementById("receipt");
   if (!r) { r = document.createElement("div"); r.id = "receipt"; document.body.appendChild(r); }
   r.className = "p" + paper; r.innerHTML = receiptHtml(o);
@@ -1870,7 +1878,8 @@ function printReceipt(o) {
   document.body.classList.add("printing");
   const done = () => { document.body.classList.remove("printing"); window.removeEventListener("afterprint", done); };
   window.addEventListener("afterprint", done);
-  setTimeout(() => { window.print(); setTimeout(done, 1500); }, 50);
+  try { window.print(); } catch (_) { }
+  setTimeout(done, 1500);
 }
 const printBlock = o => `<div class="prow"><button class="btn btn-ghost" id="prt">${canBill() && o.billed ? "Print receipt" : "Print drop-off slip"}</button>
   <div class="aseg" aria-label="Receipt paper width"><button data-paper="80" aria-pressed="${paper === "80"}">80mm</button><button data-paper="58" aria-pressed="${paper === "58"}">58mm</button></div></div>`;
