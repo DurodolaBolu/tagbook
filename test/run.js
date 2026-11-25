@@ -738,11 +738,6 @@ async function handle(route) {
     add(7, "Musa Ibrahim", "MI", "told", true, 3000, 3000);
     if (process.env.LONGMARK) db.customers.forEach((c, i) => { if (i % 2 === 0) c.mark = "LAG1045" + (i % 10); });
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForSelector(".order", { timeout: 8000 });
-    if (process.env.REFPOP) { db.shop_private[0].setup = { complete: true };
-      const base = db.orders.slice(); base.forEach((o, i) => { const id = "x" + i; db.orders.push({ ...JSON.parse(JSON.stringify(o)), id, no: 100 + i }); const m = db.order_money.find(x => x.order_id === o.id); if (m) db.order_money.push({ ...JSON.parse(JSON.stringify(m)), order_id: id }); });
-      await page.reload(); await page.waitForTimeout(2500);
-      await page.screenshot({ path: path.join(process.env.CAPTURE_ORDERS, "refpop.png") }); console.log("popup shown:", !!(await page.$("#refpop")), "| ref_pop saved:", !!db.shop_private[0].setup.ref_pop);
-      await page.click("#refpop-x"); await page.waitForTimeout(300); await page.screenshot({ path: path.join(process.env.CAPTURE_ORDERS, "refcard.png") }); process.exit(0); }
     for (const f of ["all", "new", "work", "ready", "owed", "picked"]) {
       await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(400);
       await page.click(`[data-f="${f}"]`, { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(300);

@@ -1221,47 +1221,9 @@ function renderHelp() {
   };
 }
 
-/* ---------- Referral: share message + quiet line on Orders ---------- */
+/* ---------- Referral: share message (Settings, Plan) ---------- */
 const refShareLink = () => "https://wa.me/?text=" + encodeURIComponent(
   `We now use Tagbook in our laundry to record customers' clothes, send bills on WhatsApp and see who still owes. It has made things easier for us.\n\nThe first month is free. Message them here and tell them ${shop.name} sent you:\nhttps://wa.me/${TAGBOOK_LINE}?text=${encodeURIComponent(`Hi, ${shop.name} referred me to Tagbook`)}`);
-const refLater = () => { try { return Date.now() - (+localStorage.getItem("tb-ref-later") || 0) < 30 * 864e5; } catch (_) { return false; } };
-const GIFT = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 1 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 1 1 0 5"/></svg>`;
-// Referral ask. The card shows from 5 orders (they've used the whole flow); the stronger monthly pop-up waits for 10.
-const REF_CARD_AT = 5, REF_POP_AT = 10;
-const refReady = (min = REF_CARD_AT) => own() && !!priv && orders.length >= min;
-function refLine() {
-  if (!refReady() || refLater()) return "";
-  return `<section class="scard refcard"><span class="gift">${GIFT}</span><div><h3>Know another laundry?</h3>
-    <p>Tell them about Tagbook. When they start paying, you get 1 month free.</p>
-    <div class="row"><a class="btn btn-primary" target="_blank" rel="noopener" href="${refShareLink()}">Share on WhatsApp</a><button class="btn btn-ghost" id="refx">Not now</button></div></div></section>`;
-}
-// Once a month (on any of the owner's phones), the same ask as a pop-up.
-const REF_POP_EVERY = 30 * 864e5;
-function maybeRefPopup() {
-  if (!refReady(REF_POP_AT) || $("#refpop") || document.querySelector(".tplayer")) return;
-  const last = +(setupState().ref_pop || 0);
-  if (Date.now() - last < REF_POP_EVERY) return;
-  let welcome = false; try { welcome = sessionStorage.getItem("tb-welcome") === "1"; } catch (_) { } if (welcome) return;
-  markSetup("ref_pop", Date.now());
-  const d = document.createElement("div"); d.id = "refpop"; d.className = "popbg";
-  d.innerHTML = `<section class="popcard" role="dialog" aria-modal="true" aria-labelledby="refpop-t">
-    <span class="gift big">${GIFT}</span>
-    <h2 id="refpop-t">Know another laundry owner?</h2>
-    <p>You've logged ${orders.length} orders on Tagbook. Share it with another laundry. When they start paying, you get <b>1 month free</b>.</p>
-    <a class="btn btn-primary" id="refpop-go" target="_blank" rel="noopener" href="${refShareLink()}">Share on WhatsApp</a>
-    <button class="btn btn-ghost" id="refpop-x">Maybe later</button></section>`;
-  document.body.appendChild(d);
-  const close = () => d.remove();
-  $("#refpop-x").onclick = close; $("#refpop-go").addEventListener("click", () => setTimeout(close, 300));
-  d.onclick = e => { if (e.target === d) close(); };
-  document.addEventListener("keydown", function esc1(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc1); } });
-  $("#refpop-go").focus();
-}
-function wireRefLine() {
-  const x = $("#refx"); if (x) x.onclick = () => { try { localStorage.setItem("tb-ref-later", Date.now()); } catch (_) { } renderOrders(); };
-  if (!wireRefLine.t) wireRefLine.t = setTimeout(() => { wireRefLine.t = 0; if (tab === "orders") maybeRefPopup(); }, 1500);
-}
-
 /* ---------- Owner's setup checklist on the Orders screen ---------- */
 let instOpen = false;
 const setupState = () => (priv && priv.setup) || {};
@@ -1470,7 +1432,6 @@ function renderOrders() {
     ${setupHtml || installCard()}
     ${askPush ? `<div class="alert push"><span>${own() ? "Get a buzz when staff log clothes, even when Tagbook is closed." : "Get a reminder when clothes are due tomorrow, due today or late, even when Tagbook is closed."}</span><span class="pacts"><button id="pushon">Turn on</button><button class="later" id="pushlater">Not now</button></span></div>` : ""}
     ${own() && fresh.length ? `<div class="alert"><span>${fresh.length} new order${fresh.length > 1 ? "s" : ""} logged by staff. Send the list of clothes to the customer.</span><button id="seen">See</button></div>` : ""}
-    ${setupHtml ? "" : refLine()}
     ${own() ? `<div class="stats">
       <button class="stat ${toList.length ? "hot" : ""}" data-go="new"><b>${toList.length}</b><span>Send list</span></button>
       <button class="stat ${notTold.length ? "hot" : ""}" data-go="ready"><b>${notTold.length}</b><span>Ready, not told</span></button>
@@ -1499,7 +1460,7 @@ function renderOrders() {
   view.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; page = 0; renderOrders(); });
   view.querySelectorAll("[data-go]").forEach(c => c.onclick = () => { filter = c.dataset.go; page = 0; renderOrders(); });
   view.querySelectorAll(".order").forEach(b => b.onclick = () => go("order-" + b.dataset.no));
-  wirePlanBanner(view); wireInstallCard(); wireSetup(); wireRefLine(); wireDuty(renderOrders);
+  wirePlanBanner(view); wireInstallCard(); wireSetup(); wireDuty(renderOrders);
   view.querySelectorAll("[data-dmore]").forEach(b => b.onclick = () => { dueOpen[b.dataset.dmore] = !dueOpen[b.dataset.dmore]; renderOrders(); });
   if ($("#wlog")) $("#wlog").onclick = () => go("log");
   if ($("#wprices")) $("#wprices").onclick = () => { setTab = "prices"; go("shop"); };
