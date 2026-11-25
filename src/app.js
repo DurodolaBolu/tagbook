@@ -2701,6 +2701,7 @@ function openOrder(no) {
         <div><span>Pickup / delivery${o.pickup ? "<br><small style='color:var(--muted)'>Customer asked for it</small>" : ""}</span><input id="dl" ${moneyAttrs} placeholder="0" value="${o.m.delivery || ""}" aria-label="Pickup or delivery cost"></div>
         ${own() ? `<div><span>Discount</span><input id="dc" ${moneyAttrs} placeholder="0" value="${o.m.discount || ""}" aria-label="Discount"></div>` : o.m.discount ? `<div><span>Discount</span><span>−${naira(o.m.discount)}</span></div>` : ""}
         <div><b>Total · ${countTxt(o)}</b><b id="tot">${naira(k.total)}</b></div></div>
+        ${canFix(o) ? `<p class="hint" style="margin:6px 0 0">Wrong clothes or number of clothes? <button class="olink" data-om="items">Change the clothes</button></p>` : `<p class="hint" style="margin:6px 0 0">Wrong clothes or number of clothes? Ask the owner to change them under More, Edit clothes.</p>`}
         <button class="btn btn-primary" id="bill">${o.billed ? "Save changes" : "Save bill"}</button>
         ${o.billed ? `<button class="olink" id="billcancel" style="margin-top:8px">Cancel</button>` : `<p class="hint">Save the bill to send it now, or it goes out with the ready message.</p>`}`;
     } else {
