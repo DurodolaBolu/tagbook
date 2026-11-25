@@ -837,7 +837,7 @@ async function handle(route) {
   console.log("money after part pay:", db.order_money[0].paid, "settled:", db.orders[0].settled);
   await page.$eval("#ppall", e => e.scrollIntoView({ block: "center" })); await page.screenshot({ path: path.join(out, "09b-pay-form.png") });
   await page.evaluate(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
-  console.log("print button:", await page.textContent("#prt")); await T(".oprint summary"); await T("#prt"); await page.waitForTimeout(200);
+  console.log("print button:", await page.textContent("#prt")); await T("#prt"); await page.waitForTimeout(200);
   console.log("print called:", await page.evaluate(() => window.__printed), "| receipt has total:", (await page.textContent("#receipt")).includes("TOTAL"));
   await page.emulateMedia({ media: "print" }); await page.evaluate(() => document.body.classList.add("printing"));
   await page.locator("#receipt").screenshot({ path: path.join(out, "30-receipt-80.png") });

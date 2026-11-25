@@ -2711,9 +2711,9 @@ function openOrder(no) {
     ${next}${sent}
     ${payHtml}
     ${billHtml}
+    <section class="ocard oprint">${printBlock(o)}</section>
     <section class="ocard"><h3>Photos and notes</h3>${noteBlock(o)}${photoBlock(o)}</section>
     ${whoHtml}
-    <details class="ocard oprint"><summary>${canBill() && o.billed ? "Print receipt" : "Print drop-off slip"}</summary>${printBlock(o)}</details>
   </div>`;
   const wasHidden = sh.hidden; sh.hidden = false; sh.scrollTop = wasHidden ? 0 : y;
   wireBack(sh); wireFix(sh, o); wireNote(sh, o); wirePhotos(sh, o);

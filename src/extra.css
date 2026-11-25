@@ -765,7 +765,6 @@ label .opt{font-size:13px}
 .phist summary span{color:var(--accent);font-weight:600}
 .owho .lbl{margin:0 0 4px;font-size:13px;color:var(--muted)}
 .owho p:last-child{margin:0;font-size:14px;color:var(--muted);line-height:1.6}
-.oprint summary{cursor:pointer;font-weight:600;color:var(--accent)}
 .oview .sent{margin-top:10px}
 .ocard .phblock{background:none;border:0;box-shadow:none;padding:0;margin:12px 0 0}
 .ocard .phblock>b{font-size:14px;color:var(--muted);font-weight:600}
