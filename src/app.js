@@ -977,8 +977,9 @@ function renderAdmin() {
         <p class="ssub"><span class="dstate"><b>${real.length - noApp.length}</b> of ${real.length} installed the app</span><span class="dstate"><b>${real.length - noPush.length}</b> of ${real.length} have alerts on</span></p>
         ${noApp.length ? `<p class="dfollow"><b>Not installed:</b> ${names(noApp)}</p>` : ""}
         ${noPush.length ? `<p class="dfollow"><b>Alerts off:</b> ${names(noPush)}</p><button class="btn btn-ghost" data-dseg="alerts">Remind them to turn alerts on</button>` : ""}</section>` : ""; })()}
-    ${(st => { const n = k => st.filter(x => x.kind === k).reduce((a, x) => a + Number(x.sends), 0), sh = k => Math.max(0, ...st.filter(x => x.kind === k).map(x => Number(x.shops))); const pdf = n("pdf"), txt = n("text");
-      return `<section class="scard dstates"><h3 class="stitle">Bills sent, last 30 days</h3>${pdf + txt ? `<p class="ssub"><span class="dstate"><b>${pdf}</b> as PDF invoice${sh("pdf") ? ` (${sh("pdf")} shop${sh("pdf") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${txt}</b> as text${sh("text") ? ` (${sh("text")} shop${sh("text") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${Math.round(pdf / (pdf + txt) * 100)}%</b> PDF</span></p>` : `<p class="ssub">None yet. Counting started 14 Nov.</p>`}</section>`; })(sendStats)}
+    ${(st => { const n = k => st.filter(x => x.kind === k).reduce((a, x) => a + Number(x.sends), 0), sh = k => Math.max(0, ...st.filter(x => x.kind === k).map(x => Number(x.shops))); const bills = st.filter(x => x.stage !== "list"), list = st.filter(x => x.stage === "list"); st = bills; const pdf = n("pdf"), txt = n("text"), ln = list.reduce((a, x) => a + Number(x.sends), 0), ls = Math.max(0, ...list.map(x => Number(x.shops)));
+      return `<section class="scard dstates"><h3 class="stitle">Bills sent, last 30 days</h3>${pdf + txt ? `<p class="ssub"><span class="dstate"><b>${pdf}</b> as PDF invoice${sh("pdf") ? ` (${sh("pdf")} shop${sh("pdf") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${txt}</b> as text${sh("text") ? ` (${sh("text")} shop${sh("text") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${Math.round(pdf / (pdf + txt) * 100)}%</b> PDF</span></p>` : `<p class="ssub">None yet. Counting started 14 Nov.</p>`}</section>
+      <section class="scard dstates"><h3 class="stitle">Lists of clothes sent, last 30 days</h3><p class="ssub">${ln ? `<span class="dstate"><b>${ln}</b> list${ln === 1 ? "" : "s"} sent on WhatsApp${ls ? ` (${ls} shop${ls === 1 ? "" : "s"})` : ""}</span>` : "None yet. Counting started 25 Nov."}</p></section>`; })(sendStats)}
     ${(by => by.length ? `<section class="scard dstates"><h3 class="stitle">Shops by state</h3><p class="ssub">${by.map(([k, n]) => `<span class="dstate"><b>${n}</b> ${esc(k)}</span>`).join("")}</p></section>` : "")(Object.entries(real.reduce((m, r) => { const k = r.state || "Not set"; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]))}
     ${(() => { const q = dQ.trim().toLowerCase(), digits = q.replace(/\D/g, "");
       const hit = r => !q || [r.name, r.owner_name, r.area, r.state].some(v => String(v || "").toLowerCase().includes(q)) || (digits.length >= 3 && String(r.owner_phone || "").includes(digits));
@@ -2118,7 +2119,8 @@ const invCaption = (o, type) => { const c = cust(o.cid); return type === "early"
 let invReady = null;
 // Counts bills sent as PDF vs text (no customer details), so Bolu can see which one shops use.
 const BILL_STAGES = ["ready", "owe", "early"];
-function logSend(kind, stage) { if (!canBill() || !shop || !BILL_STAGES.includes(stage)) return; sb.from("send_log").insert({ shop_id: shop.id, kind, stage }).then(() => { }, () => { }); }
+// Counts sends for the admin page: bills (owner or billing staff) and the list of clothes (anyone)
+function logSend(kind, stage) { if (!shop || !(stage === "list" || (canBill() && BILL_STAGES.includes(stage)))) return; sb.from("send_log").insert({ shop_id: shop.id, kind, stage }).then(() => { }, () => { }); }
 let earlyOpen = null; // order whose "send the bill now" panel is open // the last invoice made, so a second tap shares at once
 // When the phone confirms the ready invoice was shared, move the order to Told, so nobody has to tap "I've sent it".
 // BrightWash first (asked for by Impressions Laundry), everyone from 25 Nov.
