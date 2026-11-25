@@ -786,3 +786,4 @@ label .opt{font-size:13px}
 .ocard .phblock>b{font-size:14px;color:var(--muted);font-weight:600}
 .ocard .phblock>.hint{display:none}
 .onext .gask .wa-label{display:block}
+.orsep{margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}

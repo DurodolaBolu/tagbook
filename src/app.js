@@ -2660,8 +2660,8 @@ function openOrder(no) {
     return o.checking ? `<div class="check"><p><b>Check before bagging.</b> Gather every cloth with mark <b>${esc(c.mark)}</b> inside, and tick each one. If something is missing, you find out now, not when the customer comes.</p>
         ${o.items.map((it, i) => `<label class="ck"><input type="checkbox" data-ck="${i}" ${o.checked[i] ? "checked" : ""}> ${it.qty} × ${esc(pname(it) + pcsTag(it))}</label>`).join("")}
         <button class="btn btn-primary" id="rd" ${allChecked ? "" : "disabled"}>All here. Mark ready</button></div>`
-      : `<button class="btn btn-primary" id="washed">Clothes are washed and ironed</button>
-        <p class="hint">You'll then tick each cloth with mark ${esc(c.mark)} before bagging.</p>`;
+      : `<button class="btn ${canBill() && !o.list_sent ? "btn-ghost" : "btn-primary"}" id="washed">Clothes are ready</button>
+        <p class="hint">Tap when washing and ironing is done. You'll tick each cloth with mark ${esc(c.mark)} as you pack it.</p>`;
   };
   // One clear "next step" at the top; everything else sits in its own section below.
   const card = (h, p, body) => `<section class="ocard onext"><small>Next step</small><h2>${h}</h2>${p ? `<p>${p}</p>` : ""}${body}</section>`;
@@ -2672,10 +2672,12 @@ function openOrder(no) {
     else if (o.status === "told") next = card(`Has ${first} picked up the clothes?`, still.trim(), `<button class="btn btn-primary" id="pick">Clothes picked up</button>`) ;
     else if (o.status === "ready") next = o.billed ? card(`Tell ${first} the clothes are ready`, `Sends the bill with the ready message.${still}`, waBlock(o, "ready") + `<button class="olink" id="pick" style="margin-top:10px">Already picked up?</button>`)
       : card("Save the bill first", "The ready message goes out with the bill.", `<button class="btn btn-primary" id="gobill">Open the bill</button>`);
-    else if (o.status === "new" && !o.list_sent) next = card(`Send ${first} the list of clothes`, `So ${first} has a record of the ${countTxt(o)} dropped off.`, waBlock(o, "list"));
-    else next = card("When the clothes are washed and ironed", "", checkHtml());
+    // Shops that don't send lists can go straight to "Clothes are ready".
+    else if (o.status === "new" && !o.list_sent) next = o.checking ? card("Pack and check the clothes", "", checkHtml())
+      : card(`Send ${first} the list of clothes`, `So ${first} has a record of the ${countTxt(o)} dropped off.`, waBlock(o, "list") + `<p class="orsep">Or, when the clothes are done</p>` + checkHtml());
+    else next = card(o.checking ? "Pack and check the clothes" : "When the clothes are done", "", checkHtml());
   } else {
-    if (o.status === "new" || o.status === "listed") next = card("When the clothes are washed and ironed", "", checkHtml());
+    if (o.status === "new" || o.status === "listed") next = card(o.checking ? "Pack and check the clothes" : "When the clothes are done", "", checkHtml());
     else if (o.status === "ready") next = card("Ready and bagged", "Waiting for the owner to tell the customer.", `<button class="btn btn-ghost" id="pick">Clothes picked up</button>`);
     else if (o.status === "told") next = card(`Has ${first} picked up the clothes?`, "", `<button class="btn btn-primary" id="pick">Clothes picked up</button>`);
   }
