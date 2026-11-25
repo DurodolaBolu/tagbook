@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.ordiventa.tagbook",
+        "sha256_cert_fingerprints": ["19:A3:E3:2F:5A:AE:14:7B:28:D9:E2:29:92:50:7E:72:DF:8A:45:7B:D1:92:EF:27:83:EB:A0:E7:DB:3B:0B:02"]
+      }
+    }]
