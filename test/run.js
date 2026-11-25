@@ -213,6 +213,7 @@ async function handle(route) {
     console.log("alerts segment cards:", await page.$$eval(".dlist .dshop", e => e.length), "| remind links:", await page.$$eval('a[href*="wa.me"][href*="notifications"]', e => e.length));
     await page.click('.dsegs [data-dseg="all"]'); await page.fill("#dq", "kenny"); await page.waitForTimeout(400); console.log("search kenny:", await page.$$eval(".dlist .dshop", e => e.length));
     await page.fill("#dq", ""); await page.click("[data-dopen]"); await page.waitForTimeout(300); console.log("opened details:", !!(await page.$(".dclose")));
+    if (process.env.SCRIPTSHOT) { await page.click("[data-nscript]"); await page.waitForTimeout(300); const el = await page.$(".nscript"); await el.scrollIntoViewIfNeeded(); await page.setViewportSize({ width: 390, height: 1400 }); await page.evaluate(() => document.querySelector(".nscript").scrollIntoView({ block: "start" })); await page.screenshot({ path: path.join(C, "script.png") }); }
     if (process.env.FOLLOW) {
       const before = await page.$$eval("[data-nwa]", e => e.length);
       await page.evaluate(() => { const a = document.querySelector("[data-nwa]"); a.removeAttribute("href"); a.removeAttribute("target"); a.click(); }); await page.waitForTimeout(1000);

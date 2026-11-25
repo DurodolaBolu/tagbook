@@ -623,6 +623,31 @@ async function markWelcomed(id) {
   if (error) { toast("Couldn't save. Try again."); return false; }
   const r = dash.find(x => x.id === id); if (r) r.welcomed_at = new Date().toISOString(); return true;
 }
+// Call script for "Call these shops": what to say depends on why the shop is on the list.
+let nScript = null;
+function shopCallScript(r) {
+  const first = String(r.owner_name || "").trim().split(/\s+/).find(w => w.replace(/[^a-z]/gi, "").length >= 3) || "";
+  const cl = daysLeft(coveredUntil(r)), ended = cl !== null && cl < 0, started = r.orders > 0;
+  const kind = !started ? "start" : ended ? "plan" : "quiet";
+  const steps = [
+    ["Greet", `"${greet()}${first ? " " + esc(first) : ""}. This is Bolu from Tagbook. How is the shop today?"`, "Let them talk for a moment. A friendly start matters more than the reason for the call."],
+    ...(kind === "start" ? [
+      ["Ask, don't accuse", `"We're calling to see how Tagbook is going for you. We noticed no clothes have been logged yet. Is anything stopping you?"`, "Listen. The usual answers: too busy, not sure how, prices not put in yet, staff not shown, phone problem. Fix that one thing."],
+      ["Log one together", `"Do you have a customer's clothes there now? Let's log them together while we're on the phone. Open Tagbook and tap + Log clothes."`, "Walk them through it slowly: customer's name and phone, tap each cloth, then Save. One order done on the phone is worth more than any explanation."],
+      ["Prices", `"Have you put in your prices? If you have them on paper, snap it and send it to us on WhatsApp, and we'll put them in for you."`, "Only ask if they haven't set prices. Without prices, the bills come out empty."],
+    ] : kind === "quiet" ? [
+      ["Ask what changed", `"We noticed you haven't logged clothes for ${esc(ago(r.last_order).replace(" ago", ""))}. Is everything okay with the shop? Did anything in Tagbook give you a problem?"`, "Listen. If it's a problem in the app, write it down and tell them we'll fix it. If business is just slow, that's fine."],
+      ["Remind what they get", `"When you log every customer, you can see who still owes you and send the bill on WhatsApp in one tap. It helps most in busy weeks."`, "Pick the one benefit that matches what they told you."],
+      ["Staff", `"Is it your staff that receives the clothes? We can show them how to use it. It takes 5 minutes."`, "Many shops stop because the person at the counter was never shown."],
+    ] : [
+      ["The plan", `"Your Tagbook plan ended on ${esc(longDay(coveredUntil(r)))}, so new orders are paused. Your records are all safe. Would you like to continue?"`, "If yes: in the app, tap the settings icon, then Plan & billing, choose a plan and pay with Paystack (card, transfer or USSD)."],
+      ["If money is the issue", `"For every laundry you introduce that starts paying, you get 1 month free. Do you know other laundry owners?"`, "Don't push. If they say no for now, thank them and ask if you can check back next month."],
+    ]),
+    ["Close", `"Thank you. If you need anything, send us a message or a voice note on this number, any time."`, "After the call, tap Called below. They leave the list until the next follow-up is due."],
+  ];
+  return `<div class="ocopy nscript"><p><b>Call script</b>${r.owner_phone ? ` · ${fmtPhone(r.owner_phone)}` : ""}</p><ol>${steps.map(([t, say, tip]) => `<li><b>${t}</b><p>${say}</p><p class="hint">${tip}</p></li>`).join("")}</ol>
+    <div class="row"><button class="btn btn-primary" data-ncalled="${r.id}">Called</button><button class="btn btn-ghost" data-nsclose>Close</button></div></div>`;
+}
 function nudgeMsg(r) {
   // Skip initials like "O A Matthew" -> "Matthew"
   const first = String(r.owner_name || "").trim().split(/\s+/).find(w => w.replace(/[^a-z]/gi, "").length >= 3) || "";
@@ -985,7 +1010,7 @@ function renderAdmin() {
     ${(nw => nw.length ? (M => `<section class="scard dcall"><h3 class="stitle">New shops to welcome <span class="hint">${nw.length}</span></h3><p class="ssub">Send each new shop the welcome message, or call. Once you've sent it, they leave this list.</p>${M.shown.map(r => `<div class="staff-row dwel"><div><b>${esc(r.name)}</b><span>${esc(r.owner_name || "")} · ${fmtPhone(r.owner_phone || "")}${r.area || r.state ? " · " + esc([r.area, r.state].filter(Boolean).join(", ")) : ""}</span><span>${r.self_signup ? `Signed up themselves${r.confirmed ? " · number confirmed" : " · number not confirmed"}` : `Set up by ${esc(r.setup_by_name || r.claim_by_name || "Bolu")}`} · ${ago(r.created_at)}</span></div>
       ${r.owner_phone ? `<div class="row"><a class="btn btn-primary" data-wwa="${r.id}" href="${waLink(r.owner_phone, welcomeMsg(r))}" target="_blank" rel="noopener">Send welcome</a><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${iosBiz() ? `<button class="btn btn-ghost" data-wcopy="${r.id}">Copy</button>` : ""}</div>` : ""}
       <div class="row dwelmore">${r.self_signup && !r.confirmed ? `<button class="btn btn-ghost" data-sconf="${r.id}">Number confirmed</button>` : ""}<button class="btn btn-ghost" data-wdone="${r.id}">Already welcomed</button></div></div>`).join("")}${M.btn}</section>`)(moreList("wel", nw)) : "")(real.filter(r => !r.welcomed_at && Date.now() - Date.parse(r.created_at) < 14 * 864e5))}
-    ${need.length ? (M => `<section class="scard dcall"><h3 class="stitle">Call these shops <span class="hint">${need.length}</span></h3><p class="ssub">A call works best. If you can't call, send the message.</p>${M.shown.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}${(st => st ? ` · messaged ${st.times}×, last ${ago(st.at)}` : "")(followState(r))}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-ghost" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-primary" data-nwa="${r.id}" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}`).join("")}${M.btn}</section>`)(moreList("call", need)) : ""}
+    ${need.length ? (M => `<section class="scard dcall"><h3 class="stitle">Call these shops <span class="hint">${need.length}</span></h3><p class="ssub">A call works best. Tap Call and the script opens here. If you can't get them, send the WhatsApp message.</p>${M.shown.map(([r, f]) => `<div class="staff-row"><div><b>${esc(r.name)}</b><span>${f.map(x => x[0]).join(" · ")}${(st => st ? ` · messaged ${st.times}×, last ${ago(st.at)}` : "")(followState(r))}</span></div>${r.owner_phone ? `<div class="row"><a class="btn btn-primary" data-ncall="${r.id}" href="tel:${esc(r.owner_phone)}">Call</a>${`<a class="btn btn-ghost" data-nwa="${r.id}" href="${waLink(r.owner_phone, nudgeMsg(r))}" target="_blank" rel="noopener">WhatsApp</a>${iosBiz() ? `<button class="btn btn-ghost" data-ncopy="${r.id}">Copy</button>` : ""}`}</div>` : ""}</div>${iosBiz() && nCopy === r.id ? `<div class="ocopy"><p><b>Message copied.</b> Open <b>WhatsApp Business</b>, open the chat with ${fmtPhone(r.owner_phone)} and paste it.</p><div class="row"><button class="btn btn-ghost" data-nnum="${r.id}">Copy number</button><button class="btn btn-ghost" data-nclose>Done</button></div></div>` : ""}${nScript === r.id ? shopCallScript(r) : r.owner_phone ? `<button class="linkbtn" data-nscript="${r.id}">See call script</button>` : ""}`).join("")}${M.btn}</section>`)(moreList("call", need)) : ""}
     ${resting.length ? `<details class="scard drest"><summary><b>Messaged, waiting for a reply</b> <span class="hint">${resting.length} · they come back above when the next follow-up is due</span></summary>${moreList("rest", resting).shown.map(([r]) => { const st = followState(r); return `<div class="staff-row"><div><b>${esc(r.name)}</b><span>Messaged ${st.times}×, last ${ago(st.at)} · next follow-up ${new Date(st.next).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span></div><button class="mini" data-nback="${r.id}">Follow up now</button></div>`; }).join("")}${moreList("rest", resting).btn}</details>` : ""}
     ${teamGoalHtml()}
     ${(() => { const noApp = real.filter(r => !r.installed), noPush = real.filter(r => !ownerPush(r)), names = l => l.map(r => `<span class="dname">${esc(r.name)}</span>`).join("");
@@ -1073,6 +1098,10 @@ function renderAdmin() {
   });
   view.querySelectorAll("[data-nnum]").forEach(b => b.onclick = async () => { const r = dash.find(x => x.id === b.dataset.nnum); toast(await copyText("+234" + String(r.owner_phone).replace(/^0/, "")) ? "Number copied" : "Couldn't copy"); });
   view.querySelectorAll("[data-nclose]").forEach(b => b.onclick = () => { nCopy = null; renderAdmin(); });
+  view.querySelectorAll("[data-ncall]").forEach(a => a.addEventListener("click", () => { nScript = a.dataset.ncall; setTimeout(() => renderAdmin(), 300); }));
+  view.querySelectorAll("[data-nscript]").forEach(b => b.onclick = () => { nScript = b.dataset.nscript; renderAdmin(); });
+  view.querySelectorAll("[data-nsclose]").forEach(b => b.onclick = () => { nScript = null; renderAdmin(); });
+  view.querySelectorAll("[data-ncalled]").forEach(b => b.onclick = () => { markFollow(b.dataset.ncalled); nScript = null; toast("Marked as called. They come back when the next follow-up is due."); renderAdmin(); });
   view.querySelectorAll("[data-nwa]").forEach(a => a.addEventListener("click", () => { markFollow(a.dataset.nwa); setTimeout(() => renderAdmin(), 600); }));
   view.querySelectorAll("[data-nback]").forEach(b => b.onclick = () => { const f = follows[b.dataset.nback]; if (!f) return; f.at = new Date(Date.now() - 8 * 864e5).toISOString(); sb.from("shop_followups").update({ at: f.at }).eq("shop_id", f.shop_id).then(() => { }); renderAdmin(); });
   $("#dadd").onclick = () => { setTab = "shops"; go("shop"); };

@@ -776,3 +776,8 @@ label .opt{font-size:13px}
 .pager button{min-width:36px;height:40px;padding:0 6px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg);font:inherit;font-weight:600;cursor:pointer}
 .pager button[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:#fff}
 .pager button:disabled{opacity:.35;cursor:default}
+.nscript ol{margin:8px 0 10px;padding-left:20px}
+.nscript li{margin-bottom:10px}
+.nscript li p{margin:2px 0 0}
+.nscript li p.hint{margin-top:2px}
+.dcall .linkbtn{color:var(--accent);margin:-2px 0 8px}
