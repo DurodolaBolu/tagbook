@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261125132722";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261125133334";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -46,7 +46,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:17px
 .app{max-width:440px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 100px}
 header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:6px 10px}
 .brand{min-width:0;font-weight:700;font-size:24px;line-height:1.2;color:var(--fg);letter-spacing:-.01em}
-.brand #shopname{display:block;overflow-wrap:anywhere}
+.brand #shopname{display:block;overflow-wrap:break-word}
+@media (max-width:380px){.brand{font-size:20px}}
 .brand small{display:block;margin-top:2px;font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.02em}
 .hdr-r{display:flex;align-items:center;gap:10px;flex:none}
 .gear{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -991,7 +992,7 @@ label .opt{font-size:13px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261125132722"></script>
+<script src="/app.js?v=20261125133334"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

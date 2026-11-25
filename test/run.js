@@ -84,7 +84,7 @@ async function handle(route) {
   if (p === "/rest/v1/rpc/admin_dashboard" && global.dashRows) return send(200, global.dashRows);
   if (p === "/rest/v1/rpc/admin_send_stats" && global.dashRows) return send(200, [{ kind: "pdf", stage: "ready", sends: 7, shops: 3 }, { kind: "text", stage: "ready", sends: 2, shops: 1 }]);
   if (/^\/rest\/v1\/rpc\/(admin_dashboard|admin_agents|admin_shops|team_options|admin_team_pay)$/.test(p)) return send(200, []);
-  if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId && !process.env.CAPTURE_CALLS);
+  if (p === "/rest/v1/rpc/is_platform_admin") return send(200, current === ownerId && !process.env.CAPTURE_CALLS && !process.env.STORE_SHOTS);
   if (process.env.CAPTURE_CALLS && p === "/rest/v1/rpc/is_agent") return send(200, true);
   if (p.startsWith("/storage/v1/object/order-photos/") && method === "POST") { global.photoUploads = (global.photoUploads || 0) + 1; return send(200, { Key: p.slice(19) }); }
   if (p.startsWith("/storage/v1/object/sign/order-photos/") && method === "GET" && process.env.PHOTO_FILE) return route.fulfill({ status: 200, contentType: "image/jpeg", headers: { "access-control-allow-origin": "*" }, body: fs.readFileSync(process.env.PHOTO_FILE) });
@@ -128,7 +128,7 @@ async function handle(route) {
   }
   if (p === "/rest/v1/rpc/track_info") {
     const o = db.orders.find(q => q.track_token === body.p_token); if (!o) return send(200, null);
-    return send(200, { shop: "BrightWash Test", no: o.no, mark: "AD", status: o.status, at: o.created_at || new Date().toISOString(), collect: new Date(Date.now() + 2 * 864e5).toISOString(), picked: null, express: false, wait: false,
+    return send(200, { shop: db.shops[0].name, no: o.no, mark: (db.customers.find(c => c.id === o.customer_id) || {}).mark || "AD", status: o.status, at: o.created_at || new Date().toISOString(), collect: new Date(Date.now() + 2 * 864e5).toISOString(), picked: null, express: false, wait: false,
       items: o.items.map(it => ({ n: (db.items.find(i => i.id === it.id) || {}).name || "Item", q: it.qty, note: it.note || null, pcs: it.pcs || 1 })) });
   }
   if (p === "/rest/v1/rpc/log_order") {
@@ -393,6 +393,47 @@ async function handle(route) {
     const dl = page.waitForEvent("download", { timeout: 15000 }).catch(e => null);
     await page.click('details.early [data-pdf="early"]');
     const f = await dl; if (!f) console.log("pdf: no download"); else { const fp = path.join(process.env.XP_TEST, "combo.pdf"); await f.saveAs(fp); console.log("pdf:", f.suggestedFilename(), fs.statSync(fp).size); }
+    process.exit(0);
+  }
+  if (process.env.STORE_SHOTS) { // Google Play listing screenshots: a realistic shop, phone size, 1080x1920
+    const C = process.env.STORE_SHOTS, day = d => new Date(Date.now() + d * 864e5).toISOString();
+    db.shops[0].name = "BrightWash Laundry"; db.shops[0].next_no = 214;
+    db.shops[0].crew = [{ n: "Grace", r: "c" }, { n: "Effiong", r: "a" }, { n: "Kemi", r: "a" }];
+    db.shop_private[0].setup = { ...db.shop_private[0].setup, complete: true, prices: true };
+    db.orders.length = 0; db.order_money.length = 0; db.customers.length = 0; db.customer_phones.length = 0;
+    [["Senator (up and down)", 2, { wi: 2000, wo: 1500, io: 800, wsi: 2500 }], ["Agbada", 3, { wi: 3500, wo: 2500, io: 1500, wsi: 4500 }], ["Bedsheet", 1, { wi: 1200, wo: 900, io: 500, wsi: 1500 }], ["Duvet", 1, { wi: 4000, wo: 3000, io: 0, wsi: 5000 }], ["Suit (2 piece)", 2, { wi: 3000, wo: 2000, io: 1200, wsi: 3500 }]]
+      .forEach(([n, pc, pr], k) => { const id = "sx" + k; db.items.push({ id, shop_id: shopId, name: n, custom: false, services: Object.keys(pr), sort: 4 + k, hidden: false, pieces: pc }); db.item_prices.push({ item_id: id, shop_id: shopId, prices: pr }); });
+    db.items.find(i => i.id === "it2").pieces = 2; db.items.find(i => i.id === "it3").hidden = true;
+    const log = x => page.evaluate(async ([SBu, x]) => { const r = await fetch(SBu + "/rest/v1/rpc/log_order", { method: "POST", headers: { "Content-Type": "application/json", apikey: "x", Authorization: "Bearer x" }, body: JSON.stringify({ p: x }) }); return r.status; }, [SB, x]);
+    const people = [
+      ["Adaeze Okafor", "08031112233", "ADA", [["sx0", 2, "navy blue"], ["it0", 3, "white"]], 2, "new", 0],
+      ["Tunde Bakare", "08052223344", "TB", [["sx1", 1, "cream"], ["it1", 2, ""]], 0, "ready", 3000],
+      ["Mrs Funmi Adeyemi", "08063334455", "FA", [["sx2", 2, ""], ["sx3", 1, "white"]], -1, "listed", 0],
+      ["Chinedu Eze", "08074445566", "CE", [["sx4", 1, "black"], ["it0", 4, ""]], 1, "listed", 5000],
+      ["Ibrahim Musa", "08085556677", "IM", [["it2", 2, "green and gold"]], 0, "told", 3000],
+      ["Blessing Udoh", "08096667788", "BU", [["it0", 5, ""], ["it1", 3, ""]], 3, "new", 0],
+      ["Kunle Ojo", "08017778899", "KO", [["sx0", 1, "wine"]], -2, "listed", 0],
+    ];
+    for (const [name, phone, mark, lines, due, st, paid] of people) {
+      await log({ name, phone, mark, branch_id: "b1", express: false, pickup: false, collect_at: day(due), paid, method: "transfer", duty: { by: "Grace", w: ["Effiong", "Kemi"] },
+        items: lines.map(([id, qty, note]) => ({ id, svc: "wi", qty, note: note || undefined, pcs: (db.items.find(i => i.id === id) || {}).pieces || 1 })) });
+      const o = db.orders[db.orders.length - 1]; o.status = st; const cu = db.customers.find(c => c.id === o.customer_id); cu.greet = "name"; cu.greet_asked = true; cu.inv_name = name; o.created_at = day(due - 3); if (st !== "new") o.list_sent = true;
+    }
+    console.log("store orders:", db.orders.length);
+    await page.setViewportSize({ width: 360, height: 640 });
+    const S = async n => { await page.waitForTimeout(700); await page.addStyleTag({ content: "#supfab,.alert.push{display:none!important}" }).catch(() => {}); await page.screenshot({ path: path.join(C, n + ".png") }); };
+    try { localStorage; } catch (_) {}
+    await page.evaluate(() => { try { localStorage.setItem("tb-duty-shop1", JSON.stringify({ by: "Grace", w: ["Effiong", "Kemi"] })); } catch (_) {} });
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1500); await S("1-orders");
+    const tb = db.orders.find(o => o.status === "ready");
+    await page.goto("http://localhost:8787/#order-" + tb.no); await page.reload(); await page.waitForTimeout(1500); await S("3-order");
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1200); await page.click('[data-tab="new"]'); await page.waitForTimeout(800);
+    try { await page.click("[data-pick] >> nth=0"); await page.waitForTimeout(300); await page.click('[data-add="sx1"]'); await page.click('[data-add="it0"]'); await page.click('[data-add="it0"]'); await page.evaluate(() => scrollTo(0, 0)); } catch (e) { console.log("log fill:", e.message.slice(0, 120)); }
+    await S("2-log");
+    await page.goto("http://localhost:8787/#reports"); await page.reload(); await page.waitForTimeout(1500); await S("5-reports");
+    await page.goto("http://localhost:8787/#shop"); await page.reload(); await page.waitForTimeout(1000); await page.click('[data-st="prices"]').catch(() => {}); await page.waitForTimeout(600); await S("6-prices");
+    await page.goto("http://localhost:8787/track?k=" + tb.track_token); await page.waitForTimeout(1500); await S("4-track");
+    console.log("errors:", errors.slice(0, 5));
     process.exit(0);
   }
   if (process.env.TEAM_TEST) { // team on duty, colour per cloth, pieces (Impressions Laundry)
