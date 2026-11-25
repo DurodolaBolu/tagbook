@@ -3650,7 +3650,7 @@ function drawLogin() {
         : pinStep && L.last ? `<p class="lhi">Welcome back,</p><h1 class="lname">${esc(L.last.name)}</h1>${L.last.shop ? `<p class="lshop">${esc(L.last.shop)}</p>` : ""}`
         : `<h1 class="lname">${pinStep ? "Enter your PIN" : "Welcome to Tagbook"}</h1>`}
       <p class="lask">${newStep ? (L.step === "newpin" ? "6 digits you'll remember. Don't use 123456." : "To make sure it's right") : L.confirm ? "Enter your PIN once to switch on Tagbook's new login protection. You only do this once." : pinStep ? (L.last ? "Enter your 6-digit PIN to continue" : `PIN for ${fmtPhone(L.phone)}`) : "Enter your phone number"}</p>
-      ${L.help ? `<p class="lhelptext">Forgot your PIN? Tap “Forgot PIN?” below to reset it with WhatsApp, or ask the shop owner to set a new one in Settings.${pinStep && !L.confirm && !newStep ? ` <button class="llink" id="lswitch">Log in with a different number</button>` : ""}</p>` : ""}
+      ${L.help ? `<p class="lhelptext">Forgot your PIN? Tap “Forgot PIN?” below to reset it with WhatsApp, or ask the shop owner to set a new one in Settings.</p>` : ""}
       ${boxes}
       <p class="lerr" role="alert">${esc(L.err)}</p>
       <div class="keypad">${keys.map(k => k === "" ? `<span></span>` : k === "back"
@@ -3659,7 +3659,7 @@ function drawLogin() {
       ${!pinStep ? `<button class="btn btn-primary lgo" id="lgo" ${L.phone.length === 11 ? "" : "disabled"}>Continue</button>`
         : newStep ? `<p class="lfoot"><button class="llink" id="lrback">Cancel</button></p>`
         : L.confirm ? `<p class="lfoot"><button class="llink" id="llater">Not now</button></p>`
-        : `<p class="lfoot"><button class="llink" id="lforgot">Forgot PIN?</button>${L.last ? "" : ` · <button class="llink" id="lswitch">Change phone number</button>`}</p>`}
+        : `<p class="lfoot"><button class="llink" id="lforgot">Forgot PIN?</button></p><p class="lfoot"><button class="llink" id="lswitch">${L.last ? "Log in with a different number" : "Change phone number"}</button></p>`}
       ${!L.confirm && !pinStep ? `<p class="lnew">New to Tagbook? <button class="llink" id="lnew">Start a new shop</button></p>` : ""}
       ${L.busy ? `<p class="lbusy">${newStep ? "Saving your new PIN…" : L.confirm ? "Checking…" : "Logging in…"}</p>` : ""}
       <p class="lpriv"><a href="/privacy">Privacy policy</a></p><p class="lpriv lco">Tagbook is a product of Ordiventa Technologies Limited (RC 10010214), No. 4, Aule Housing Estate, Aule Street, Akure, Ondo State, Nigeria · WhatsApp +234 812 075 6325</p>
