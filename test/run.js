@@ -202,6 +202,8 @@ async function handle(route) {
     await page.setViewportSize({ width: 390, height: 2600 }); await page.goto("http://localhost:8787/#admin"); await page.reload(); await page.waitForTimeout(1500);
     const errs = []; page.on("pageerror", e => errs.push(e.message));
     await page.screenshot({ path: path.join(C, "dash.png"), fullPage: true }); console.log("dash text has App and alerts:", (await page.textContent("#view")).includes("App and alerts"), errs);
+    await page.fill("#dq", "proc"); await page.waitForTimeout(300); console.log("search proc:", await page.$$eval(".dlist > *", e => e.length), (await page.textContent("#view")).includes("App and alerts") ? "rest still shown" : "only results");
+    await page.screenshot({ path: path.join(C, "dash-search.png") }); await page.fill("#dq", ""); await page.waitForTimeout(300); console.log("cleared, rest back:", (await page.textContent("#view")).includes("App and alerts"));
     { const sec = await page.$("text=New shops to welcome"); if (sec) { await sec.scrollIntoViewIfNeeded(); await page.setViewportSize({ width: 390, height: 1100 }); await page.evaluate(() => { const h = [...document.querySelectorAll("h3")].find(x => /New shops to welcome/.test(x.textContent)); h.scrollIntoView({ block: "start" }); }); await page.screenshot({ path: path.join(C, "dash-welcome.png") }); }
       console.log("welcome rows:", await page.$$eval(".dwel", e => e.length), "| first link has text:", (await page.getAttribute("[data-wwa]", "href") || "").includes("Tagbook")); }
     await page.setViewportSize({ width: 390, height: 1100 }); await page.click('.dsegs [data-dseg="alerts"]'); await page.waitForTimeout(400);
@@ -447,6 +449,9 @@ async function handle(route) {
       await page.evaluate(() => { navigator.canShare = () => true; navigator.share = async () => {}; });
       await page.click('[data-pdf="ready"]').catch(e => console.log("no ready pdf", e.message.slice(0, 80))); await page.waitForTimeout(4000);
       console.log("auto told:", db.orders.find(x => x.id === o.id).status); }
+    { const q = db.orders.find(x => x.id === o.id); q.status = "ready"; const m = db.order_money.find(x => x.order_id === o.id); if (m) { m.paid = 2000; m.payments = [{ amt: 2000, at: Date.now() - 864e5, method: "cash", by: "Bolu" }]; }
+      await page.setViewportSize({ width: 390, height: 3200 }); await page.goto("http://localhost:8787/#order-" + o.no); await page.reload(); await page.waitForTimeout(1500);
+      await page.screenshot({ path: path.join(C, "order-ready.png"), fullPage: true }); }
     console.log("bill sender saved:", JSON.stringify(db.orders.find(q => q.id === o.id).duty));
     console.log("errors:", errors.slice(0, 5));
     process.exit(0);

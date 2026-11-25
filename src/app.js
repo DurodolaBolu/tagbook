@@ -939,9 +939,13 @@ function renderAdmin() {
         <div class="row"><button class="btn btn-ghost" id="ag-no">Cancel</button><button class="btn btn-primary" id="ag-go">Add to team</button></div></div>`
       : `<button class="btn btn-ghost" id="ag-add">+ Add an agent</button>`}
   </section>`;
+  // Search sits at the top: while something is typed, only matching shops show.
+  const qOn = !!dQ.trim(), dHit = r => { const q = dQ.trim().toLowerCase(), dg = q.replace(/\D/g, ""); return [r.name, r.owner_name, r.area, r.state].some(v => String(v || "").toLowerCase().includes(q)) || (dg.length >= 3 && String(r.owner_phone || "").includes(dg.replace(/^234/, "0").replace(/^0/, ""))); };
   if (Date.now() - followAt > 60e3) { followAt = Date.now(); sb.from("outreach_leads").select("id", { count: "exact", head: true }).eq("status", "called").then(({ count }) => { if (count != null && count !== followN) { followN = count; if (tab === "admin" && adminView === "shops") renderAdmin(); } }); }
   view.innerHTML = `${adminSeg()}${followN ? `<div class="alert"><span><b>${followN} shop${followN > 1 ? "s" : ""} to follow up.</b> Called and interested. Send the after-call message on WhatsApp.</span><button id="gofollow">Open</button></div>` : ""}<div class="dtop"><div><h2 class="ptitle">Shops</h2><p class="hint">Updated ${ago(new Date(dashAt).toISOString())} · test shops not counted</p></div>
       <div class="row"><button class="btn btn-ghost" id="dref">Refresh</button><button class="btn btn-primary" id="dadd">Add a shop</button></div></div>
+    <input id="dq" class="dq" type="search" placeholder="Search a shop: name, owner or phone" value="${esc(dQ)}" autocomplete="off" style="margin:4px 0 14px">
+    ${qOn ? (() => { const list = dash.filter(dHit); return `<p class="hint">${list.length} shop${list.length === 1 ? "" : "s"} found</p><div class="dlist">${list.map(shopCard).join("") || `<p class="hint">No shop matches “${esc(dQ.trim())}”. Try part of the name or the last 4 digits of the phone.</p>`}</div>`; })() : `
     <div class="stats dstats">
       <div class="stat"><b>${real.length}</b><span>Shops</span></div>
       <div class="stat"><b>${active}<small> of ${real.length}</small></b><span>Logged orders this week</span></div>
@@ -972,12 +976,11 @@ function renderAdmin() {
       const list = real.filter(r => inSeg(r, dSeg) && hit(r));
       return `<h3 class="stitle" id="dlisth">All shops</h3>
       <div class="chips dsegs">${D_SEGS.map(([k, l]) => `<button class="chip" data-dseg="${k}" aria-pressed="${dSeg === k}">${l}<span class="cnt">${real.filter(r => inSeg(r, k)).length}</span></button>`).join("")}</div>
-      <input id="dq" class="dq" type="search" placeholder="Search shop, owner, town or phone" value="${esc(dQ)}" autocomplete="off">
       ${dSeg === "alerts" && list.length ? `<p class="hint">Tap Remind to send the owner a WhatsApp message with the steps to turn notifications on.</p>` : ""}
       <div class="dlist">${list.map(shopCard).join("") || `<p class="hint">No shops here.</p>`}</div>`; })()}
     ${refHtml}
     ${agentHtml}
-    ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`;
+    ${test.length ? `<h3 class="stitle dtest">Test shops</h3><div class="dlist">${test.map(shopCard).join("")}</div>` : ""}`}`;
   wireAdminSeg(); if ($("#gofollow")) $("#gofollow").onclick = () => { adminView = "leads"; oStatus = "called"; oCity = "all"; try { localStorage.setItem("tb-admin-view", "leads"); } catch (_) { } renderAdmin(); };
   view.querySelectorAll("[data-dseg]").forEach(b => b.onclick = () => { dSeg = b.dataset.dseg; dOpen = null; renderAdmin(); const h = $("#dlisth"); if (h) h.scrollIntoView({ block: "start" }); });
   view.querySelectorAll("[data-dopen]").forEach(b => b.onclick = () => { dOpen = b.dataset.dopen || null; renderAdmin(); });
