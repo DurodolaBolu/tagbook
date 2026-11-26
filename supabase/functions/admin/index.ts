@@ -96,7 +96,7 @@ const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET") || "";
 const TERMII_KEY = Deno.env.get("TERMII_KEY") || Deno.env.get("TERMII_API_KEY") || "";
 const TERMII_BASE = (Deno.env.get("TERMII_BASE_URL") || "https://api.ng.termii.com").replace(/\/$/, "");
 // Until the "Tagbook" sender ID is approved, Termii's default sender carries the codes (Termii support, 25 Nov 2026).
-const TERMII_FROM = Deno.env.get("TERMII_SENDER_ID") || "N-Alert";
+const TERMII_FROM = Deno.env.get("TERMII_SENDER_ID") || "OE Alert"; // Termii approved OE Alert for Ordiventa, 26 Nov 2026
 // Bolu's own phone for a text alert on every self sign-up (set ADMIN_SMS_TO in Supabase, e.g. 0903...).
 const ADMIN_SMS_TO = (Deno.env.get("ADMIN_SMS_TO") || "").replace(/\D/g, "");
 async function textBolu(msg: string) {
