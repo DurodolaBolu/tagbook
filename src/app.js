@@ -26,6 +26,10 @@ const localTime = ts => { const t = new Date(ts); return t.getHours() || t.getMi
 const collectIso = (date, time) => date ? new Date(`${date}T${time || "00:00"}`).toISOString() : null;
 const speedLabel = o => o.wait ? "wait & get" : o.express ? "express delivery" : "";
 const moneyAttrs = 'type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"';
+// Amount boxes that show commas as you type (1,000 · 10,000); num() strips them when saving.
+const cm = n => n ? Number(n).toLocaleString("en-NG") : "";
+function commaInput(el, fn) { if (!el) return; el.addEventListener("input", () => { const pos = el.selectionStart || 0, before = digits(el.value.slice(0, pos)).length, c = digits(el.value).replace(/^0+(?=\d)/, "").slice(0, 9), f = cm(+c);
+  if (el.value !== f) { el.value = f; let i = 0, seen = 0; while (i < f.length && seen < before) { if (/\d/.test(f[i])) seen++; i++; } try { el.setSelectionRange(i, i); } catch (_) { } } fn(+c || 0); }); }
 function moneyInput(el, fn) { if (!el) return; el.addEventListener("input", () => { const c = digits(el.value); if (el.value !== c) el.value = c; fn(num(c)); }); }
 const $ = s => document.querySelector(s);
 const view = $("#view");
@@ -173,7 +177,7 @@ async function load() {
     ph.forEach(r => phones[r.customer_id] = r.phone);
     om.forEach(r => money[r.order_id] = r);
     if (expOn()) { try { expenses = await fetchAll("expenses", "id,amount,kind,note,spent_on,created_by,created_at", "spent_on"); } catch (_) { expenses = []; } }
-    if (oldOn()) { try { oldMoney = await fetchAll("old_money", "id,kind,name,phone,amount,on_date,note,payments,created_by,created_at", "created_at"); } catch (_) { oldMoney = []; } }
+    if (oldOn()) { try { oldMoney = await fetchAll("old_money", "id,kind,name,phone,amount,on_date,note,payments,created_by,created_at,customer_id", "created_at"); } catch (_) { oldMoney = []; } }
   } else if (shop.staff_prices) {
     (await fetchAll("item_prices", "item_id,prices")).forEach(r => prices[r.item_id] = r.prices);
   }
@@ -3056,7 +3060,7 @@ function expHtml(live) {
   const list = expenses.filter(x => { const d = expDay(x.spent_on); return d >= D.s && d < D.e; }).sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
   const byKind = {}; list.forEach(x => byKind[x.kind] = (byKind[x.kind] || 0) + x.amount);
   const rows = !isDay ? Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><span>${esc(expKind(k))}</span><b>${naira(v)}</b></div>`).join("") : list.map(x => `<div class="exrow"><span><b>${esc(expKind(x.kind))}</b>${x.note ? `<em class="exnote">${esc(x.note)}</em>` : ""}</span><span class="exr"><b>${naira(x.amount)}</b><button class="exdel" data-exdel="${x.id}" aria-label="Delete ${esc(expKind(x.kind))} ${naira(x.amount)}">×</button></span></div>`).join("");
-  const form = expAdd ? `<div class="exform"><label for="exa">Amount spent (₦)</label><input id="exa" ${moneyAttrs} value="${expAdd.amt || ""}" placeholder="e.g. 4500">
+  const form = expAdd ? `<div class="exform"><label for="exa">Amount spent (₦)</label><input id="exa" ${moneyAttrs} value="${cm(expAdd.amt)}" placeholder="e.g. 4,500">
       <p class="exl">What was it for?</p><div class="chips exchips">${EXP_KINDS.map(([k, l]) => `<button class="chip" data-exk="${k}" aria-pressed="${expAdd.kind === k}">${l}</button>`).join("")}</div>
       <label for="exn">Note (optional)</label><input id="exn" maxlength="120" value="${esc(expAdd.note || "")}" placeholder="e.g. 2 bags of Ariel" autocomplete="off">
       <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="excancel">Cancel</button><button class="btn btn-primary" id="exsave" ${expAdd.busy ? "disabled" : ""}>${expAdd.busy ? "Saving…" : "Save expense"}</button></div></div>` : "";
@@ -3074,7 +3078,7 @@ function wireExp() {
   const pv = $("#exprev"); if (pv) pv.onclick = () => { expK--; expAdd = null; renderReports(); };
   const nx = $("#exnext"); if (nx) nx.onclick = () => { expK++; expAdd = null; renderReports(); };
   const ad = $("#exadd"); if (ad) ad.onclick = () => { expAdd = { kind: null }; renderReports(); const a = $("#exa"); if (a) a.focus(); };
-  const a = $("#exa"); if (a) moneyInput(a, v => expAdd.amt = v || "");
+  const a = $("#exa"); if (a) commaInput(a, v => expAdd.amt = v || "");
   view.querySelectorAll("[data-exk]").forEach(b => b.onclick = () => { expAdd.kind = b.dataset.exk; expAdd.note = $("#exn").value; renderReports(); });
   const n = $("#exn"); if (n) n.oninput = () => expAdd.note = n.value;
   const cx = $("#excancel"); if (cx) cx.onclick = () => { expAdd = null; renderReports(); };
@@ -3105,16 +3109,25 @@ const oldPaid = x => (x.payments || []).reduce((s, p) => s + (p.amt || 0), 0);
 const oldLeft = x => x.kind === "balance" ? Math.max(0, x.amount - oldPaid(x)) : 0;
 const oldOwing = () => oldOn() ? oldMoney.reduce((s, x) => s + oldLeft(x), 0) : 0;
 const oldDate = d => { const x = expDay(d); return `${x.getDate()} ${MON[x.getMonth()]} ${x.getFullYear()}`; };
+// Customer picker for old balances: matches by name, mark or phone. Picking links the customer; no match means a new name.
+function oldSug(A) {
+  if (A.cid) { const c = customers.find(x => x.id === A.cid); return c ? `<p class="olpick">Existing customer${c.mark ? ` · mark ${esc(c.mark)}` : ""} <button class="llink" data-olunpick>Change</button></p>` : ""; }
+  const q = tidy(A.name || "").toLowerCase(), qd = digits(A.phone || "") || (/^\d{3,}$/.test(q.replace(/\s/g, "")) ? q.replace(/\s/g, "") : "");
+  if (q.length < 2 && qd.length < 3) return "";
+  const hits = customers.filter(c => (q.length >= 2 && !/^\d+$/.test(q.replace(/\s/g, "")) && (c.name.toLowerCase().includes(q) || (c.mark || "").toLowerCase() === q)) || (qd.length >= 3 && (c.phone || "").includes(qd))).slice(0, 5);
+  return hits.length ? `<p class="exl">Existing customers. Tap one, or keep typing to add someone new.</p>${hits.map(c => `<button class="olhit" data-olcust="${c.id}"><b>${esc(c.name)}</b><span>${[c.mark, c.phone ? fmtPhone(c.phone) : ""].filter(Boolean).map(esc).join(" · ")}</span></button>`).join("")}` : `<p class="exl">New customer. They will be added with this name.</p>`;
+}
 function oldHtml() {
   const bal = oldMoney.filter(x => x.kind === "balance").sort((a, b) => (oldLeft(b) > 0) - (oldLeft(a) > 0) || String(b.created_at).localeCompare(String(a.created_at)));
   const inc = oldMoney.filter(x => x.kind === "income").sort((a, b) => String(b.on_date).localeCompare(String(a.on_date)) || String(b.created_at).localeCompare(String(a.created_at)));
   const today = ymd(new Date()), A = oldAdd || {};
-  const balForm = `<div class="exform"><label for="oln">Customer's name</label><input id="oln" maxlength="60" value="${esc(A.name || "")}" placeholder="e.g. Mrs Adeyemi" autocomplete="off">
-    <label for="olp">Phone (optional, for the WhatsApp reminder)</label><input id="olp" type="tel" inputmode="numeric" maxlength="11" value="${esc(A.phone || "")}" placeholder="08012345678" autocomplete="off">
-    <label for="ola">Amount still owing (₦)</label><input id="ola" ${moneyAttrs} value="${A.amt || ""}" placeholder="e.g. 7500">
+  const balForm = `<div class="exform"><label for="oln">Customer</label><input id="oln" maxlength="60" value="${esc(A.name || "")}" placeholder="Type a name or phone to find them" autocomplete="off">
+    <div id="olsug" class="olsug">${oldSug(A)}</div>
+    <label for="olp">Phone (optional, for the WhatsApp reminder)</label><input id="olp" type="tel" inputmode="numeric" maxlength="11" value="${esc(A.phone || "")}" placeholder="08012345678" autocomplete="off" ${A.cid ? "readonly" : ""}>
+    <label for="ola">Amount still owing (₦)</label><input id="ola" ${moneyAttrs} value="${cm(A.amt)}" placeholder="e.g. 7,500">
     <label for="olx">Note (optional)</label><input id="olx" maxlength="120" value="${esc(A.note || "")}" placeholder="e.g. Agbada and 3 shirts, October" autocomplete="off">
     <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="olcancel">Cancel</button><button class="btn btn-primary" id="olsave" ${A.busy ? "disabled" : ""}>${A.busy ? "Saving…" : "Save old balance"}</button></div></div>`;
-  const incForm = `<div class="exform"><label for="ola">Amount received (₦)</label><input id="ola" ${moneyAttrs} value="${A.amt || ""}" placeholder="e.g. 85000">
+  const incForm = `<div class="exform"><label for="ola">Amount received (₦)</label><input id="ola" ${moneyAttrs} value="${cm(A.amt)}" placeholder="e.g. 85,000">
     <label for="old">Date</label><input id="old" type="date" max="${today}" value="${esc(A.day || today)}">
     <label for="olx">Note (optional)</label><input id="olx" maxlength="120" value="${esc(A.note || "")}" placeholder="e.g. From the old book, 1 to 20 Nov" autocomplete="off">
     <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="olcancel">Cancel</button><button class="btn btn-primary" id="olsave" ${A.busy ? "disabled" : ""}>${A.busy ? "Saving…" : "Save"}</button></div></div>`;
@@ -3122,7 +3135,7 @@ function oldHtml() {
     return `<div class="olrow"><div class="exrow"><span><b>${esc(x.name)}</b><em class="exnote">${x.note ? esc(x.note) + " · " : ""}${left ? `${naira(x.amount)} from before${paid ? `, ${naira(paid)} paid` : ""}` : `${naira(x.amount)}, paid in full`}</em></span>
       <span class="exr"><b style="color:${left ? "var(--owes)" : "inherit"}">${left ? naira(left) : "Paid"}</b><button class="exdel" data-oldel="${x.id}" aria-label="Delete ${esc(x.name)}">×</button></span></div>
       ${left && !P ? `<div class="olacts"><button class="mini" data-olpay="${x.id}">Record payment</button>${x.phone ? `<a class="mini" target="_blank" rel="noopener" href="${waLink(x.phone, `Good day ${x.name}. This is ${shop.name}. This is a reminder that ${naira(left)} is still owing${x.note ? ` for ${x.note}` : ""}.${payTo()}`)}">Remind on WhatsApp</a>` : ""}</div>` : ""}
-      ${P ? `<div class="exform"><label for="opa">Amount paid now (₦)</label><input id="opa" ${moneyAttrs} value="${P.amt || ""}">
+      ${P ? `<div class="exform"><label for="opa">Amount paid now (₦)</label><input id="opa" ${moneyAttrs} value="${cm(P.amt)}">
         <div class="row" style="margin-top:10px"><button class="btn btn-ghost" id="opcancel">Cancel</button><button class="btn btn-primary" id="opsave" ${P.busy ? "disabled" : ""}>${P.busy ? "Saving…" : "Save payment"}</button></div></div>` : ""}</div>`; };
   const incRow = x => `<div class="exrow"><span><b>${oldDate(x.on_date)}</b>${x.note ? `<em class="exnote">${esc(x.note)}</em>` : ""}</span><span class="exr"><b>${naira(x.amount)}</b><button class="exdel" data-oldel="${x.id}" aria-label="Delete ${naira(x.amount)} on ${oldDate(x.on_date)}">×</button></span></div>`;
   const owing = bal.reduce((s, x) => s + oldLeft(x), 0), got = inc.reduce((s, x) => s + x.amount, 0);
@@ -3140,13 +3153,21 @@ function wireOld() {
   const keep = () => { if (!oldAdd) return; const g = id => { const e = $(id); return e ? e.value : undefined; }; ["name:#oln", "phone:#olp", "note:#olx", "day:#old"].forEach(s => { const [k, id] = s.split(":"); const v = g(id); if (v !== undefined) oldAdd[k] = v; }); };
   view.querySelectorAll("[data-oldt]").forEach(b => b.onclick = () => { oldT = b.dataset.oldt; oldAdd = null; oldPay = null; renderReports(); });
   const ad = $("#oladd"); if (ad) ad.onclick = () => { oldAdd = {}; oldPay = null; renderReports(); const f = $(oldT === "balance" ? "#oln" : "#ola"); if (f) f.focus(); };
-  moneyInput($("#ola"), v => oldAdd.amt = v || "");
-  const ph = $("#olp"); if (ph) ph.addEventListener("input", () => { const c = digits(ph.value).slice(0, 11); if (ph.value !== c) ph.value = c; });
+  commaInput($("#ola"), v => oldAdd.amt = v || "");
+  const ph = $("#olp"), nm = $("#oln");
+  const sug = () => { const box = $("#olsug"); if (!box || !oldAdd) return; oldAdd.name = nm.value; oldAdd.phone = ph.value; box.innerHTML = oldSug(oldAdd); wireSug(); };
+  const wireSug = () => {
+    view.querySelectorAll("[data-olcust]").forEach(b => b.onclick = () => { const c = customers.find(x => x.id === b.dataset.olcust); if (!c) return; keep(); Object.assign(oldAdd, { cid: c.id, name: c.name, phone: c.phone || "" }); renderReports(); const a = $("#ola"); if (a) a.focus(); });
+    const un = view.querySelector("[data-olunpick]"); if (un) un.onclick = () => { keep(); Object.assign(oldAdd, { cid: null, name: "", phone: "" }); renderReports(); const f = $("#oln"); if (f) f.focus(); };
+  };
+  if (ph) ph.addEventListener("input", () => { const c = digits(ph.value).slice(0, 11); if (ph.value !== c) ph.value = c; if (!oldAdd.cid) sug(); });
+  if (nm) nm.addEventListener("input", () => { if (oldAdd.cid) { oldAdd.cid = null; ph.readOnly = false; } sug(); });
+  wireSug();
   const cx = $("#olcancel"); if (cx) cx.onclick = () => { oldAdd = null; renderReports(); };
   const sv = $("#olsave"); if (sv) sv.onclick = async () => {
     keep(); const amt = num($("#ola").value), note = tidy(oldAdd.note).slice(0, 120) || null, row = { kind: oldT, amount: amt, note, created_by: (me && me.name) || null };
     if (oldT === "balance") {
-      row.name = tidy(oldAdd.name).slice(0, 60); row.phone = digits(oldAdd.phone || "") || null;
+      row.name = tidy(oldAdd.name).slice(0, 60); row.phone = digits(oldAdd.phone || "") || null; row.customer_id = oldAdd.cid || null;
       if (!row.name) { toast("Type the customer's name"); return; }
       if (row.phone && !/^0\d{10}$/.test(row.phone)) { toast("The phone number must be 11 digits and start with 0."); return; }
       row.on_date = ymd(new Date());
@@ -3157,12 +3178,12 @@ function wireOld() {
     if (!amt) { toast(oldT === "balance" ? "Type the amount still owing" : "Type the amount received"); return; }
     if (amt > 100000000) { toast("That amount is too big. Check it and try again."); return; }
     oldAdd.busy = true; renderReports();
-    const { data, error } = await sb.from("old_money").insert(row).select("id,kind,name,phone,amount,on_date,note,payments,created_by,created_at").single();
+    const { data, error } = await sb.from("old_money").insert(row).select("id,kind,name,phone,amount,on_date,note,payments,created_by,created_at,customer_id").single();
     if (error) { oldAdd.busy = false; toast(failMsg(error)); renderReports(); return; }
     oldMoney.push(data); oldAdd = null; toast(oldT === "balance" ? `Old balance of ${naira(amt)} added for ${row.name}` : `${naira(amt)} recorded for ${oldDate(row.on_date)}`); renderReports();
   };
   view.querySelectorAll("[data-olpay]").forEach(b => b.onclick = () => { const x = oldMoney.find(e => e.id === b.dataset.olpay); oldAdd = null; oldPay = { id: x.id, amt: oldLeft(x) }; renderReports(); const a = $("#opa"); if (a) { a.focus(); a.select(); } });
-  moneyInput($("#opa"), v => oldPay.amt = v || "");
+  commaInput($("#opa"), v => oldPay.amt = v || "");
   const pc = $("#opcancel"); if (pc) pc.onclick = () => { oldPay = null; renderReports(); };
   const ps = $("#opsave"); if (ps) ps.onclick = async () => {
     const x = oldMoney.find(e => e.id === oldPay.id); if (!x) return; const amt = num($("#opa").value), left = oldLeft(x);

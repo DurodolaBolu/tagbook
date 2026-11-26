@@ -915,7 +915,12 @@ async function handle(route) {
     const r0 = num(await recvTxt()), o0 = num(await owedTxt());
     await page.evaluate(() => document.querySelector("#oldh").scrollIntoView()); await shot("12e-old-empty");
     await T("#oladd"); await T("#olsave"); const noName = (await page.textContent("#toast")).trim();
-    await page.fill("#oln", "Mrs Adeyemi"); await page.fill("#olp", "08031112222"); await page.fill("#ola", "7500"); await page.fill("#olx", "Agbada and 3 shirts, October"); await shot("12f-old-form"); await T("#olsave"); await page.waitForTimeout(300);
+    { const c0 = db.customers[0]; await page.type("#oln", c0.name.slice(0, 3)); await page.waitForTimeout(200); const hits = await page.$$eval("[data-olcust]", b => b.length); await shot("12f0-old-picker");
+      await T("[data-olcust]"); const picked = await page.inputValue("#oln"); const ro = await page.$eval("#olp", e => e.readOnly);
+      console.log("picker hits:", hits, "| picked:", picked, "| phone locked:", ro); if (!hits || picked !== c0.name || !ro) errors.push("customer picker wrong");
+      await T("[data-olunpick]"); }
+    await page.type("#oln", "Mrs Adeyemi"); const newNote = (await page.textContent("#olsug")).trim(); console.log("new name note:", newNote); if (!/New customer/.test(newNote)) errors.push("new customer note missing");
+    await page.fill("#olp", "08031112222"); await page.type("#ola", "7500"); const shown = await page.inputValue("#ola"); console.log("comma box:", shown); if (shown !== "7,500") errors.push("amount commas missing"); await page.fill("#olx", "Agbada and 3 shirts, October"); await shot("12f-old-form"); await T("#olsave"); await page.waitForTimeout(300);
     const o1 = num(await owedTxt()); await shot("12g-old-balance");
     await T("[data-olpay]"); await page.fill("#opa", "9000"); await T("#opsave"); const tooMuch = (await page.textContent("#toast")).trim();
     await page.fill("#opa", "3000"); await T("#opsave"); await page.waitForTimeout(300);

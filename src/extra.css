@@ -789,3 +789,7 @@ label .opt{font-size:13px}
 .olacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .olacts .mini{text-decoration:none;display:inline-flex;align-items:center}
 .olhint{margin:8px 0 0}
+.olsug .exl{margin:6px 0 4px}
+.olhit{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-top:6px;color:var(--fg);cursor:pointer}
+.olhit span{color:var(--muted);font-size:14px;flex:none}
+.olpick{margin:6px 0 0;font-size:14px;color:var(--muted)}
