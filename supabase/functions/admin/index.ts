@@ -127,6 +127,26 @@ async function sendCode(phone: string): Promise<string | null> {
     return String(d.pinId || d.pin_id);
   } catch (e) { console.error("termii send", String(e)); return null; }
 }
+// Each text code is tied to the phone it was sent to: the Termii pin id is saved with that phone, and a code only
+// counts when it is checked against the same phone (26 Nov 2026 fix: before, a code sent to one's own phone could
+// confirm someone else's number).
+async function sendCodeFor(phone: string, kind: string): Promise<string | null> {
+  const pinId = await sendCode(phone);
+  if (!pinId) return null;
+  const { error } = await admin.from("wa_checks").insert({ phone, code: "sms", kind, from_wa: "sms:" + pinId });
+  if (error) { console.error("code save", error.message); return null; }
+  return pinId;
+}
+async function smsCheck(phone: string, kind: string, pinId: string, code: string, mins: number): Promise<string | null> {
+  if (!pinId || !/^\d{6}$/.test(code)) return null;
+  const { data: ck } = await admin.from("wa_checks").select("id, created_at, verified_at, used_at").eq("phone", phone).eq("kind", kind).eq("from_wa", "sms:" + pinId).maybeSingle();
+  if (!ck || ck.used_at || Date.now() - Date.parse(ck.created_at) > mins * 60e3) return null;
+  if (!ck.verified_at) {
+    if (!(await codeOk(pinId, code))) return null;
+    await admin.from("wa_checks").update({ verified_at: new Date().toISOString() }).eq("id", ck.id);
+  }
+  return ck.id as string;
+}
 // Text-message codes for sign-up and Forgot PIN. On from 26 Nov 2026 (OE Alert, DND): test codes reached MTN and Airtel almost instantly.
 const SMS_LIVE = true;
 const SMS_ON = SMS_LIVE && !!TERMII_KEY;
@@ -174,7 +194,7 @@ Deno.serve(async (req) => {
         const { data: why } = await admin.rpc("signup_check", { p_ip: ip, p_phone: phone, p_kind: "code" });
         if (why) return fail(String(why), 429);
         if (SMS_ON) {
-          const pinId = await sendCode(phone);
+          const pinId = await sendCodeFor(phone, "pin");
           return pinId ? json({ ok: true, pin_id: pinId }) : fail("CODE_FAILED", 502);
         }
         const code = sixDigits();
@@ -184,10 +204,9 @@ Deno.serve(async (req) => {
       }
       if (action === "pin_reset_code") {
         if (!SMS_ON) return fail("RESET_OFF");
-        if (!(await codeOk(String(body.pin_id || ""), String(body.code || "")))) return fail("BAD_CODE");
-        const { data: ck, error: ce } = await admin.from("wa_checks").insert({ phone, code: "sms", kind: "pin", verified_at: new Date().toISOString(), from_wa: "sms" }).select("id").single();
-        if (ce || !ck) throw ce || new Error("CHECK_FAILED");
-        return json({ ok: true, check_id: ck.id });
+        const id = await smsCheck(phone, "pin", String(body.pin_id || ""), String(body.code || ""), 10);
+        if (!id) return fail("BAD_CODE");
+        return json({ ok: true, check_id: id });
       }
       if (!isUuid(body.check_id)) return fail("NOT_VERIFIED");
       if (!okPin(body.pin)) return fail("BAD_PIN");
@@ -216,7 +235,7 @@ Deno.serve(async (req) => {
         const { data: why } = await admin.rpc("signup_check", { p_ip: ip, p_phone: phone, p_kind: "code" });
         if (why) return fail(String(why), 429);
         if (SMS_ON) {
-          const pinId = await sendCode(phone);
+          const pinId = await sendCodeFor(phone, "signup");
           return pinId ? json({ ok: true, pin_id: pinId }) : fail("CODE_FAILED", 502);
         }
         const code = sixDigits();
@@ -232,9 +251,10 @@ Deno.serve(async (req) => {
       if (shopName.length > SHOP_NAME_MAX) return fail("NAME_TOO_LONG");
       if (!okPin(pin)) return fail("BAD_PIN");
       if (Number(body.ms) < 4000) return fail("TOO_FAST"); // a person can't fill the form in under 4 seconds
-      let verified = false;
+      let verified = false, smsRow: string | null = null;
       if (SMS_ON) {
-        if (!(await codeOk(String(body.pin_id || ""), String(body.code || "")))) return fail("BAD_CODE");
+        smsRow = await smsCheck(phone, "signup", String(body.pin_id || ""), String(body.code || ""), 30);
+        if (!smsRow) return fail("BAD_CODE");
         verified = true;
       } else if (WA_ON) {
         if (!isUuid(body.check_id)) return fail("NOT_VERIFIED");
@@ -245,6 +265,7 @@ Deno.serve(async (req) => {
       const { data: why } = await admin.rpc("signup_check", { p_ip: ip, p_phone: phone, p_kind: "shop" });
       if (why) return fail(String(why), 429);
       const r = await newShop({ shopName, ownerName: name, phone, pin, branches: ["Main branch"], startNo: 1, trial: isoIn(30), founding: true, referredBy: null, createdBy: null });
+      if (smsRow) await admin.from("wa_checks").update({ used_at: new Date().toISOString() }).eq("id", smsRow);
       const state = String(body.state);
       await admin.from("shops").update({ self_signup: true, confirmed: verified, area, state }).eq("id", r.shopId);
       const where = `${area}, ${state}`;

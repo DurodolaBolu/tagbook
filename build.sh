@@ -115,7 +115,7 @@ self.addEventListener("notificationclick", e => {
 });
 SW
 printf '{"v":"%s"}\n' "$B" > site/version.json
-printf '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: same-origin\n/sw.js\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n' > site/_headers
+printf '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: same-origin\n  X-Frame-Options: SAMEORIGIN\n  Content-Security-Policy: frame-ancestors \x27self\x27\n  Strict-Transport-Security: max-age=31536000\n/sw.js\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n' > site/_headers
 # /start opens the self sign-up screen
 printf '/start /?start=1 302\n' > site/_redirects
 echo "built $B"

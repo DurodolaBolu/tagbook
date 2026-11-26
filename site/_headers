@@ -1,6 +1,9 @@
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: frame-ancestors 'self'
+  Strict-Transport-Security: max-age=31536000
 /sw.js
   Cache-Control: no-cache
 /index.html
