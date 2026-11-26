@@ -99,8 +99,9 @@ const TERMII_BASE = (Deno.env.get("TERMII_BASE_URL") || "https://api.ng.termii.c
 const TERMII_FROM = Deno.env.get("TERMII_SENDER_ID") || "OE Alert"; // Termii approved OE Alert for Ordiventa, 26 Nov 2026
 // Bolu's own phone for a text alert on every self sign-up (set ADMIN_SMS_TO in Supabase, e.g. 0903...).
 const ADMIN_SMS_TO = (Deno.env.get("ADMIN_SMS_TO") || "").replace(/\D/g, "");
+// Off: Termii's DND route only allows the approved code message, so free-text alerts could get the sender blocked (Termii, 26 Nov 2026).
 async function textBolu(msg: string) {
-  if (!TERMII_KEY || !/^0\d{10}$/.test(ADMIN_SMS_TO)) return;
+  if (true || !TERMII_KEY || !/^0\d{10}$/.test(ADMIN_SMS_TO)) return;
   try {
     const r = await fetch(`${TERMII_BASE}/api/sms/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       api_key: TERMII_KEY, to: "234" + ADMIN_SMS_TO.slice(1), from: TERMII_FROM, sms: msg.slice(0, 300), type: "plain", channel: "dnd",
@@ -119,7 +120,7 @@ async function sendCode(phone: string): Promise<string | null> {
     const r = await fetch(`${TERMII_BASE}/api/sms/otp/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       api_key: TERMII_KEY, message_type: "NUMERIC", to: "234" + phone.slice(1), from: TERMII_FROM, channel: "dnd",
       pin_attempts: 3, pin_time_to_live: 10, pin_length: 6, pin_placeholder: "< 1234 >", pin_type: "NUMERIC",
-      message_text: "Your Tagbook code is < 1234 >. It expires in 10 minutes. Don't share it with anyone.",
+      message_text: "Your Tagbook code is < 1234 >. It expires in 10 minutes. Do not share it with anyone.",
     }) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !(d.pinId || d.pin_id)) { console.error("termii send", r.status, JSON.stringify(d).slice(0, 200)); return null; }
@@ -273,7 +274,7 @@ Deno.serve(async (req) => {
       const r = await fetch(`${TERMII_BASE}/api/sms/otp/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         api_key: TERMII_KEY, message_type: "NUMERIC", to: "234" + phone.slice(1), from, channel,
         pin_attempts: 3, pin_time_to_live: 10, pin_length: 6, pin_placeholder: "< 1234 >", pin_type: "NUMERIC",
-        message_text: "Your Tagbook code is < 1234 >. It expires in 10 minutes. Don't share it with anyone.",
+        message_text: "Your Tagbook code is < 1234 >. It expires in 10 minutes. Do not share it with anyone.",
       }) });
       return json({ status: r.status, termii: await r.json().catch(() => null), from, channel });
     }
