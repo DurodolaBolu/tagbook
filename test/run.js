@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toStrin
 
 // ---- in-memory database ----
 const shopId = "shop1", ownerId = "u-owner", secId = "u-sec";
-const db = { expenses: [], order_photos: [], send_log: [], quick_replies: [], shop_followups: [], shop_remarks: [],
+const db = { expenses: [], old_money: [], order_photos: [], send_log: [], quick_replies: [], shop_followups: [], shop_remarks: [],
   shops: [{ id: shopId, name: "BrightWash Test", created_at: new Date(Date.now() - 86400e3 * 3).toISOString(), next_no: 1, staff_prices: true }],
   branches: [{ id: "b1", shop_id: shopId, name: "Main branch", sort: 0, active: true }, { id: "b2", shop_id: shopId, name: "Second point", sort: 1, active: true }],
   staff: [{ user_id: ownerId, shop_id: shopId, role: "owner", name: "Bolu", phone: "08120756325", active: true, created_at: "2026-11-01" },
@@ -18,10 +18,10 @@ const db = { expenses: [], order_photos: [], send_log: [], quick_replies: [], sh
 const P = [["Shirt", { wi: 800, wo: 500, io: 300, wsi: 1000 }], ["Trouser", { wi: 800, wo: 500, io: 300, wsi: 1000 }], ["Native (2 piece)", { wi: 1500, wo: 1000, io: 600, wsi: 2000 }], ["Special item", null]];
 P.forEach(([n, p], i) => { const id = "it" + i; db.items.push({ id, shop_id: shopId, name: n, custom: !p, services: p ? Object.keys(p) : ["wi", "wo", "io", "wsi"], sort: i, hidden: false }); if (p) db.item_prices.push({ item_id: id, shop_id: shopId, prices: p }); });
 let current = null; // logged-in user id
-const ownerOnly = new Set(["expenses", "shop_private", "item_prices", "customer_phones", "order_money"]);
+const ownerOnly = new Set(["expenses", "old_money", "shop_private", "item_prices", "customer_phones", "order_money"]);
 const staffMay = t => t === "item_prices" && db.shops[0].staff_prices;
 const biller = () => { const me = db.staff.find(s => s.user_id === current); return me && (me.role === "owner" || me.can_bill); };
-const rowsFor = t => { const me = db.staff.find(s => s.user_id === current); if (ownerOnly.has(t) && me.role !== "owner" && !staffMay(t) && !(t !== "expenses" && me.can_bill)) return []; return db[t]; };
+const rowsFor = t => { const me = db.staff.find(s => s.user_id === current); if (ownerOnly.has(t) && me.role !== "owner" && !staffMay(t) && !(!["expenses", "old_money"].includes(t) && me.can_bill)) return []; return db[t]; };
 function filterRows(rows, params) {
   for (const [k, v] of params) { if (["select", "order", "limit", "offset", "on_conflict", "columns"].includes(k)) continue;
     const [op, ...rest] = v.split("."); const val = rest.join(".");
@@ -29,7 +29,7 @@ function filterRows(rows, params) {
     if (op === "in") { const set = val.replace(/^\(|\)$/g, "").split(",").map(s => s.replace(/"/g, "")); rows = rows.filter(r => set.includes(String(r[k]))); } }
   return rows;
 }
-const pk = { expenses: "id", order_photos: "id", send_log: "id", quick_replies: "id", shop_followups: "shop_id", shop_remarks: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
+const pk = { expenses: "id", old_money: "id", order_photos: "id", send_log: "id", quick_replies: "id", shop_followups: "shop_id", shop_remarks: "id", orders: "id", order_money: "order_id", items: "id", item_prices: "item_id", shops: "id", shop_private: "shop_id", branches: "id", customers: "id", customer_phones: "customer_id", staff: "user_id" };
 const errors = [];
 async function handle(route) {
   const req = route.request(), u = new URL(req.url()), p = u.pathname, method = req.method();
@@ -907,6 +907,32 @@ async function handle(route) {
     if (mspent !== "₦2,000" || madd) errors.push("expense month view wrong");
     await T('[data-ext="day"]');
     if (db.expenses.length !== 1) errors.push("expense delete failed");
+  }
+  { // from before Tagbook: old balance with a part payment, and old income on an earlier day
+    const num = t => +String(t || "").replace(/\D/g, "") || 0;
+    const recvTxt = async () => page.evaluate(() => [...document.querySelectorAll(".lines div")].find(d => /Money received/.test(d.textContent)).querySelector("b").textContent);
+    const owedTxt = async () => page.evaluate(() => [...document.querySelectorAll(".lines div")].find(d => /Owed to you right now/.test(d.textContent)).querySelector("b").textContent);
+    const r0 = num(await recvTxt()), o0 = num(await owedTxt());
+    await page.evaluate(() => document.querySelector("#oldh").scrollIntoView()); await shot("12e-old-empty");
+    await T("#oladd"); await T("#olsave"); const noName = (await page.textContent("#toast")).trim();
+    await page.fill("#oln", "Mrs Adeyemi"); await page.fill("#olp", "08031112222"); await page.fill("#ola", "7500"); await page.fill("#olx", "Agbada and 3 shirts, October"); await shot("12f-old-form"); await T("#olsave"); await page.waitForTimeout(300);
+    const o1 = num(await owedTxt()); await shot("12g-old-balance");
+    await T("[data-olpay]"); await page.fill("#opa", "9000"); await T("#opsave"); const tooMuch = (await page.textContent("#toast")).trim();
+    await page.fill("#opa", "3000"); await T("#opsave"); await page.waitForTimeout(300);
+    const r1 = num(await recvTxt()), o2 = num(await owedTxt()), remind = await page.getAttribute(".olacts a", "href"); await shot("12h-old-paid");
+    console.log("old: no-name toast:", noName, "| owed", o0, "->", o1, "->", o2, "| received", r0, "->", r1, "| too much:", tooMuch, "| remind:", decodeURIComponent(remind || "").slice(0, 120));
+    if (db.old_money.length !== 1 || o1 - o0 !== 7500 || o2 - o0 !== 4500 || r1 - r0 !== 3000 || !(db.old_money[0].payments || []).length) errors.push("old balance not right");
+    if (!/4,500/.test(decodeURIComponent(remind || ""))) errors.push("old balance reminder wrong");
+    await T('[data-oldt="income"]'); await T("#oladd"); const y = new Date(Date.now() - 864e5), ys = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+    await page.fill("#ola", "20000"); await page.fill("#old", ys); await page.fill("#olx", "From the old book"); await T("#olsave"); await page.waitForTimeout(300); await shot("12i-old-income");
+    const r2 = num(await recvTxt()); await T('[data-rt="day"]'); await T("#rprev"); const yday = num(await page.textContent(".rhero b")); await T('[data-rt="week"]');
+    console.log("old income saved:", db.old_money.filter(x => x.kind === "income").map(x => [x.amount, x.on_date]), "| received now", r2, "| yesterday hero", yday);
+    if (yday < 20000) errors.push("old income not in yesterday's report");
+    await T('#tabs button[data-tab="orders"]'); await T('[data-go="owed"]'); const hint = (await page.textContent(".olhint").catch(() => "")).trim(); await shot("12j-owing-hint");
+    console.log("owing hint:", hint); if (!/4,500/.test(hint)) errors.push("owing hint missing");
+    await T("#seeold"); await page.waitForTimeout(300); const onRep = await page.evaluate(() => location.hash);
+    await T("[data-oldel]"); await T('.cfm [data-c="1"]'); await page.waitForTimeout(300);
+    console.log("seeold ->", onRep, "| after delete:", db.old_money.length); if (onRep !== "#reports" || db.old_money.length !== 1) errors.push("old money delete/nav wrong");
   }
   // settings: add staff, price edit, branch add
   await T("#gear"); await shot("13a-settings-business");

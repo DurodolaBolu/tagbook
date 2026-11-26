@@ -781,3 +781,11 @@ label .opt{font-size:13px}
 .nscript li p{margin:2px 0 0}
 .nscript li p.hint{margin-top:2px}
 .dcall .linkbtn{color:var(--accent);margin:-2px 0 8px}
+/* From before Tagbook: old balances and old income (Reports) */
+.lines>div.olrow{display:block}
+.olrow .exrow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.olrow .exform{padding:10px 0 2px;margin-top:6px;background:transparent}
+.olrow .exform input{width:100%;text-align:left;padding:10px 12px}
+.olacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.olacts .mini{text-decoration:none;display:inline-flex;align-items:center}
+.olhint{margin:8px 0 0}

@@ -173,6 +173,7 @@ async function load() {
     ph.forEach(r => phones[r.customer_id] = r.phone);
     om.forEach(r => money[r.order_id] = r);
     if (expOn()) { try { expenses = await fetchAll("expenses", "id,amount,kind,note,spent_on,created_by,created_at", "spent_on"); } catch (_) { expenses = []; } }
+    if (oldOn()) { try { oldMoney = await fetchAll("old_money", "id,kind,name,phone,amount,on_date,note,payments,created_by,created_at", "created_at"); } catch (_) { oldMoney = []; } }
   } else if (shop.staff_prices) {
     (await fetchAll("item_prices", "item_id,prices")).forEach(r => prices[r.item_id] = r.prices);
   }
@@ -1444,7 +1445,7 @@ function renderOrders() {
   const fresh = orders.filter(o => !o.notified);
   const toList = orders.filter(o => o.status === "new");
   const notTold = orders.filter(o => o.status === "ready");
-  const owing = orders.reduce((s, o) => s + ((o.status === "told" || o.status === "picked") ? (own() ? owed(o) : 0) : 0), 0);
+  const owing = orders.reduce((s, o) => s + ((o.status === "told" || o.status === "picked") ? (own() ? owed(o) : 0) : 0), 0) + oldOwing();
   const inShop = orders.filter(o => o.status !== "picked");
   const fl = canBill()
     ? [["all", "All"], ["new", "Send list"], ["work", "In progress"], ["ready", "Ready, not told"], ["owed", "Owing"], ["picked", "Picked up"], ...(cancelledOrders.length || filter === "cx" ? [["cx", "Cancelled"]] : [])]
@@ -1487,6 +1488,7 @@ function renderOrders() {
       <div class="stat"><b>${inShop.reduce((s, o) => s + calc(o).count, 0)}</b><span>Clothes in the shop</span></div></div>`}
     <input class="search" id="q" placeholder="${canBill() ? "Search phone, name or mark (BO)" : "Search name or mark (BO)"}" value="${esc(query)}" aria-label="Search">
     <div class="chips">${fl.map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filter === k}">${l}<span class="cnt">${k === "cx" ? cancelledOrders.length : orders.filter(o => inF(o, k)).length}</span></button>`).join("")}</div>
+    ${filter === "owed" && oldOwing() ? `<p class="hint olhint">Plus ${naira(oldOwing())} in old balances from before Tagbook. <button class="llink" id="seeold">See them</button></p>` : ""}
     <div class="list">${shown.length ? shown.map(o => {
       const c = cust(o.cid), k = calc(o); return `
       <button class="order" data-no="${o.no}">
@@ -1509,6 +1511,7 @@ function renderOrders() {
   wirePlanBanner(view); wireInstallCard(); wireSetup(); wireDuty(renderOrders);
   view.querySelectorAll("[data-dmore]").forEach(b => b.onclick = () => { dueOpen[b.dataset.dmore] = !dueOpen[b.dataset.dmore]; renderOrders(); });
   if ($("#wlog")) $("#wlog").onclick = () => go("log");
+  if ($("#seeold")) $("#seeold").onclick = () => { oldT = "balance"; go("reports"); setTimeout(() => { const h = $("#oldh"); if (h) h.scrollIntoView({ block: "start" }); }, 60); };
   if ($("#wprices")) $("#wprices").onclick = () => { setTab = "prices"; go("shop"); };
   if ($("#pushon")) $("#pushon").onclick = async () => { await enablePush(); renderOrders(); };
   if ($("#pushlater")) $("#pushlater").onclick = () => { try { localStorage.setItem("tb-push-later", String(Date.now())); } catch (_) { } renderOrders(); };
@@ -2974,6 +2977,7 @@ function liveByDay() {
   });
   // Money really came in on cancelled orders too, so it stays in "received".
   cancelledOrders.forEach(o => (o.m.payments || []).forEach(p => add(p.at, "received", p.amt)));
+  if (oldOn()) oldMoney.forEach(x => x.kind === "income" ? add(expDay(x.on_date).getTime(), "received", x.amount) : (x.payments || []).forEach(p => add(Date.parse(p.at), "received", p.amt)));
   return m;
 }
 let rep = { type: "week", k: 0, sel: null };
@@ -3004,13 +3008,13 @@ function buckets(type, { s, e }, live) {
 }
 function renderReports() {
   if (!view.querySelector(".exnav")) { expT = "day"; expK = 0; expAdd = null; } // Spending opens on today
-  const firstDay = (() => { const x = new Date(Math.min(Date.parse(shop.created_at), ...orders.map(o => o.at))); x.setHours(0, 0, 0, 0); return x; })();
+  const firstDay = (() => { const x = new Date(Math.min(Date.parse(shop.created_at), ...orders.map(o => o.at), ...(oldOn() ? oldMoney.filter(m => m.kind === "income").map(m => expDay(m.on_date).getTime()) : []))); x.setHours(0, 0, 0, 0); return x; })();
   const live = liveByDay(), R = periodRange(rep.type, rep.k), P = periodRange(rep.type, rep.k - 1);
   const cur = sumRange(R.s, R.e, live);
   let pe = P.e; if (rep.k === 0 && rep.type !== "day") { const t = new Date(); t.setHours(0, 0, 0, 0); const days = Math.round((t - R.s) / 864e5) + 1; pe = new Date(P.s); pe.setDate(pe.getDate() + days); if (pe > P.e) pe = P.e; }
   const prev = sumRange(P.s, pe, live);
   const canBack = R.s > firstDay, canFwd = rep.k < 0;
-  const owingNow = orders.reduce((s, o) => s + ((o.status === "told" || o.status === "picked") ? owed(o) : 0), 0);
+  const owingNow = orders.reduce((s, o) => s + ((o.status === "told" || o.status === "picked") ? owed(o) : 0), 0) + oldOwing();
   const prevName = rep.k === 0 && rep.type !== "day" ? { week: "the same days last week", month: "the same days last month", year: "the same days last year" }[rep.type] : { day: rep.k === 0 ? "yesterday" : "the day before", week: "the week before", month: "the month before", year: "the year before" }[rep.type];
   const diff = prev.received ? Math.round((cur.received - prev.received) / prev.received * 100) : null;
   const bars = buckets(rep.type, R, live), max = Math.max(1, ...bars.map(b => b.v || 0));
@@ -3031,9 +3035,11 @@ function renderReports() {
     </div>
     <div class="lines"><div><span>Owed to you right now</span><b style="color:${owingNow ? "var(--owes)" : "inherit"}">${naira(owingNow)}</b></div></div>
     ${expOn() ? expHtml(live) : ""}
+    ${oldOn() ? oldHtml() : ""}
     <p class="hint">Money received counts payments on the day they came in. Billed counts bills on the day they were made, paid or not.</p>`;
   wireBack(view);
   if (expOn()) wireExp();
+  if (oldOn()) wireOld();
   view.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => { rep = { type: b.dataset.rt, k: 0, sel: null }; renderReports(); });
   $("#rprev").onclick = () => { rep.k--; rep.sel = null; renderReports(); };
   $("#rnext").onclick = () => { rep.k++; rep.sel = null; renderReports(); };
@@ -3087,6 +3093,94 @@ function wireExp() {
     const { error } = await sb.from("expenses").delete().eq("id", x.id);
     if (error) { toast(failMsg(error)); return; }
     expenses = expenses.filter(e => e !== x); toast("Expense deleted"); renderReports();
+  });
+}
+
+// From before Tagbook (owner only, 26 Nov 2026, from Lanre): money already received in the old book, and old balances
+// customers still owe. Income counts in "Money received" on its date; a payment on an old balance counts on the day it is paid.
+// BrightWash only until Bolu switches it on for every shop.
+const oldOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || location.hostname === "localhost");
+let oldMoney = [], oldAdd = null, oldPay = null, oldT = "balance";
+const oldPaid = x => (x.payments || []).reduce((s, p) => s + (p.amt || 0), 0);
+const oldLeft = x => x.kind === "balance" ? Math.max(0, x.amount - oldPaid(x)) : 0;
+const oldOwing = () => oldOn() ? oldMoney.reduce((s, x) => s + oldLeft(x), 0) : 0;
+const oldDate = d => { const x = expDay(d); return `${x.getDate()} ${MON[x.getMonth()]} ${x.getFullYear()}`; };
+function oldHtml() {
+  const bal = oldMoney.filter(x => x.kind === "balance").sort((a, b) => (oldLeft(b) > 0) - (oldLeft(a) > 0) || String(b.created_at).localeCompare(String(a.created_at)));
+  const inc = oldMoney.filter(x => x.kind === "income").sort((a, b) => String(b.on_date).localeCompare(String(a.on_date)) || String(b.created_at).localeCompare(String(a.created_at)));
+  const today = ymd(new Date()), A = oldAdd || {};
+  const balForm = `<div class="exform"><label for="oln">Customer's name</label><input id="oln" maxlength="60" value="${esc(A.name || "")}" placeholder="e.g. Mrs Adeyemi" autocomplete="off">
+    <label for="olp">Phone (optional, for the WhatsApp reminder)</label><input id="olp" type="tel" inputmode="numeric" maxlength="11" value="${esc(A.phone || "")}" placeholder="08012345678" autocomplete="off">
+    <label for="ola">Amount still owing (₦)</label><input id="ola" ${moneyAttrs} value="${A.amt || ""}" placeholder="e.g. 7500">
+    <label for="olx">Note (optional)</label><input id="olx" maxlength="120" value="${esc(A.note || "")}" placeholder="e.g. Agbada and 3 shirts, October" autocomplete="off">
+    <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="olcancel">Cancel</button><button class="btn btn-primary" id="olsave" ${A.busy ? "disabled" : ""}>${A.busy ? "Saving…" : "Save old balance"}</button></div></div>`;
+  const incForm = `<div class="exform"><label for="ola">Amount received (₦)</label><input id="ola" ${moneyAttrs} value="${A.amt || ""}" placeholder="e.g. 85000">
+    <label for="old">Date</label><input id="old" type="date" max="${today}" value="${esc(A.day || today)}">
+    <label for="olx">Note (optional)</label><input id="olx" maxlength="120" value="${esc(A.note || "")}" placeholder="e.g. From the old book, 1 to 20 Nov" autocomplete="off">
+    <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="olcancel">Cancel</button><button class="btn btn-primary" id="olsave" ${A.busy ? "disabled" : ""}>${A.busy ? "Saving…" : "Save"}</button></div></div>`;
+  const balRow = x => { const left = oldLeft(x), paid = oldPaid(x), P = oldPay && oldPay.id === x.id ? oldPay : null;
+    return `<div class="olrow"><div class="exrow"><span><b>${esc(x.name)}</b><em class="exnote">${x.note ? esc(x.note) + " · " : ""}${left ? `${naira(x.amount)} from before${paid ? `, ${naira(paid)} paid` : ""}` : `${naira(x.amount)}, paid in full`}</em></span>
+      <span class="exr"><b style="color:${left ? "var(--owes)" : "inherit"}">${left ? naira(left) : "Paid"}</b><button class="exdel" data-oldel="${x.id}" aria-label="Delete ${esc(x.name)}">×</button></span></div>
+      ${left && !P ? `<div class="olacts"><button class="mini" data-olpay="${x.id}">Record payment</button>${x.phone ? `<a class="mini" target="_blank" rel="noopener" href="${waLink(x.phone, `Good day ${x.name}. This is ${shop.name}. This is a reminder that ${naira(left)} is still owing${x.note ? ` for ${x.note}` : ""}.${payTo()}`)}">Remind on WhatsApp</a>` : ""}</div>` : ""}
+      ${P ? `<div class="exform"><label for="opa">Amount paid now (₦)</label><input id="opa" ${moneyAttrs} value="${P.amt || ""}">
+        <div class="row" style="margin-top:10px"><button class="btn btn-ghost" id="opcancel">Cancel</button><button class="btn btn-primary" id="opsave" ${P.busy ? "disabled" : ""}>${P.busy ? "Saving…" : "Save payment"}</button></div></div>` : ""}</div>`; };
+  const incRow = x => `<div class="exrow"><span><b>${oldDate(x.on_date)}</b>${x.note ? `<em class="exnote">${esc(x.note)}</em>` : ""}</span><span class="exr"><b>${naira(x.amount)}</b><button class="exdel" data-oldel="${x.id}" aria-label="Delete ${naira(x.amount)} on ${oldDate(x.on_date)}">×</button></span></div>`;
+  const owing = bal.reduce((s, x) => s + oldLeft(x), 0), got = inc.reduce((s, x) => s + x.amount, 0);
+  return `<h3 class="exh" id="oldh">From before Tagbook</h3>
+    <p class="hint" style="margin-top:0">Bring over what is in your old book: balances customers still owe you, and money you received before you started.</p>
+    <div class="chips"><button class="chip" data-oldt="balance" aria-pressed="${oldT === "balance"}">Old balances<span class="cnt">${bal.length}</span></button><button class="chip" data-oldt="income" aria-pressed="${oldT === "income"}">Money received<span class="cnt">${inc.length}</span></button></div>
+    ${oldT === "balance" ? `${bal.length ? `<div class="lines"><div><span>Still owing from before</span><b style="color:${owing ? "var(--owes)" : "inherit"}">${naira(owing)}</b></div></div>` : ""}
+      ${oldAdd ? balForm : `<button class="btn btn-ghost" id="oladd" style="margin-top:10px">+ Add old balance</button>`}
+      ${bal.length ? `<div class="lines exlist">${bal.map(balRow).join("")}</div>` : `<p class="hint">No old balances yet. Add each customer who still owes you from your old book. When they pay, tap Record payment and it counts in Money received for that day.</p>`}`
+    : `${inc.length ? `<div class="lines"><div><span>Total recorded</span><b>${naira(got)}</b></div></div>` : ""}
+      ${oldAdd ? incForm : `<button class="btn btn-ghost" id="oladd" style="margin-top:10px">+ Add money received</button>`}
+      ${inc.length ? `<div class="lines exlist">${inc.map(incRow).join("")}</div>` : `<p class="hint">Add money you received before you started using Tagbook, with its date, so your reports for that day and month are complete.</p>`}`}`;
+}
+function wireOld() {
+  const keep = () => { if (!oldAdd) return; const g = id => { const e = $(id); return e ? e.value : undefined; }; ["name:#oln", "phone:#olp", "note:#olx", "day:#old"].forEach(s => { const [k, id] = s.split(":"); const v = g(id); if (v !== undefined) oldAdd[k] = v; }); };
+  view.querySelectorAll("[data-oldt]").forEach(b => b.onclick = () => { oldT = b.dataset.oldt; oldAdd = null; oldPay = null; renderReports(); });
+  const ad = $("#oladd"); if (ad) ad.onclick = () => { oldAdd = {}; oldPay = null; renderReports(); const f = $(oldT === "balance" ? "#oln" : "#ola"); if (f) f.focus(); };
+  moneyInput($("#ola"), v => oldAdd.amt = v || "");
+  const ph = $("#olp"); if (ph) ph.addEventListener("input", () => { const c = digits(ph.value).slice(0, 11); if (ph.value !== c) ph.value = c; });
+  const cx = $("#olcancel"); if (cx) cx.onclick = () => { oldAdd = null; renderReports(); };
+  const sv = $("#olsave"); if (sv) sv.onclick = async () => {
+    keep(); const amt = num($("#ola").value), note = tidy(oldAdd.note).slice(0, 120) || null, row = { kind: oldT, amount: amt, note, created_by: (me && me.name) || null };
+    if (oldT === "balance") {
+      row.name = tidy(oldAdd.name).slice(0, 60); row.phone = digits(oldAdd.phone || "") || null;
+      if (!row.name) { toast("Type the customer's name"); return; }
+      if (row.phone && !/^0\d{10}$/.test(row.phone)) { toast("The phone number must be 11 digits and start with 0."); return; }
+      row.on_date = ymd(new Date());
+    } else {
+      row.on_date = oldAdd.day || ymd(new Date());
+      if (row.on_date > ymd(new Date())) { toast("The date can't be in the future"); return; }
+    }
+    if (!amt) { toast(oldT === "balance" ? "Type the amount still owing" : "Type the amount received"); return; }
+    if (amt > 100000000) { toast("That amount is too big. Check it and try again."); return; }
+    oldAdd.busy = true; renderReports();
+    const { data, error } = await sb.from("old_money").insert(row).select("id,kind,name,phone,amount,on_date,note,payments,created_by,created_at").single();
+    if (error) { oldAdd.busy = false; toast(failMsg(error)); renderReports(); return; }
+    oldMoney.push(data); oldAdd = null; toast(oldT === "balance" ? `Old balance of ${naira(amt)} added for ${row.name}` : `${naira(amt)} recorded for ${oldDate(row.on_date)}`); renderReports();
+  };
+  view.querySelectorAll("[data-olpay]").forEach(b => b.onclick = () => { const x = oldMoney.find(e => e.id === b.dataset.olpay); oldAdd = null; oldPay = { id: x.id, amt: oldLeft(x) }; renderReports(); const a = $("#opa"); if (a) { a.focus(); a.select(); } });
+  moneyInput($("#opa"), v => oldPay.amt = v || "");
+  const pc = $("#opcancel"); if (pc) pc.onclick = () => { oldPay = null; renderReports(); };
+  const ps = $("#opsave"); if (ps) ps.onclick = async () => {
+    const x = oldMoney.find(e => e.id === oldPay.id); if (!x) return; const amt = num($("#opa").value), left = oldLeft(x);
+    if (!amt) { toast("Type the amount paid"); return; }
+    if (amt > left) { toast(`That is more than the ${naira(left)} still owing`); return; }
+    const payments = (x.payments || []).concat([{ amt, at: new Date().toISOString(), by: (me && me.name) || "" }]);
+    oldPay.busy = true; renderReports();
+    const { error } = await sb.from("old_money").update({ payments }).eq("id", x.id);
+    if (error) { oldPay.busy = false; toast(failMsg(error)); renderReports(); return; }
+    x.payments = payments; oldPay = null; toast(amt === left ? `${x.name} has paid in full` : `${naira(amt)} recorded. ${naira(left - amt)} still owing`); renderReports();
+  };
+  view.querySelectorAll("[data-oldel]").forEach(b => b.onclick = async () => {
+    const x = oldMoney.find(e => e.id === b.dataset.oldel); if (!x) return; const paid = oldPaid(x);
+    const what = x.kind === "balance" ? `${esc(x.name)}, ${naira(x.amount)}.${paid ? ` The ${naira(paid)} already paid will also come out of your reports.` : ""}` : `${naira(x.amount)} on ${oldDate(x.on_date)}. It will come out of your reports.`;
+    if (!await askConfirm(x.kind === "balance" ? "Delete this old balance?" : "Delete this entry?", what, "Yes, delete it")) return;
+    const { error } = await sb.from("old_money").delete().eq("id", x.id);
+    if (error) { toast(failMsg(error)); return; }
+    oldMoney = oldMoney.filter(e => e !== x); oldPay = null; toast("Deleted"); renderReports();
   });
 }
 
