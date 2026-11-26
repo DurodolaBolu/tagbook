@@ -60,8 +60,10 @@ async function handle(route) {
     return send(200, { access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4IiwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQifQ.sig", refresh_token: "r" });
   }
   if (p === "/rest/v1/rpc/wa_check_status") return send(200, !!global.resetOk);
+  if (p === "/functions/v1/admin" && body.action === "pin_reset_code") { if (body.code !== "482913" || body.pin_id !== "pin-1") return send(400, { error: "BAD_CODE" }); global.resetOk = true; return send(200, { ok: true, check_id: "33333333-3333-3333-3333-333333333333" }); }
   if (p === "/functions/v1/admin" && (body.action === "pin_reset_start" || body.action === "pin_reset_finish")) {
     if (!db.staff.some(s => s.phone === body.phone)) return send(404, { error: "NO_ACCOUNT" });
+    if (body.action === "pin_reset_start" && process.env.RESET_SMS) return send(200, { ok: true, pin_id: "pin-1" });
     if (body.action === "pin_reset_start") return send(200, { ok: true, wa_to: "2349160478738", wa_code: "731905", check_id: "22222222-2222-2222-2222-222222222222" });
     if (!global.resetOk) return send(400, { error: "NOT_VERIFIED" });
     global.pins = { ...(global.pins || {}), [body.phone]: body.pin }; global.fails[body.phone] = 0; return send(200, { ok: true });
@@ -611,6 +613,14 @@ async function handle(route) {
     await page.keyboard.type("08120756325"); await page.keyboard.press("Enter"); await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(out, "reset-1-pin.png") });
     await page.click("#lforgot"); await page.waitForTimeout(500);
+    if (process.env.RESET_SMS) { // text-message code instead of WhatsApp
+      await page.screenshot({ path: path.join(out, "reset-sms-1.png") });
+      await page.fill("#rcode", "111111"); await page.click("#rnext"); await page.waitForTimeout(400); console.log("wrong code:", (await page.textContent(".lerr")).slice(0, 50));
+      await page.fill("#rcode", "482913"); await page.click("#rnext"); await page.waitForTimeout(500); await page.screenshot({ path: path.join(out, "reset-sms-2.png") });
+      await page.keyboard.type("703518"); await page.waitForTimeout(300); await page.keyboard.type("703518");
+      try { await page.waitForSelector("#tabs button", { timeout: 8000 }); console.log("sms reset, logged in with new PIN: true"); } catch (_) { console.log("sms reset, logged in: false", await page.textContent(".lerr").catch(() => "")); }
+      process.exit(0);
+    }
     console.log("reset screen:", !!(await page.$("#rwa")), "| link:", await page.getAttribute("#rwa", "href"));
     await page.screenshot({ path: path.join(out, "reset-2-code.png") });
     await page.click("#rnext"); await page.waitForTimeout(500);

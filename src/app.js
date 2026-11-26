@@ -3874,22 +3874,58 @@ function next() {
   L.step = "pin"; L.pin = ""; L.err = ""; drawLogin();
 }
 const waitWords = s => { const m = Math.ceil(s / 60); return m >= 60 ? `${Math.ceil(m / 60)} hour${m > 60 ? "s" : ""}` : `${m} minute${m === 1 ? "" : "s"}`; };
-/* Forgot PIN: prove the phone by sending a code from its WhatsApp, then choose a new PIN. */
+/* Forgot PIN: prove the phone with a text-message code (or, if ever switched back on, a code sent from its WhatsApp), then choose a new PIN. */
 const RESET_ERR = {
   NO_ACCOUNT: "No Tagbook login uses this number. Check the number, or ask your shop owner.",
   RESET_OFF: "Staff: ask your shop owner to set a new PIN in Settings. Shop owners: message Tagbook on WhatsApp, 0812 075 6325, and we'll set a new PIN for you.",
   TOO_MANY: "Too many tries. Wait an hour, or ask your shop owner to set a new PIN.",
   NOT_VERIFIED: "We haven't got the code on WhatsApp yet. Tap “Send code on WhatsApp”, send it, then come back.",
   NETWORK: "Can't reach Tagbook. Check your internet and try again.",
+  BAD_CODE: "That code is wrong or has expired. Check the text message, or tap Send a new code.",
+  CODE_FAILED: "We couldn't send the text message. Please try again in a minute.",
 };
 async function startReset() {
   L.busy = true; L.err = ""; drawLogin();
   const r = await signupCall({ action: "pin_reset_start", phone: L.phone });
   L.busy = false;
   if (r.error) { L.err = RESET_ERR[r.error] || "Something went wrong. Please try again."; drawLogin(); return; }
-  L.reset = { checkId: r.check_id, to: r.wa_to, code: r.wa_code, sent: false }; L.step = "reset"; L.np = L.np2 = ""; drawLogin();
+  L.reset = r.pin_id ? { sms: true, pinId: r.pin_id, typed: "" } : { checkId: r.check_id, to: r.wa_to, code: r.wa_code, sent: false };
+  L.step = "reset"; L.np = L.np2 = ""; drawLogin();
+}
+// Text-message code (Termii): type the 6 digits, the server checks them, then choose a new PIN.
+function drawResetSms() {
+  const box = $("#login"), R = L.reset;
+  box.innerHTML = `<div class="lwrap">
+    <aside class="lside"><div class="lart">${ART_MACHINE}</div><p class="lbrand">Tagbook</p><p class="ltag">Every cloth, accounted for.</p></aside>
+    <main class="lmain">
+      <div class="lart small">${ART_MACHINE}</div>
+      <h1 class="lname">Check your text messages</h1>
+      <p class="lask">We sent a 6-digit code to <b>${fmtPhone(L.phone)}</b>. It comes from OE Alert.</p>
+      <form class="lform" id="rform" novalidate>
+        <label for="rcode">Code</label>
+        <input id="rcode" class="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" value="${esc(R.typed || "")}">
+        <p class="lerr" role="alert">${esc(L.err)}</p>
+        <button class="btn btn-primary lgo" id="rnext" ${R.busy ? "disabled" : ""}>${R.busy ? "Checking…" : "Next: choose a new PIN"}</button>
+      </form>
+      <p class="hint">No text message? Staff can ask their shop owner to set a new PIN in Settings. Shop owners can message Tagbook on WhatsApp, 0812 075 6325.</p>
+      <p class="lfoot"><button class="llink" id="rcancel">Back to log in</button> · <button class="llink" id="rresend">Send a new code</button></p>
+    </main></div>`;
+  const inp = $("#rcode"); inp.focus();
+  inp.oninput = () => { const c = digits(inp.value).slice(0, 6); if (inp.value !== c) inp.value = c; R.typed = c; };
+  $("#rform").onsubmit = async e => {
+    e.preventDefault(); if (R.busy) return;
+    if ((R.typed || "").length !== 6) { L.err = "Type the 6-digit code from the text message."; drawResetSms(); return; }
+    R.busy = true; L.err = ""; drawResetSms();
+    const r = await signupCall({ action: "pin_reset_code", phone: L.phone, pin_id: R.pinId, code: R.typed });
+    R.busy = false;
+    if (r.error || !r.check_id) { L.err = RESET_ERR[r.error] || "Something went wrong. Please try again."; drawResetSms(); return; }
+    R.checkId = r.check_id; L.err = ""; L.step = "newpin"; L.np = L.np2 = ""; drawLogin();
+  };
+  $("#rresend").onclick = () => startReset();
+  $("#rcancel").onclick = () => { L.step = "pin"; L.pin = ""; L.err = ""; L.reset = null; drawLogin(); };
 }
 function drawReset() {
+  if (L.reset && L.reset.sms) return drawResetSms();
   const box = $("#login"), R = L.reset;
   box.innerHTML = `<div class="lwrap">
     <aside class="lside"><div class="lart">${ART_MACHINE}</div><p class="lbrand">Tagbook</p><p class="ltag">Every cloth, accounted for.</p></aside>
@@ -3920,7 +3956,7 @@ async function finishReset() {
   const r = await signupCall({ action: "pin_reset_finish", phone: L.phone, check_id: L.reset.checkId, pin: L.np });
   L.busy = false;
   if (r.error) {
-    if (r.error === "NOT_VERIFIED") { L.step = "reset"; L.err = RESET_ERR.NOT_VERIFIED; drawLogin(); return; }
+    if (r.error === "NOT_VERIFIED") { L.step = "reset"; L.err = L.reset.sms ? "That code has expired. Tap Send a new code." : RESET_ERR.NOT_VERIFIED; drawLogin(); return; }
     L.step = "newpin"; L.np = L.np2 = ""; L.err = RESET_ERR[r.error] || (r.error === "BAD_PIN" ? "The PIN must be 6 digits." : "Something went wrong. Please try again."); drawLogin(); return;
   }
   const pin = L.np; L.reset = null; L.np = L.np2 = ""; L.step = "pin"; L.pin = pin; L.err = "";
