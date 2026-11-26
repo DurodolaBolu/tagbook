@@ -93,9 +93,10 @@ async function newShop(o: { shopName: string; ownerName: string; phone: string; 
 
 // Optional checks for self sign-up. Each switches on when its secret is added in Supabase.
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET") || "";
-const TERMII_KEY = Deno.env.get("TERMII_API_KEY") || "";
+const TERMII_KEY = Deno.env.get("TERMII_KEY") || Deno.env.get("TERMII_API_KEY") || "";
 const TERMII_BASE = (Deno.env.get("TERMII_BASE_URL") || "https://api.ng.termii.com").replace(/\/$/, "");
-const TERMII_FROM = Deno.env.get("TERMII_SENDER_ID") || "Tagbook";
+// Until the "Tagbook" sender ID is approved, Termii's default sender carries the codes (Termii support, 25 Nov 2026).
+const TERMII_FROM = Deno.env.get("TERMII_SENDER_ID") || "N-Alert";
 // Bolu's own phone for a text alert on every self sign-up (set ADMIN_SMS_TO in Supabase, e.g. 0903...).
 const ADMIN_SMS_TO = (Deno.env.get("ADMIN_SMS_TO") || "").replace(/\D/g, "");
 async function textBolu(msg: string) {
@@ -125,6 +126,9 @@ async function sendCode(phone: string): Promise<string | null> {
     return String(d.pinId || d.pin_id);
   } catch (e) { console.error("termii send", String(e)); return null; }
 }
+// Text-message codes for sign-up and Forgot PIN. Off until test codes reach every network; then set to true.
+const SMS_LIVE = false;
+const SMS_ON = SMS_LIVE && !!TERMII_KEY;
 async function codeOk(pinId: string, code: string) {
   if (!pinId || !/^\d{6}$/.test(code)) return false;
   try {
@@ -157,8 +161,10 @@ Deno.serve(async (req) => {
     // ---- Anyone: reset a forgotten PIN by proving the phone on WhatsApp ----
     // Step 1 gives a code to send from that number's WhatsApp. Step 2 sets the new PIN once the "wa" function has
     // confirmed the message came from the same number. Each code works once and only for 30 minutes.
-    if (action === "pin_reset_start" || action === "pin_reset_finish") {
-      if (!WA_READY) return fail("RESET_OFF");
+    // With a Termii key, the code comes by text message instead: start sends it, "pin_reset_code" checks it and
+    // marks a check row as verified, and finish (unchanged) sets the PIN against that row.
+    if (action === "pin_reset_start" || action === "pin_reset_finish" || action === "pin_reset_code") {
+      if (!WA_READY && !SMS_ON) return fail("RESET_OFF");
       const ip = ipOf(req), phone = cleanPhone(body.phone);
       if (!okPhone(phone)) return fail("BAD_PHONE");
       const { data: who } = await admin.from("staff").select("user_id").eq("phone", phone).eq("active", true).limit(1).maybeSingle();
@@ -166,10 +172,21 @@ Deno.serve(async (req) => {
       if (action === "pin_reset_start") {
         const { data: why } = await admin.rpc("signup_check", { p_ip: ip, p_phone: phone, p_kind: "code" });
         if (why) return fail(String(why), 429);
+        if (SMS_ON) {
+          const pinId = await sendCode(phone);
+          return pinId ? json({ ok: true, pin_id: pinId }) : fail("CODE_FAILED", 502);
+        }
         const code = sixDigits();
         const { data: ck, error: ce } = await admin.from("wa_checks").insert({ phone, code, kind: "pin" }).select("id").single();
         if (ce || !ck) throw ce || new Error("WA_CHECK_FAILED");
         return json({ ok: true, wa_to: WA_NUMBER, wa_code: code, check_id: ck.id });
+      }
+      if (action === "pin_reset_code") {
+        if (!SMS_ON) return fail("RESET_OFF");
+        if (!(await codeOk(String(body.pin_id || ""), String(body.code || "")))) return fail("BAD_CODE");
+        const { data: ck, error: ce } = await admin.from("wa_checks").insert({ phone, code: "sms", kind: "pin", verified_at: new Date().toISOString(), from_wa: "sms" }).select("id").single();
+        if (ce || !ck) throw ce || new Error("CHECK_FAILED");
+        return json({ ok: true, check_id: ck.id });
       }
       if (!isUuid(body.check_id)) return fail("NOT_VERIFIED");
       if (!okPin(body.pin)) return fail("BAD_PIN");
@@ -194,10 +211,10 @@ Deno.serve(async (req) => {
       if (!(await humanCheck(body.bot_token, ip))) return fail("BOT_CHECK", 403);
 
       if (action === "signup_code") {
-        if (!TERMII_KEY && !WA_ON) return fail("CODES_OFF");
+        if (!SMS_ON && !WA_ON) return fail("CODES_OFF");
         const { data: why } = await admin.rpc("signup_check", { p_ip: ip, p_phone: phone, p_kind: "code" });
         if (why) return fail(String(why), 429);
-        if (TERMII_KEY) {
+        if (SMS_ON) {
           const pinId = await sendCode(phone);
           return pinId ? json({ ok: true, pin_id: pinId }) : fail("CODE_FAILED", 502);
         }
@@ -215,7 +232,7 @@ Deno.serve(async (req) => {
       if (!okPin(pin)) return fail("BAD_PIN");
       if (Number(body.ms) < 4000) return fail("TOO_FAST"); // a person can't fill the form in under 4 seconds
       let verified = false;
-      if (TERMII_KEY) {
+      if (SMS_ON) {
         if (!(await codeOk(String(body.pin_id || ""), String(body.code || "")))) return fail("BAD_CODE");
         verified = true;
       } else if (WA_ON) {
@@ -240,6 +257,26 @@ Deno.serve(async (req) => {
     const { data: keyOk } = await admin.rpc("check_admin_key", { k: req.headers.get("x-admin-key") || "" });
     const { data: isAdmin } = uid ? await admin.rpc("admin_is", { uid }) : { data: false };
     const { data: isAgent } = uid ? await admin.rpc("agent_is", { uid }) : { data: false };
+
+    // ---- Ordiventa only: check the Termii key, balance and sender IDs, and send a test code ----
+    if (action === "termii_check" || action === "termii_test") {
+      if (!keyOk && !isAdmin) return fail("FORBIDDEN", 403);
+      if (!TERMII_KEY) return fail("NO_TERMII_KEY");
+      if (action === "termii_check") {
+        const bal = await fetch(`${TERMII_BASE}/api/get-balance?api_key=${encodeURIComponent(TERMII_KEY)}`).then(r => r.json()).catch(e => ({ error: String(e) }));
+        const ids = await fetch(`${TERMII_BASE}/api/sender-id?api_key=${encodeURIComponent(TERMII_KEY)}`).then(r => r.json()).catch(e => ({ error: String(e) }));
+        return json({ balance: bal, sender_ids: ids, from: TERMII_FROM });
+      }
+      const phone = cleanPhone(body.phone);
+      if (!okPhone(phone)) return fail("BAD_PHONE");
+      const from = String(body.from || TERMII_FROM), channel = String(body.channel || "dnd");
+      const r = await fetch(`${TERMII_BASE}/api/sms/otp/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        api_key: TERMII_KEY, message_type: "NUMERIC", to: "234" + phone.slice(1), from, channel,
+        pin_attempts: 3, pin_time_to_live: 10, pin_length: 6, pin_placeholder: "< 1234 >", pin_type: "NUMERIC",
+        message_text: "Your Tagbook code is < 1234 >. It expires in 10 minutes. Don't share it with anyone.",
+      }) });
+      return json({ status: r.status, termii: await r.json().catch(() => null), from, channel });
+    }
 
     // ---- Ordiventa and its agents: set up a new shop with its owner ----
     if (action === "create_shop") {
