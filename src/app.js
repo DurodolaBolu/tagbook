@@ -3741,6 +3741,9 @@ function drawSignup() {
   if (TURNSTILE_SITE && $("#sbot")) loadTurnstile().then(() => { try { window.turnstile.render("#sbot", { sitekey: TURNSTILE_SITE, callback: t => { S.bot = t; } }); } catch (_) { } });
   const first = S.step === "code" ? $("#su-code") : null; if (first) first.focus();
   if ($("#swa")) $("#swa").onclick = () => { S.waSent = true; };
+  // Go on by itself once the 6-digit text code is in, or once the second PIN matches the first.
+  const sc = $("#su-code"); if (sc) sc.addEventListener("input", () => { const c = digits(sc.value).slice(0, 6); if (sc.value !== c) sc.value = c; if (c.length === 6 && !S.busy) { keep(); submitSignup(); } });
+  const p2 = $("#su-pin2"), p1 = $("#su-pin"); if (p2 && p1) p2.addEventListener("input", () => { const a = digits(p1.value).slice(0, 6), b = digits(p2.value).slice(0, 6); if (b.length === 6 && a === b && !S.busy) { keep(); submitSignup(); } });
 }
 // Back from WhatsApp after sending the code: try to finish straight away (once), so they don't have to tap again.
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S && S.step === "wa" && S.waSent && !S.busy && !S.autoTried) { S.autoTried = true; setTimeout(() => { if (S && S.step === "wa" && !S.busy) submitSignup(); }, 2500); } });
@@ -3911,7 +3914,7 @@ function drawResetSms() {
       <p class="lfoot"><button class="llink" id="rcancel">Back to log in</button> · <button class="llink" id="rresend">Send a new code</button></p>
     </main></div>`;
   const inp = $("#rcode"); inp.focus();
-  inp.oninput = () => { const c = digits(inp.value).slice(0, 6); if (inp.value !== c) inp.value = c; R.typed = c; };
+  inp.oninput = () => { const c = digits(inp.value).slice(0, 6); if (inp.value !== c) inp.value = c; R.typed = c; if (c.length === 6 && !R.busy) $("#rform").requestSubmit(); };
   $("#rform").onsubmit = async e => {
     e.preventDefault(); if (R.busy) return;
     if ((R.typed || "").length !== 6) { L.err = "Type the 6-digit code from the text message."; drawResetSms(); return; }

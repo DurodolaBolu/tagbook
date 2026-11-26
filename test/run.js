@@ -615,8 +615,8 @@ async function handle(route) {
     await page.click("#lforgot"); await page.waitForTimeout(500);
     if (process.env.RESET_SMS) { // text-message code instead of WhatsApp
       await page.screenshot({ path: path.join(out, "reset-sms-1.png") });
-      await page.fill("#rcode", "111111"); await page.click("#rnext"); await page.waitForTimeout(400); console.log("wrong code:", (await page.textContent(".lerr")).slice(0, 50));
-      await page.fill("#rcode", "482913"); await page.click("#rnext"); await page.waitForTimeout(500); await page.screenshot({ path: path.join(out, "reset-sms-2.png") });
+      await page.fill("#rcode", "111111"); await page.waitForTimeout(500); console.log("wrong code (auto):", (await page.textContent(".lerr")).slice(0, 50));
+      await page.fill("#rcode", "482913"); await page.waitForTimeout(600); await page.screenshot({ path: path.join(out, "reset-sms-2.png") });
       await page.keyboard.type("703518"); await page.waitForTimeout(300); await page.keyboard.type("703518");
       try { await page.waitForSelector("#tabs button", { timeout: 8000 }); console.log("sms reset, logged in with new PIN: true"); } catch (_) { console.log("sms reset, logged in: false", await page.textContent(".lerr").catch(() => "")); }
       process.exit(0);
