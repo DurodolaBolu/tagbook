@@ -3102,8 +3102,9 @@ function wireExp() {
 
 // From before Tagbook (owner only, 26 Nov 2026, from Lanre): money already received in the old book, and old balances
 // customers still owe. Income counts in "Money received" on its date; a payment on an old balance counts on the day it is paid.
-// BrightWash only until Bolu switches it on for every shop.
-const oldOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || location.hostname === "localhost");
+// BrightWash first; every shop from 27 Nov, 8am (Bolu's call).
+const OLD_LIVE = Date.parse("2026-11-27T08:00:00+01:00");
+const oldOn = () => !!shop && own() && (shop.id === PHOTO_SHOP || Date.now() >= OLD_LIVE || location.hostname === "localhost");
 let oldMoney = [], oldAdd = null, oldPay = null, oldT = "balance";
 const oldPaid = x => (x.payments || []).reduce((s, p) => s + (p.amt || 0), 0);
 const oldLeft = x => x.kind === "balance" ? Math.max(0, x.amount - oldPaid(x)) : 0;
