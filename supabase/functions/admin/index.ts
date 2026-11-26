@@ -127,8 +127,8 @@ async function sendCode(phone: string): Promise<string | null> {
     return String(d.pinId || d.pin_id);
   } catch (e) { console.error("termii send", String(e)); return null; }
 }
-// Text-message codes for sign-up and Forgot PIN. Off until test codes reach every network; then set to true.
-const SMS_LIVE = false;
+// Text-message codes for sign-up and Forgot PIN. On from 26 Nov 2026 (OE Alert, DND): test codes reached MTN and Airtel almost instantly.
+const SMS_LIVE = true;
 const SMS_ON = SMS_LIVE && !!TERMII_KEY;
 async function codeOk(pinId: string, code: string) {
   if (!pinId || !/^\d{6}$/.test(code)) return false;
