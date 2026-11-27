@@ -15,8 +15,9 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:17px;line-height:1.5}
 .app{max-width:440px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 100px}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:6px 10px}
-.brand{min-width:0;font-weight:700;font-size:24px;line-height:1.2;color:var(--fg);letter-spacing:-.01em}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px;padding-block:6px 10px}
+/* Big phone text or a folded phone (280px): the buttons drop to the next line instead of squeezing the shop name letter by letter. */
+.brand{flex:1 1 8.5em;min-width:0;font-weight:700;font-size:24px;line-height:1.2;color:var(--fg);letter-spacing:-.01em}
 .brand #shopname{display:block;overflow-wrap:break-word}
 @media (max-width:380px){.brand{font-size:20px}}
 .brand small{display:block;margin-top:2px;font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.02em}

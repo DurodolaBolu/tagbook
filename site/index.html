@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261126171907";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261127070739";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -44,8 +44,9 @@ html{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:17px;line-height:1.5}
 .app{max-width:440px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 100px}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:6px 10px}
-.brand{min-width:0;font-weight:700;font-size:24px;line-height:1.2;color:var(--fg);letter-spacing:-.01em}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px;padding-block:6px 10px}
+/* Big phone text or a folded phone (280px): the buttons drop to the next line instead of squeezing the shop name letter by letter. */
+.brand{flex:1 1 8.5em;min-width:0;font-weight:700;font-size:24px;line-height:1.2;color:var(--fg);letter-spacing:-.01em}
 .brand #shopname{display:block;overflow-wrap:break-word}
 @media (max-width:380px){.brand{font-size:20px}}
 .brand small{display:block;margin-top:2px;font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.02em}
@@ -998,7 +999,7 @@ label .opt{font-size:13px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261126171907"></script>
+<script src="/app.js?v=20261127070739"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */

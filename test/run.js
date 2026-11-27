@@ -647,6 +647,29 @@ async function handle(route) {
     console.log("finished, check_id sent:", global.signups.slice(-1)[0].check_id);
     process.exit(0);
   }
+  if (process.env.EDGE) { // edge cases from the "break your app" checklist: small/fold widths, landscape, big text, dark, offline save, double tap
+    const out = process.env.EDGE, shot = async n => page.screenshot({ path: path.join(out, n + ".png") });
+    const wide = async () => page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    for (const [w, h, n] of [[280, 653, "w280"], [844, 390, "landscape"], [717, 512, "fold-open"]]) { await page.setViewportSize({ width: w, height: h }); for (const r of ["#orders", "#log", "#reports"]) { await page.goto("http://localhost:8787/" + r); await page.waitForTimeout(700); console.log(n, r, "sideways scroll:", await wide()); await shot(n + r.replace("#", "-")); } }
+    await page.setViewportSize({ width: 360, height: 760 });
+    await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(600); await page.evaluate(() => { document.documentElement.style.fontSize = "150%"; document.body.style.zoom = "1.3"; }); await page.waitForTimeout(300); console.log("big text sideways:", await wide()); await shot("bigtext-orders");
+    await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(600); await page.evaluate(() => { document.body.style.zoom = "1.3"; }); await shot("bigtext-log");
+    await page.emulateMedia({ colorScheme: "dark" }); await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(700); await shot("dark-orders"); await page.emulateMedia({ colorScheme: "light" });
+    // offline save
+    const n0 = db.orders.length; await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.waitForTimeout(200);
+    { const bs = await page.$$("[data-add]"); await bs[0].click(); await page.waitForTimeout(200); }
+    await page.context().setOffline(true); await page.route("**/rest/v1/**", r => r.abort("internetdisconnected")); await page.click("#save"); await page.waitForTimeout(2500);
+    console.log("offline save: toast:", (await page.textContent("#toast").catch(() => "")).trim().slice(0, 90), "| banner shown:", await page.isVisible("#offline"), "| orders added:", db.orders.length - n0); await shot("offline-save");
+    await page.unroute("**/rest/v1/**"); await page.context().setOffline(false); await page.waitForTimeout(800); console.log("after reconnect, orders added:", db.orders.length - n0, "| still on:", await page.evaluate(() => location.hash));
+    // double tap save
+    const n1 = db.orders.length; await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1200); await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.waitForTimeout(200);
+    { const bs = await page.$$("[data-add]"); await bs[0].click(); await page.waitForTimeout(200); }
+    await page.evaluate(() => { const b = document.querySelector("#save"); b.click(); b.click(); b.click(); }); await page.waitForTimeout(2500);
+    console.log("triple tap save -> orders added:", db.orders.length - n1);
+    process.exit(0);
+  }
   if (process.env.CAPTURE_MAIN) { // frames for the main "how Tagbook works" video
     const out = process.env.CAPTURE_MAIN; await page.setViewportSize({ width: 390, height: 844 });
     const snap = async (n, sel, block = "center") => { await page.addStyleTag({ content: ".toast,#supfab{display:none!important}" }); if (sel) await page.evaluate(([q, b]) => { const e = document.querySelector(q); if (e) e.scrollIntoView({ block: b }); }, [sel, block]); else await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, n + ".jpg"), type: "jpeg", quality: 92 }); };
