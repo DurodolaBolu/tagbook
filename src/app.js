@@ -1023,8 +1023,8 @@ function renderAdmin() {
         <p class="ssub"><span class="dstate"><b>${real.length - noApp.length}</b> of ${real.length} installed the app</span><span class="dstate"><b>${real.length - noPush.length}</b> of ${real.length} have alerts on</span></p>
         ${noApp.length ? `<p class="dfollow"><b>Not installed:</b> ${names(noApp)}</p>` : ""}
         ${noPush.length ? `<p class="dfollow"><b>Alerts off:</b> ${names(noPush)}</p><button class="btn btn-ghost" data-dseg="alerts">Remind them to turn alerts on</button>` : ""}</section>` : ""; })()}
-    ${(st => { const n = k => st.filter(x => x.kind === k).reduce((a, x) => a + Number(x.sends), 0), sh = k => Math.max(0, ...st.filter(x => x.kind === k).map(x => Number(x.shops))); const bills = st.filter(x => x.stage !== "list"), list = st.filter(x => x.stage === "list"); st = bills; const pdf = n("pdf"), txt = n("text"), ln = list.reduce((a, x) => a + Number(x.sends), 0), ls = Math.max(0, ...list.map(x => Number(x.shops)));
-      return `<section class="scard dstates"><h3 class="stitle">Bills sent, last 30 days</h3>${pdf + txt ? `<p class="ssub"><span class="dstate"><b>${pdf}</b> as PDF invoice${sh("pdf") ? ` (${sh("pdf")} shop${sh("pdf") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${txt}</b> as text${sh("text") ? ` (${sh("text")} shop${sh("text") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${Math.round(pdf / (pdf + txt) * 100)}%</b> PDF</span></p>` : `<p class="ssub">None yet. Counting started 14 Nov.</p>`}</section>
+    ${(st => { const n = k => st.filter(x => x.kind === k).reduce((a, x) => a + Number(x.sends), 0), sh = k => Math.max(0, ...st.filter(x => x.kind === k).map(x => Number(x.shops))); const bills = st.filter(x => x.stage !== "list"), list = st.filter(x => x.stage === "list"); st = bills; const pdf = n("pdf"), img = n("image"), txt = n("text"), ln = list.reduce((a, x) => a + Number(x.sends), 0), ls = Math.max(0, ...list.map(x => Number(x.shops)));
+      return `<section class="scard dstates"><h3 class="stitle">Bills sent, last 30 days</h3>${pdf + img + txt ? `<p class="ssub"><span class="dstate"><b>${img}</b> as picture invoice${sh("image") ? ` (${sh("image")} shop${sh("image") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${pdf}</b> as PDF invoice${sh("pdf") ? ` (${sh("pdf")} shop${sh("pdf") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${txt}</b> as text${sh("text") ? ` (${sh("text")} shop${sh("text") === 1 ? "" : "s"})` : ""}</span><span class="dstate"><b>${Math.round((pdf + img) / (pdf + img + txt) * 100)}%</b> invoice</span></p>` : `<p class="ssub">None yet. Counting started 14 Nov.</p>`}</section>
       <section class="scard dstates"><h3 class="stitle">Lists of clothes sent, last 30 days</h3><p class="ssub">${ln ? `<span class="dstate"><b>${ln}</b> list${ln === 1 ? "" : "s"} sent on WhatsApp${ls ? ` (${ls} shop${ls === 1 ? "" : "s"})` : ""}</span>` : "None yet. Counting started 25 Nov."}</p></section>`; })(sendStats)}
     ${(by => by.length ? `<section class="scard dstates"><h3 class="stitle">Shops by state</h3><p class="ssub">${by.map(([k, n]) => `<span class="dstate"><b>${n}</b> ${esc(k)}</span>`).join("")}</p></section>` : "")(Object.entries(real.reduce((m, r) => { const k = r.state || "Not set"; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]))}
     ${(() => { const q = dQ.trim().toLowerCase(), digits = q.replace(/\D/g, "");
@@ -1875,8 +1875,8 @@ function waBlock(o, type, markable) {
   // Bills go out as a PDF invoice; the plain text message stays one tap away. Tapping send counts as sent (no "I've sent it").
   if (type === "ready" || type === "owe" || type === "early") return `<p class="wa-label">Invoice for the customer: ${type === "ready" ? "clothes ready" : type === "early" ? "before the clothes are ready" : "payment reminder"}</p>
     ${billToLine(c)}
-    <button class="btn btn-primary" data-pdf="${type}">Send bill on WhatsApp</button>
-    <p class="hint">Your phone asks where to send it. Pick WhatsApp, then ${esc(c.name.split(" ")[0])}'s chat.</p>
+    <button class="btn btn-primary" data-pdf="${type}" data-fmt="${invFmt}">Send bill on WhatsApp${invFmt === "pdf" ? " (PDF)" : ""}</button>
+    <p class="hint">Your phone asks where to send it. Pick WhatsApp, then ${esc(c.name.split(" ")[0])}'s chat. <button class="llink" data-pdf="${type}" data-fmt="${invFmt === "pdf" ? "jpg" : "pdf"}">${invFmt === "pdf" ? "Send as a picture instead" : "Send as PDF instead"}</button></p>
     <details class="wtext"><summary>Send as a text message instead</summary>${text}<div class="row"><button class="btn btn-ghost" data-copy="${type}">Copy</button></div></details>
     ${bankNote}`;
   return `<p class="wa-label">WhatsApp to customer: ${MSG_NAMES[type]}</p>
@@ -2176,13 +2176,22 @@ async function invoiceFile(o, c = cust(o.cid)) {
   const name = `${invNo(o).replace("/", "-")} ${shopName()} ${c.name}`.replace(/[^A-Za-z0-9 -]+/g, "").trim().replace(/\s+/g, "-").slice(0, 80) + ".pdf";
   return new File([blob], name, { type: "application/pdf" });
 }
+// The same invoice as pictures (one JPEG per page): WhatsApp shows them in the chat, so customers see the bill without opening a PDF
+// (asked for by Lanry Professional Services, 27 Nov 2026). PDF stays one tap away.
+async function invoiceImages(o, c = cust(o.cid)) {
+  const pages = await invoicePages(o, c);
+  const base = `${invNo(o).replace("/", "-")} ${shopName()} ${c.name}`.replace(/[^A-Za-z0-9 -]+/g, "").trim().replace(/\s+/g, "-").slice(0, 76);
+  const blobs = await Promise.all(pages.map(cv => new Promise((ok, no) => cv.toBlob(b => b ? ok(b) : no(new Error("jpeg")), "image/jpeg", .9))));
+  return blobs.map((b, i) => new File([b], `${base}${blobs.length > 1 ? "-" + (i + 1) : ""}.jpg`, { type: "image/jpeg" }));
+}
+let invFmt = (() => { try { return localStorage.getItem("tb-invfmt") === "pdf" ? "pdf" : "jpg"; } catch (_) { return "jpg"; } })();
 function saveFile(f) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
 const invCaption = (o, type) => { const c = cust(o.cid); return type === "early" ? `${hello(c)}, here is your bill from ${shopName()} (invoice ${invNo(o)}). Your clothes are being cleaned, and we'll let you know as soon as they're ready.` : type === "owe" ? `${hello(c)}, a reminder from ${shopName()}: invoice ${invNo(o)} has ${naira(owed(o))} still to pay. The invoice is attached.` : `${hello(c)}, your clothes are ready at ${shopName()}. Your invoice is attached.`; };
 let invReady = null;
-// Counts bills sent as PDF vs text (no customer details), so Bolu can see which one shops use.
+// Counts bills sent as a picture, PDF or text (no customer details), so Bolu can see which one shops use.
 const BILL_STAGES = ["ready", "owe", "early"];
 // Counts sends for the admin page: bills (owner or billing staff) and the list of clothes (anyone)
 function logSend(kind, stage) { if (!shop || !(stage === "list" || (canBill() && BILL_STAGES.includes(stage)))) return; sb.from("send_log").insert({ shop_id: shop.id, kind, stage }).then(() => { }, () => { }); }
@@ -2197,22 +2206,24 @@ function autoTold(o, type) {
   toast("Sent. The order is now marked as told.");
   if (oFor === o.no && !$("#sheet").hidden) openOrder(o.no); else if (typeof render === "function") render();
 }
-async function sendInvoice(o, btn, type) {
-  const key = [o.id, o.status, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length, billBy(o)].join(":"), label = "Send invoice (PDF)";
-  let f = invReady && invReady.key === key ? invReady.file : null;
-  if (!f) {
+async function sendInvoice(o, btn, type, fmt = "jpg") {
+  if (fmt !== invFmt) { invFmt = fmt; try { localStorage.setItem("tb-invfmt", fmt); } catch (_) { } }
+  const key = [fmt, o.id, o.status, o.m.total, o.m.paid, invColor(), (sPriv().inv_logo || "").length, billBy(o)].join(":"), label = btn.textContent;
+  let files = invReady && invReady.key === key ? invReady.files : null;
+  if (!files) {
     btn.disabled = true; btn.textContent = "Making the invoice…";
-    try { f = await invoiceFile(o); invReady = { key, file: f }; } catch (_) { btn.disabled = false; btn.textContent = label; toast("Couldn't make the invoice. Try again."); return; }
+    try { files = fmt === "pdf" ? [await invoiceFile(o)] : await invoiceImages(o); invReady = { key, files }; } catch (_) { btn.disabled = false; btn.textContent = label; toast("Couldn't make the invoice. Try again."); return; }
     btn.disabled = false; btn.textContent = label;
   }
-  if (navigator.canShare && navigator.canShare({ files: [f] })) {
+  const kind = fmt === "pdf" ? "pdf" : "image";
+  if (navigator.canShare && navigator.canShare({ files })) {
     // Trial (BrightWash only): the full text bill goes with the PDF, so the account number is in the chat too.
     // WhatsApp cuts long captions (about 1,000 characters), so a long bill falls back to the short caption plus bank details.
     const full = copyLive() ? message(o, type) : "";
     const short = () => { const tot = +o.m.total || calc(o).total, pd = +o.m.paid || 0, due = owed(o);
       return `${invCaption(o, type)} The full list of clothes is in the invoice.${dutyText(o, true) ? `\n\n${dutyText(o, true)}` : ""}\n\nTotal: ${naira(tot)}${pd ? `\nPaid: ${naira(pd)}` : ""}${due > 0 ? `\nBalance: ${naira(due)}` : ""}` + (due > 0 ? payTo() : ""); };
     const text = !copyLive() ? invCaption(o, type) : full.length <= 1000 ? full : short();
-    try { await navigator.share({ files: [f], text }); logSend("pdf", type); stampBill(o); autoTold(o, type); }
+    try { await navigator.share({ files, text }); logSend(kind, type); stampBill(o); autoTold(o, type); }
     catch (e) {
       // Some phones only allow sharing straight after a tap; the invoice is ready now, so one more tap sends it.
       if (e && e.name === "NotAllowedError") { btn.textContent = "Invoice ready. Tap to send"; return; }
@@ -2220,7 +2231,7 @@ async function sendInvoice(o, btn, type) {
     }
     return;
   }
-  saveFile(f); logSend("pdf", type); stampBill(o); toast("Invoice saved to your downloads. Attach it in WhatsApp.");
+  files.forEach(saveFile); logSend(kind, type); stampBill(o); toast(fmt === "pdf" ? "Invoice saved to your downloads. Attach it in WhatsApp." : "Invoice picture saved to your downloads. Attach it in WhatsApp.");
 }
 
 /* Settings, Invoice tab (owner only) */
@@ -2801,7 +2812,7 @@ function openOrder(no) {
   const ogs = $("#og-save"); if (ogs) ogs.onclick = () => { const g = cleanGreet($("#data-og-txt").value); if (!g) { toast("Type how you greet them"); return; } setGreet(g); };
   const again = () => openOrder(no);
   const setStatus = (s, msg) => { o.status = s; toast(msg); again(); put("orders", { id: o.id }, { status: s }); };
-  sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(b.dataset.pdf === "early" ? withCombo(o) : o, b, b.dataset.pdf));
+  sh.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => sendInvoice(b.dataset.pdf === "early" ? withCombo(o) : o, b, b.dataset.pdf, b.dataset.fmt || "jpg"));
   sh.querySelectorAll("details.early").forEach(dt => dt.ontoggle = () => { earlyOpen = dt.open ? o.id : null; });
   sh.querySelectorAll("[data-bt]").forEach(b => b.onclick = () => { btEdit = o.cid; openOrder(o.no); const i = $("#btn-in"); if (i) { i.focus(); i.select(); } });
   sh.querySelectorAll("[data-btok]").forEach(b => b.onclick = async () => { const c = cust(o.cid); b.disabled = true; if (await put("customers", { id: c.id }, { inv_name: c.name.slice(0, 60) })) c.inv_name = c.name.slice(0, 60); openOrder(o.no); });

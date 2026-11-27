@@ -838,7 +838,7 @@ async function handle(route) {
     await page.click("details.wtext summary"); await page.waitForTimeout(300);
     if (process.env.MSGS) console.log("READY_MSG<<" + await page.textContent("#wamsg-ready") + ">>");
     await page.screenshot({ path: path.join(out, "order-send-text-open.png") });
-    const [dl2] = await Promise.all([page.waitForEvent("download"), page.click('[data-pdf="ready"]')]); await dl2.saveAs(path.join(out, "order.pdf"));
+    const [dl2] = await Promise.all([page.waitForEvent("download"), page.click('button.btn[data-pdf="ready"]')]); await dl2.saveAs(path.join(out, dl2.suggestedFilename())); console.log("invoice file:", dl2.suggestedFilename()); const [dl2b] = await Promise.all([page.waitForEvent("download"), page.click('.llink[data-pdf="ready"]')]); console.log("other format:", dl2b.suggestedFilename());
     // the same order while still being cleaned: the bill can go out early
     db.orders.find(o => o.id === "oi").status = "listed";
     await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(800);
