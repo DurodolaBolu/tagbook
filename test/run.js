@@ -668,6 +668,28 @@ async function handle(route) {
     { const bs = await page.$$("[data-add]"); await bs[0].click(); await page.waitForTimeout(200); }
     await page.evaluate(() => { const b = document.querySelector("#save"); b.click(); b.click(); b.click(); }); await page.waitForTimeout(2500);
     console.log("triple tap save -> orders added:", db.orders.length - n1);
+    // double tap on an item: one cloth; a slower second tap: two; + tapped steadily still counts every tap
+    await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1200); await page.goto("http://localhost:8787/#log"); await page.waitForTimeout(800);
+    await page.fill("#cq", db.customers[0].name.slice(0, 3)); await page.waitForTimeout(300); await page.click("[data-pick]"); await page.waitForTimeout(200);
+    const qtyOf = async () => page.evaluate(() => [...document.querySelectorAll(".qty b")].map(b => +b.textContent));
+    await page.evaluate(() => { const b = document.querySelector("[data-add]"); b.click(); document.querySelector("[data-add]").click(); }); await page.waitForTimeout(300);
+    const q1 = await qtyOf(); const badge = await page.textContent(".picker .tcount").catch(() => "");
+    await page.waitForTimeout(800); await page.click("[data-add]"); await page.waitForTimeout(300); const q2 = await qtyOf();
+    for (let k = 0; k < 3; k++) { await page.click("[data-inc]"); await page.waitForTimeout(300); } const q3 = await qtyOf();
+    await page.evaluate(() => { document.querySelector("[data-inc]").click(); document.querySelector("[data-inc]").click(); }); await page.waitForTimeout(200); const q4 = await qtyOf();
+    await shot("tap-guard");
+    console.log("double tap item:", q1, "badge", badge, "| slow second tap:", q2, "| 3 steady +:", q3, "| double tap +:", q4);
+    // owner fixes a collected, unpaid order: 2 pieces down to 1, bill recalculates
+    { const o = db.orders[db.orders.length - 1], m = db.order_money.find(q => q.order_id === o.id);
+      o.items[0].qty = 2; o.status = "picked"; o.billed = true; o.settled = false; o.picked_at = new Date().toISOString(); m.unit = o.items.map(() => 1000); m.total = 2000 * 1 + (o.items.length - 1) * 1000; m.billed_at = new Date().toISOString(); m.paid = 0; m.payments = [];
+      const t0 = m.total; await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1500);
+      await page.evaluate(no => { location.hash = "#order-" + no; }, o.no); await page.waitForTimeout(800);
+      const hasMore = await page.isVisible("#omore"); if (hasMore) await page.click("#omore"); await page.waitForTimeout(200);
+      const menu = hasMore ? await page.$$eval(".omenu button", bs => bs.map(b => b.textContent)) : [];
+      if (menu.includes("Edit clothes")) { await page.click('[data-om="items"]'); await page.waitForTimeout(300); await page.click('[data-qm="0"]'); await page.waitForTimeout(150); await page.click("#fxsave"); await page.waitForTimeout(800); }
+      console.log("picked order: more menu:", menu, "| total", t0, "->", m.total, "| qty now", o.items[0] && o.items[0].qty, "| toast:", (await page.textContent("#toast").catch(() => "")).trim().slice(0, 90));
+      m.paid = m.total; o.settled = true; await page.reload(); await page.waitForTimeout(1500); await page.evaluate(no => { location.hash = "#order-" + no; }, o.no); await page.waitForTimeout(800);
+      console.log("fully paid picked order shows More:", await page.isVisible("#omore")); }
     process.exit(0);
   }
   if (process.env.CAPTURE_MAIN) { // frames for the main "how Tagbook works" video

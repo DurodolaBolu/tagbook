@@ -1651,7 +1651,7 @@ function renderNew() {
     <label>Service</label>
     <div class="chips" style="margin:0">${svcList.map(s => `<button class="chip" data-svc="${s}" aria-pressed="${d.svc === s}">${SERVICES[s]}</button>`).join("")}</div>
     <label>Tap to add clothes</label>
-    <div class="picker">${pickable.map(p => `<button data-add="${p.id}">${esc(p.name)}${p.custom ? "<small>Wedding gown, curtain</small>" : !hasPrice(p.id, d.svc) ? "<small class=\"nop\">No price yet</small>" : ""}</button>`).join("")}</div>
+    <div class="picker">${pickable.map(p => { const cnt = d.items.filter(i => i.id === p.id && i.svc === d.svc).reduce((s2, i) => s2 + i.qty, 0); return `<button data-add="${p.id}"${cnt ? ' class="has"' : ""}>${cnt ? `<span class="tcount" aria-label="${cnt} logged">×${cnt}</span>` : ""}${esc(p.name)}${p.custom ? "<small>Wedding gown, curtain</small>" : !hasPrice(p.id, d.svc) ? "<small class=\"nop\">No price yet</small>" : ""}</button>`; }).join("")}</div>
     ${d.askSpecial ? `<div class="check" style="margin-top:8px"><label for="sp" style="margin-top:0">What is the special item?</label>
       <input id="sp" placeholder="e.g. Wedding gown" value="${esc(d.specialName)}" autocomplete="off">
       ${own() ? `<label for="spp">Price for ${SERVICES[d.svc].toLowerCase()} (₦)</label><input id="spp" ${moneyAttrs} placeholder="e.g. 5000" value="${d.specialPrice || ""}">
@@ -1720,6 +1720,7 @@ function renderNew() {
   view.querySelectorAll("[data-svc]").forEach(b => b.onclick = () => { d.svc = b.dataset.svc; renderNew(); });
   view.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
     const id = b.dataset.add;
+    if (tapTwice("add:" + id, 700)) return; // a quick second tap on the same item is a slip, not a second cloth (use + for more)
     if ((item(id) || {}).custom) { d.askSpecial = id; d.specialName = ""; d.specialPrice = 0; renderNew(); $("#sp").focus(); return; }
     if (!hasPrice(id, d.svc)) {
       if (own()) { d.askPrice = id; d.askPriceVal = 0; d.askSpecial = false; renderNew(); const f = $("#aprice"); if (f) f.focus(); return; }
@@ -1758,7 +1759,7 @@ function renderNew() {
     if (syncsRemark(n)) { if (on && !d.rm.includes(n)) d.rm = [...d.rm, n]; if (!on && !d.items.some(x => (x.pn || []).includes(n))) d.rm = d.rm.filter(x => x !== n); }
     renderNew();
   });
-  view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => { d.items[+b.dataset.inc].qty++; renderNew(); });
+  view.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => { if (tapTwice("inc:" + b.dataset.inc, 250)) return; d.items[+b.dataset.inc].qty++; renderNew(); });
   view.querySelectorAll("[data-xp]").forEach(b => b.onclick = () => { const it = d.items[+b.dataset.xp]; it.x = !it.x; renderNew(); });
   view.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => { const i = +b.dataset.dec; d.items[i].qty--; if (!d.items[i].qty) { d.items.splice(i, 1); d.ed = null; } renderNew(); });
   wireDuty(renderNew);
@@ -2296,9 +2297,13 @@ function wireInvoice() {
 
 /* ---------- Owner only: edit clothes, edit customer, cancel an order (kept on record) ---------- */
 let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false, fxGreet = "", fxOther = false, ogOther = false;
-const canFix = o => own() && !o.cancelled && o.status !== "picked";
+// Owners can fix the clothes after pickup too (27 Nov 2026, from Impressions: an up & down logged as 2), until the order is fully paid.
+// Ignore a repeat tap on the same control within ms (a finger bounce or a "did it take?" second tap).
+let lastTap = { k: "", t: 0 };
+const tapTwice = (k, ms) => { const t = Date.now(); if (lastTap.k === k && t - lastTap.t < ms) return true; lastTap = { k, t }; return false; };
+const canFix = o => own() && !o.cancelled && (o.status !== "picked" || !o.billed || owed(o) > 0);
 const orderTop = o => `<div class="topbar otop"><button class="back" data-back>← All orders</button>${canFix(o) ? `<button class="omore" id="omore" aria-expanded="${oMenu}" aria-haspopup="menu">More ⋯</button>` : ""}
-  ${oMenu && canFix(o) ? `<div class="omenu" role="menu"><button role="menuitem" data-om="items">Edit clothes</button><button role="menuitem" data-om="cust">Edit customer</button><button role="menuitem" class="red" data-om="cancel">Cancel order</button></div>` : ""}</div>`;
+  ${oMenu && canFix(o) ? `<div class="omenu" role="menu"><button role="menuitem" data-om="items">Edit clothes</button><button role="menuitem" data-om="cust">Edit customer</button>${o.status === "picked" ? "" : `<button role="menuitem" class="red" data-om="cancel">Cancel order</button>`}</div>` : ""}</div>`;
 function wireFix(root, o) {
   const m = root.querySelector("#omore"); if (m) m.onclick = () => { oMenu = !oMenu; openOrder(o.no); };
   root.querySelectorAll("[data-om]").forEach(b => b.onclick = () => {
@@ -2375,7 +2380,7 @@ function fixView(o) {
   };
   if (oMode === "items" && !o.cancelled) {
     sh.querySelectorAll("[data-qm]").forEach(b => b.onclick = () => { const x = oDraft[+b.dataset.qm]; x.qty = Math.max(0, x.qty - 1); fixView(o); });
-    sh.querySelectorAll("[data-qp]").forEach(b => b.onclick = () => { oDraft[+b.dataset.qp].qty++; fixView(o); });
+    sh.querySelectorAll("[data-qp]").forEach(b => b.onclick = () => { if (tapTwice("qp:" + b.dataset.qp, 250)) return; oDraft[+b.dataset.qp].qty++; fixView(o); });
     const op = $("#fxaddopen"); if (op) op.onclick = () => { const p0 = PRICES.find(p => !p.hidden) || {}; fxAdd = { id: p0.id, svc: (p0.services || ["wi"])[0], label: "" }; fixView(o); };
     if ($("#fxi")) $("#fxi").onchange = e => { const p = item(e.target.value) || {}; fxAdd = { id: p.id, svc: (p.services || ["wi"]).includes(fxAdd.svc) ? fxAdd.svc : (p.services || ["wi"])[0], label: "" }; fixView(o); };
     if ($("#fxs")) $("#fxs").onchange = e => { fxAdd.svc = e.target.value; };
@@ -2393,6 +2398,7 @@ function fixView(o) {
       const n = draftToOrder(o, oDraft); if (!n.items.length) return;
       sv.disabled = true; sv.textContent = "Saving…";
       const wasBilled = o.billed;
+      if (wasBilled && o.status === "picked" && !n.missing) { const kk0 = calc({ ...o, items: n.items, m: { ...o.m, unit: n.unit, custom: n.custom }, billed: false }); if (kk0.total < o.m.paid) { toast(`The new total ${naira(kk0.total)} is less than the ${naira(o.m.paid)} already paid. Check the clothes.`); return; } }
       o.items = n.items; o.checked = {}; o.checking = false; o.m.custom = n.custom;
       if (wasBilled) {
         o.m.unit = n.unit;
@@ -2404,6 +2410,7 @@ function fixView(o) {
       if (o.list_sent && o.status !== "told") o.again.list = true;
       if (o.status === "told" && o.billed) o.again.ready = true;
       oMode = null; oDraft = null; fxAdd = false;
+      if (o.status === "picked" && wasBilled && !n.missing) { toast(`Clothes updated. New total ${naira(o.m.total)}${owed(o) ? `, ${naira(owed(o))} still owing` : ""}. Send the customer the new bill below.`); oMode = null; openOrder(o.no); if (tab === "orders") renderOrders(); return; }
       toast(n.missing ? `Clothes updated. Set the price for ${pname(n.missing)} and save the bill.` : o.again.list || o.again.ready ? "Clothes updated. Send the customer the updated message below." : "Clothes updated");
       openOrder(o.no); if (tab === "orders") renderOrders();
     };
