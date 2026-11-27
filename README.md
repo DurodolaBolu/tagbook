@@ -55,7 +55,8 @@ Everything someone needs to keep Tagbook running. Passwords and keys are NOT in 
 - The login "pepper" and the admin key live inside the database (`private` schema), never in code.
 
 ### Backups and restore
-- The Supabase free plan has NO restorable backups. Until a backup job or the Pro plan is in place, a bad delete cannot be undone.
+- The Supabase free plan has no restorable backups, so GitHub makes one every night at 2:37am (`.github/workflows/db-backup.yml`). It is encrypted, because this repo is public, and kept 30 days under Actions, "Nightly database backup", Artifacts. It needs the repo secrets `SUPABASE_DB_URL` and `BACKUP_PASSPHRASE` (the passphrase is also in the password manager). Run it by hand from the Actions tab with "Run workflow".
+- To restore: download the artifact, then `gpg -d tagbook-db-DATE.tar.gpg > b.tar && tar xf b.tar`. Restore into a NEW Supabase project first (never straight over the live one): `pg_restore --no-owner -d "<new db url>" app.dump`, then `pg_restore --data-only -d "<new db url>" auth.dump`. Check it, then point the app at it (Supabase URL and public key in `src/app.js`) or copy back only the rows that were lost. Drop-off photos are not in the backup (they are deleted after 7 days anyway).
 - Code: GitHub has every version. To roll back the app, revert the commit and run `./deploy.sh`.
 - Database structure: every change is recorded in Supabase (Database, Migrations).
 

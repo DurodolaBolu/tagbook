@@ -1,0 +1,53 @@
+# Nightly database backup (Supabase free plan has no restorable backups).
+# Needs two repo secrets, added by Bolu in GitHub: Settings, Secrets and variables, Actions:
+#   SUPABASE_DB_URL     Supabase "Session pooler" connection string, with the database password in it
+#   BACKUP_PASSPHRASE   a long passphrase; also kept in the password manager. Without it the backup cannot be opened.
+# The repo is public, so the dump is encrypted (AES-256) before it is stored. Backups are kept 30 days.
+# Restore steps: README, "Backups and restore".
+name: Nightly database backup
+on:
+  schedule:
+    - cron: "37 1 * * *"   # 2:37am Lagos time
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check secrets
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DB" ] || [ -z "$PASS" ]; then echo "::error::Add SUPABASE_DB_URL and BACKUP_PASSPHRASE in repo secrets"; exit 1; fi
+      - name: Install pg_dump 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+      - name: Dump and encrypt
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          D=$(date -u +%Y-%m-%d)
+          P=/usr/lib/postgresql/17/bin
+          # Tables, rules, functions and data of the app (public, private), plus logins and scheduled jobs.
+          $P/pg_dump "$DB" -Fc --no-owner --no-privileges -n public -n private -f app.dump
+          $P/pg_dump "$DB" -Fc --data-only -t auth.users -t auth.identities -t cron.job -f auth.dump
+          test $(stat -c%s app.dump) -gt 100000 || { echo "::error::Backup looks too small"; exit 1; }
+          tar cf "tagbook-db-$D.tar" app.dump auth.dump
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASS" --symmetric --cipher-algo AES256 -o "tagbook-db-$D.tar.gpg" "tagbook-db-$D.tar"
+          rm -f app.dump auth.dump "tagbook-db-$D.tar"
+          ls -l tagbook-db-*.gpg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tagbook-db-backup
+          path: tagbook-db-*.tar.gpg
+          retention-days: 30
+          if-no-files-found: error
