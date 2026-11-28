@@ -690,6 +690,19 @@ async function handle(route) {
       console.log("picked order: more menu:", menu, "| total", t0, "->", m.total, "| qty now", o.items[0] && o.items[0].qty, "| toast:", (await page.textContent("#toast").catch(() => "")).trim().slice(0, 90));
       m.paid = m.total; o.settled = true; await page.reload(); await page.waitForTimeout(1500); await page.evaluate(no => { location.hash = "#order-" + no; }, o.no); await page.waitForTimeout(800);
       console.log("fully paid picked order shows More:", await page.isVisible("#omore")); }
+    // part collection: customer takes some clothes now, the rest later
+    { const o = db.orders.find(x => x.status !== "picked" && !x.cancelled_at && (x.items || []).reduce((a, i) => a + i.qty, 0) >= 3) || db.orders[0];
+      o.status = "told"; o.cancelled_at = null; o.collected = []; const total = o.items.reduce((a, i) => a + i.qty, 0);
+      await page.goto("http://localhost:8787/#orders"); await page.reload(); await page.waitForTimeout(1500); await page.evaluate(no => { location.hash = "#order-" + no; }, o.no); await page.waitForTimeout(900);
+      const hasBtn = await page.isVisible("#partpick"); if (hasBtn) { await page.click("#partpick"); await page.waitForTimeout(300); await page.click('[data-pqp="0"]'); await page.waitForTimeout(150); await shot("part-pick"); await page.click("#psave"); await page.waitForTimeout(300); await page.click('.cfm [data-c="1"]'); await page.waitForTimeout(900); }
+      const head = await page.textContent(".ppart h3").catch(() => ""); await shot("part-saved");
+      console.log("part: button shown:", hasBtn, "| saved:", JSON.stringify(o.collected), "| status:", o.status, "| heading:", head, "| total clothes:", total);
+      await page.goto("http://localhost:8787/#orders"); await page.waitForTimeout(800); console.log("list shows:", await page.locator(".sub.s-work", { hasText: "Part collected" }).first().textContent().catch(() => "none"));
+      await page.evaluate(no => { location.hash = "#order-" + no; }, o.no); await page.waitForTimeout(900);
+      await page.click("#partpick"); await page.waitForTimeout(300);
+      for (let g = 0; g < 40; g++) { const b = await page.$("[data-pqp]:not([disabled])"); if (!b) break; await b.click(); await page.waitForTimeout(120); }
+      await page.click("#psave"); await page.waitForTimeout(300); const q = await page.textContent(".cfm h2, .cfm h3, .cfm b").catch(() => ""); await page.click('.cfm [data-c="1"]'); await page.waitForTimeout(1200);
+      console.log("rest taken: confirm said:", q, "| status now:", o.status, "| entries:", (o.collected || []).length); }
     process.exit(0);
   }
   if (process.env.CAPTURE_MAIN) { // frames for the main "how Tagbook works" video

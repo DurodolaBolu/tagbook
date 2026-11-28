@@ -154,7 +154,7 @@ async function load() {
     fetchAll("branches", "id,name,sort,active", "sort"),
     fetchAll("items", "id,name,custom,services,sort,hidden,pieces", "sort"),
     fetchAll("customers", "id,name,mark,greet,greet_asked,inv_name"),
-    fetchAll("orders", "id,no,customer_id,branch_id,pair_id,items,express,wait_get,pickup,collect_at,remarks,money_found,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by,duty,track_token", "no"),
+    fetchAll("orders", "id,no,customer_id,branch_id,pair_id,items,express,wait_get,pickup,collect_at,remarks,money_found,status,checking,checked,notified,billed,settled,list_sent,created_at,cancelled_at,cancelled_by,duty,track_token,collected", "no"),
   ]);
   if (base[0].error) throw base[0].error;
   shop = base[0].data; BRANCHES = base[1]; customers = base[3];
@@ -187,7 +187,7 @@ async function load() {
     id: o.id, no: o.no, cid: o.customer_id, branch: o.branch_id, pair: o.pair_id || null, items: o.items || [], express: o.express, wait: !!o.wait_get, pickup: o.pickup, collect: o.collect_at ? Date.parse(o.collect_at) : 0, remarks: o.remarks || "", money: o.money_found || 0,
     status: o.status, checking: o.checking, checked: o.checked || {}, notified: o.notified, billed: o.billed, settled: o.settled, list_sent: o.list_sent,
     at: Date.parse(o.created_at), m: { ...emptyMoney(), ...(money[o.id] || {}) }, again: {},
-    cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "", duty: o.duty || null, track: o.track_token || "",
+    cancelled: o.cancelled_at ? Date.parse(o.cancelled_at) : 0, cancelled_by: o.cancelled_by || "", duty: o.duty || null, track: o.track_token || "", collected: Array.isArray(o.collected) ? o.collected : [],
   }));
   // Cancelled orders stay on record but are left out of every list, total and report.
   orders = all.filter(o => !o.cancelled); cancelledOrders = all.filter(o => o.cancelled);
@@ -1204,7 +1204,8 @@ function orderRight(o, showStatus) {
   }
   if (!canBill() && o.billed && (o.status === "told" || o.status === "picked") && owed(o)) money = `<b class="owes">Not paid</b>`;
   const status = o.cancelled ? ["Cancelled", "s-done"] : showStatus ? st[o.status] : null;
-  return money + (status ? `<span class="sub ${status[1]}">${status[0]}</span>` : "");
+  const part = isPart(o) ? `<span class="sub s-work">Part collected, ${leftAll(o)} left</span>` : "";
+  return money + part + (status ? `<span class="sub ${status[1]}">${status[0]}</span>` : "");
 }
 
 /* ---------- Install banner: Android gets the real install prompt, iPhone gets the steps ---------- */
@@ -2056,7 +2057,7 @@ async function invoicePages(o, c = cust(o.cid)) {
   if (billBy(o)) kv("Prepared by", fit(billBy(o), W - M - c2 - 200, F(600, 22)));
   if (o.duty && (o.duty.w || []).length) kv("Attendants", fit(andList(o.duty.w), W - M - c2 - 200, F(600, 22)));
   if (o.express || o.wait) kv("Service", o.wait ? "Wait & get" : "Express");
-  kv("Clothes", o.status === "picked" ? "Collected" : o.status === "ready" || o.status === "told" ? "Ready for pickup" : "Being cleaned");
+  kv("Clothes", o.status === "picked" ? "Collected" : isPart(o) ? `Part collected, ${leftAll(o)} left` : o.status === "ready" || o.status === "told" ? "Ready for pickup" : "Being cleaned");
   kv("Status", "");
   const st = due === 0 ? ["Paid", "#DCF2E7", "#0F6B47"] : paid ? ["Part paid", "#FEF3C7", "#92400E"] : ["Unpaid", "#FDE2E1", "#B42318"];
   g.font = F(600, 19); const pw = g.measureText(st[0]).width + 32; box(c2 + 200, ry - 36 - 25, pw, 34, 17, st[1]); text(st[0], c2 + 216, ry - 36, F(600, 19), st[2]);
@@ -2309,10 +2310,34 @@ function wireInvoice() {
 /* ---------- Owner only: edit clothes, edit customer, cancel an order (kept on record) ---------- */
 let oFor = null, oMode = null, oMenu = false, oDraft = null, fxAdd = false, fxGreet = "", fxOther = false, ogOther = false;
 // Owners can fix the clothes after pickup too (27 Nov 2026, from Impressions: an up & down logged as 2), until the order is fully paid.
+// Part collection (28 Nov 2026): the customer takes some clothes now and the rest later. One order, one bill;
+// Tagbook only records what left the shop. The order stays Ready/Told (and keeps its reminders) until all is collected.
+// BrightWash first.
+const partOn = () => !!shop && (shop.id === PHOTO_SHOP || location.hostname === "localhost");
+const collQty = (o, i) => (o.collected || []).reduce((s, e) => s + (e.lines || []).filter(l => l.i === i).reduce((a, l) => a + (+l.qty || 0), 0), 0);
+const leftQty = (o, i) => Math.max(0, (+(o.items[i] || {}).qty || 0) - collQty(o, i));
+const leftAll = o => o.items.reduce((s, _, i) => s + leftQty(o, i), 0);
+const isPart = o => !o.cancelled && o.status !== "picked" && (o.collected || []).length > 0;
+let partPick = null; // { no, take: { line index: qty }, busy }
+function partHtml(o) {
+  if (!partOn() || o.cancelled) return "";
+  const hist = (o.collected || []).map(e => `<li><b>${fmtDay(Date.parse(e.at))}</b>: ${(e.lines || []).map(l => `${l.qty} × ${esc(pname(o.items[l.i] || {}))}`).join(", ")}${e.by ? ` <span class="sub">by ${esc(e.by)}</span>` : ""}</li>`).join("");
+  if (partPick && partPick.no === o.no) {
+    const rows = o.items.map((it, i) => ({ it, i, left: leftQty(o, i) })).filter(r => r.left > 0);
+    const n = Object.values(partPick.take).reduce((a, b) => a + b, 0);
+    return `<section class="ocard ppart"><h3>What is the customer taking now?</h3><p class="hint">Tap + for each cloth going home today. The rest stays on this order.</p>
+      ${rows.map(({ it, i, left }) => { const t = partPick.take[i] || 0; return `<div class="prow"><span>${esc(pname(it) + pcsTag(it))}<small>${left} at the shop</small></span><span class="qty"><button class="mini" data-pqm="${i}" aria-label="One less" ${t ? "" : "disabled"}>−</button><b>${t}</b><button class="mini" data-pqp="${i}" aria-label="One more" ${t < left ? "" : "disabled"}>+</button></span></div>`; }).join("")}
+      <div class="row" style="margin-top:12px"><button class="btn btn-ghost" id="pcancel">Cancel</button><button class="btn btn-primary" id="psave" ${n && !partPick.busy ? "" : "disabled"}>${partPick.busy ? "Saving…" : n ? `Save: ${n} going home` : "Pick the clothes"}</button></div></section>`;
+  }
+  if (!hist) return "";
+  const left = leftAll(o);
+  return `<section class="ocard ppart"><h3>${o.status === "picked" ? "Collected in parts" : `Part collected: ${left} still at the shop`}</h3><ul class="phist">${hist}</ul>
+    ${o.status !== "picked" && left ? `<p class="hint">Still here: ${o.items.map((it, i) => ({ it, l: leftQty(o, i) })).filter(r => r.l).map(r => `${r.l} × ${esc(pname(r.it))}`).join(", ")}</p>` : ""}</section>`;
+}
 // Ignore a repeat tap on the same control within ms (a finger bounce or a "did it take?" second tap).
 let lastTap = { k: "", t: 0 };
 const tapTwice = (k, ms) => { const t = Date.now(); if (lastTap.k === k && t - lastTap.t < ms) return true; lastTap = { k, t }; return false; };
-const canFix = o => own() && !o.cancelled && (o.status !== "picked" || !o.billed || owed(o) > 0);
+const canFix = o => own() && !o.cancelled && !(o.collected || []).length && (o.status !== "picked" || !o.billed || owed(o) > 0);
 const orderTop = o => `<div class="topbar otop"><button class="back" data-back>← All orders</button>${canFix(o) ? `<button class="omore" id="omore" aria-expanded="${oMenu}" aria-haspopup="menu">More ⋯</button>` : ""}
   ${oMenu && canFix(o) ? `<div class="omenu" role="menu"><button role="menuitem" data-om="items">Edit clothes</button><button role="menuitem" data-om="cust">Edit customer</button>${o.status === "picked" ? "" : `<button role="menuitem" class="red" data-om="cancel">Cancel order</button>`}</div>` : ""}</div>`;
 function wireFix(root, o) {
@@ -2702,7 +2727,7 @@ function markSent(o, type) {
 }
 function openOrder(no) {
   const o = orders.find(x => x.no === no) || cancelledOrders.find(x => x.no === no); if (!o) { go("orders"); return; }
-  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; billEdit = null; partOpen = null; if (phAdd) { URL.revokeObjectURL(phAdd.url); phAdd = null; } }
+  if (oFor !== no) { oFor = no; oMode = null; oMenu = false; oDraft = null; fxAdd = false; ogOther = false; billEdit = null; partOpen = null; partPick = null; if (phAdd) { URL.revokeObjectURL(phAdd.url); phAdd = null; } }
   if (o.cancelled || oMode) { fixView(o); return; }
   const c = cust(o.cid), k = calc(o), sh = $("#sheet");
   if (canBill() && !o.notified) { o.notified = true; put("orders", { id: o.id }, { notified: true }); }
@@ -2721,11 +2746,12 @@ function openOrder(no) {
   // One clear "next step" at the top; everything else sits in its own section below.
   const card = (h, p, body) => `<section class="ocard onext"><small>Next step</small><h2>${h}</h2>${p ? `<p>${p}</p>` : ""}${body}</section>`;
   const still = owed(o) ? ` ${naira(owed(o))} still to pay.` : "";
+  const partBtn = partOn() && (o.status === "ready" || o.status === "told") && leftAll(o) > 1 && !(partPick && partPick.no === o.no) ? `<button class="olink" id="partpick" style="margin-top:10px;display:block">Collecting only some</button>` : "";
   let next = "";
   if (canBill()) {
     if (o.status === "picked") next = owed(o) ? card(`${first} still owes ${naira(owed(o))}`, "Send a payment reminder with the invoice.", waBlock(o, "owe")) : "";
-    else if (o.status === "told") next = card(`Has ${first} picked up the clothes?`, still.trim(), `<button class="btn btn-primary" id="pick">Clothes picked up</button>`) ;
-    else if (o.status === "ready") next = o.billed ? card(`Tell ${first} the clothes are ready`, `Sends the bill with the ready message.${still}`, waBlock(o, "ready") + `<button class="olink" id="pick" style="margin-top:10px">Already picked up?</button>`)
+    else if (o.status === "told") next = card(isPart(o) ? `Has ${first} picked up the rest?` : `Has ${first} picked up the clothes?`, still.trim(), `<button class="btn btn-primary" id="pick">${isPart(o) ? "The rest is picked up" : "Clothes picked up"}</button>${partBtn}`) ;
+    else if (o.status === "ready") next = o.billed ? card(`Tell ${first} the clothes are ready`, `Sends the bill with the ready message.${still}`, waBlock(o, "ready") + `<button class="olink" id="pick" style="margin-top:10px">Already picked up?</button>${partBtn}`)
       : card("Save the bill first", "The ready message goes out with the bill.", `<button class="btn btn-primary" id="gobill">Open the bill</button>`);
     // Shops that don't send lists can go straight to "Clothes are ready".
     else if (o.status === "new" && !o.list_sent) next = o.checking ? card("Pack and check the clothes", "", checkHtml())
@@ -2733,8 +2759,8 @@ function openOrder(no) {
     else next = card(o.checking ? "Pack and check the clothes" : "When the clothes are done", "", checkHtml());
   } else {
     if (o.status === "new" || o.status === "listed") next = card(o.checking ? "Pack and check the clothes" : "When the clothes are done", "", checkHtml());
-    else if (o.status === "ready") next = card("Ready and bagged", "Waiting for the owner to tell the customer.", `<button class="btn btn-ghost" id="pick">Clothes picked up</button>`);
-    else if (o.status === "told") next = card(`Has ${first} picked up the clothes?`, "", `<button class="btn btn-primary" id="pick">Clothes picked up</button>`);
+    else if (o.status === "ready") next = card("Ready and bagged", "Waiting for the owner to tell the customer.", `<button class="btn btn-ghost" id="pick">Clothes picked up</button>${partBtn}`);
+    else if (o.status === "told") next = card(isPart(o) ? `Has ${first} picked up the rest?` : `Has ${first} picked up the clothes?`, "", `<button class="btn btn-primary" id="pick">${isPart(o) ? "The rest is picked up" : "Clothes picked up"}</button>${partBtn}`);
   }
   // Messages already sent, with a way to send again.
   let sent = "";
@@ -2790,7 +2816,7 @@ function openOrder(no) {
       <span>${canBill() && c.phone ? fmtPhone(c.phone) + " · " : ""}#${o.no}${liveBranches().length > 1 ? " · " + esc(branchName(o.branch)) : ""}${o.pickup ? " · pickup" : ""}${speedLabel(o) ? " · " + speedLabel(o) : ""}</span></div></div>
     <div class="steps"><span class="fill" style="width:${idx * 20}%"></span>${STEPS.map((s, i) => `<div class="st ${i === 1 && !o.list_sent && idx > 1 ? "" : i < idx || (i === idx && o.status === "picked") ? "done" : i === idx ? "cur" : ""}">${s[1]}</div>`).join("")}</div>
     <p class="hint">Dropped ${fmtDay(o.at)}${o.collect ? ` · ready by ${esc(fmtCollect(o.collect))}` : ""}</p>
-    ${next}${sent}
+    ${next}${partHtml(o)}${sent}
     ${payHtml}
     ${billHtml}
     <section class="ocard oprint">${printBlock(o)}</section>
@@ -2907,6 +2933,24 @@ function openOrder(no) {
   const w = $("#washed"); if (w) w.onclick = () => { o.checking = true; again(); put("orders", { id: o.id }, { checking: true }); };
   sh.querySelectorAll("[data-ck]").forEach(b => b.onchange = () => { o.checked = { ...o.checked, [b.dataset.ck]: b.checked }; again(); put("orders", { id: o.id }, { checked: o.checked }); });
   const rd = $("#rd"); if (rd) rd.onclick = () => setStatus("ready", canBill() ? "Marked ready. Send the ready message." : "Marked ready. The owner has been told.");
+  const ppk = $("#partpick"); if (ppk) ppk.onclick = () => { partPick = { no: o.no, take: {} }; openOrder(o.no); const sec = sh.querySelector(".ppart"); if (sec) sec.scrollIntoView({ block: "start", behavior: "smooth" }); };
+  sh.querySelectorAll("[data-pqp]").forEach(b => b.onclick = () => { const i = +b.dataset.pqp; if ((partPick.take[i] || 0) < leftQty(o, i)) partPick.take[i] = (partPick.take[i] || 0) + 1; openOrder(o.no); });
+  sh.querySelectorAll("[data-pqm]").forEach(b => b.onclick = () => { const i = +b.dataset.pqm; partPick.take[i] = Math.max(0, (partPick.take[i] || 0) - 1); openOrder(o.no); });
+  const pcx = $("#pcancel"); if (pcx) pcx.onclick = () => { partPick = null; openOrder(o.no); };
+  const psv = $("#psave"); if (psv) psv.onclick = async () => {
+    const lines = Object.entries(partPick.take).filter(([, q]) => q > 0).map(([i, q]) => ({ i: +i, qty: q })), n = lines.reduce((a, l) => a + l.qty, 0), restAfter = leftAll(o) - n, who = cust(o.cid).name;
+    if (!n) return;
+    const money = owed(o) && canBill() ? ` They still owe ${naira(owed(o))}.` : "";
+    if (!await askConfirm(restAfter ? `${who} is taking ${n} now?` : `That is everything left. Mark as picked up?`, restAfter ? `${restAfter} will stay at the shop on order #${o.no}.${money}` : `Order #${o.no}.${money}`, restAfter ? "Yes, save" : "Yes, picked up")) return;
+    partPick.busy = true; openOrder(o.no);
+    const collected = (o.collected || []).concat([{ at: new Date().toISOString(), by: (me && me.name) || "", lines }]);
+    const ok = await put("orders", { id: o.id }, { collected });
+    partPick = null;
+    if (!ok) { openOrder(o.no); return; }
+    o.collected = collected;
+    if (!restAfter) { setStatus("picked", owed(o) ? "Picked up. Not fully paid yet." : "Picked up"); return; }
+    toast(`Saved. ${restAfter} still at the shop.`); openOrder(o.no); if (tab === "orders") renderOrders();
+  };
   const pk = $("#pick"); if (pk) pk.onclick = async () => {
     if (!await askConfirm(`Has ${cust(o.cid).name} picked up their clothes?`, `Order #${o.no}. After this, the bill can't be changed.${owed(o) ? ` They still owe ${naira(owed(o))}.` : ""}`, "Yes, picked up")) return;
     setStatus("picked", owed(o) ? "Picked up. Not fully paid yet." : "Picked up"); };

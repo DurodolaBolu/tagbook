@@ -25,7 +25,7 @@
 <meta name="apple-mobile-web-app-title" content="Tagbook">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="/font/plex.css">
-<script>window.TB_BUILD="20261127125316";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
+<script>window.TB_BUILD="20261128155926";try{if(localStorage.getItem("tb-theme")==="dark")document.documentElement.dataset.tb="dark";}catch(_){}</script>
 <style>
 /* Layout: one phone-width app column, bottom tab bar, order detail slides over as a sheet */
 :root{
@@ -973,6 +973,13 @@ label .opt{font-size:13px}
 .picker button{position:relative}
 .picker button.has{border-color:var(--accent)}
 .picker .tcount{position:absolute;top:-8px;right:-6px;min-width:24px;padding:1px 6px;border-radius:999px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+/* Part collection */
+.ppart .prow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.ppart .prow small{display:block;color:var(--muted);font-size:13px}
+.ppart .qty{display:flex;align-items:center;gap:10px}
+.ppart .qty b{min-width:20px;text-align:center;font-variant-numeric:tabular-nums}
+.ppart .phist{margin:6px 0 0;padding-left:18px}
+.ppart .phist li{margin:4px 0}
 </style>
 </head><body>
 <div id="boot" class="loading washing" role="status"><div class="lart big"><svg class="art machine" viewBox="0 0 200 200" aria-hidden="true">
@@ -1003,7 +1010,7 @@ label .opt{font-size:13px}
 <nav class="tabs" id="tabsnav" hidden><div class="inner" id="tabs"></div></nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="/app.js?v=20261127125316"></script>
+<script src="/app.js?v=20261128155926"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}</script>
 <script>
 /* Live site only: auto update + pull down to refresh */
